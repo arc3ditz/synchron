@@ -39,4 +39,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
-          tagName: app-v__VERSION__ # optional, but keeps version tags clean
