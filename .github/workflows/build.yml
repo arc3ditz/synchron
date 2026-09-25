@@ -43,4 +43,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
+          tagName: app-v__VERSION__
+          releaseName: "Synchron v__VERSION__"
+          releaseBody: "Automated cross-platform build for Synchron."
+          draft: true
           includeUpdaterJson: false
