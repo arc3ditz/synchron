@@ -1,0 +1,495 @@
+.app-shell {
+  min-height: 100vh;
+  background: radial-gradient(circle at 80% -20%, rgba(0, 240, 255, 0.08), transparent 34%), #0a0a0c;
+  color: #f4f4f5;
+}
+
+.app-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ---------- Navigation (mobile: bottom bar pinned to the viewport) ---------- */
+
+.sidebar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 15, 18, 0.96);
+  border-top: 1px solid #232329;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  backdrop-filter: blur(18px);
+}
+
+.sidebar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.sidebar-item:hover {
+  color: #f4f4f5;
+  border-color: #303039;
+  background: #16161a;
+  transform: translateY(-1px);
+}
+
+.sidebar-item.active {
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.28);
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.1);
+}
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 20px 104px;
+}
+
+.main-content > div {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+/* ---------- Shared interactive states ---------- */
+
+.main-content input:hover,
+.main-content select:hover {
+  border-color: rgba(0, 240, 255, 0.48) !important;
+}
+
+.main-content button:hover {
+  border-color: rgba(0, 240, 255, 0.52) !important;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.1);
+}
+
+.main-content button:active {
+  transform: scale(0.98);
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #00e5ff, #00f0ff) !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+}
+
+/* ---------- Delete confirmation modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.delete-modal {
+  width: min(100%, 420px);
+  padding: 24px;
+  background: #16161a;
+  border: 1px solid #3f3f46;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+
+.delete-modal h2 {
+  margin: 0;
+  color: #f4f4f5;
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.delete-modal p {
+  margin: 10px 0 24px;
+  color: #a1a1aa;
+  font-size: 14px;
+}
+
+.delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.delete-modal-cancel,
+.delete-modal-confirm {
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.delete-modal-cancel {
+  color: #d4d4d8;
+  background: transparent;
+  border: 1px solid #3f3f46;
+}
+
+.delete-modal-confirm {
+  color: #fff1f2;
+  background: #dc2626;
+  border: 1px solid #ef4444;
+}
+
+.delete-modal-confirm:hover {
+  background: #ef4444;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.22) !important;
+}
+
+/* ---------- Category filter tabs ---------- */
+
+.category-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.category-manager-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: start center;
+  padding: 120px 20px 20px;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.category-manager-backdrop .category-manager {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+}
+
+.category-tabs {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+.category-tab {
+  background: transparent;
+  border: 1px solid #303039;
+  color: #a1a1aa;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.category-tab:hover {
+  color: #f4f4f5;
+}
+
+.category-tab.active {
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.42);
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.1);
+}
+
+/* ---------- Habit table ---------- */
+
+.habit-table-header,
+.habit-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.8fr 1.2fr 2fr;
+  column-gap: 12px;
+}
+
+.habit-table-header {
+  padding: 0 16px 10px;
+  align-items: end;
+}
+
+.habit-type-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.habit-table-header > span:nth-child(4),
+.streak-badge {
+  transform: translateX(40px);
+}
+
+.habit-row {
+  row-gap: 8px;
+  align-items: center;
+}
+
+.habit-row:hover {
+  background: #1c1c21 !important;
+  border-color: rgba(0, 240, 255, 0.32) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.habit-info-cluster {
+  display: contents;
+}
+
+.habit-cell-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.habit-type-badge {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  justify-self: center;
+  text-align: center;
+}
+
+.habit-cell-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.habit-icon-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.habit-row button svg {
+  transition: transform 0.15s ease-in-out;
+  animation: check-in 0.15s ease-in-out;
+}
+
+.habit-row button:hover svg {
+  transform: scale(1.08);
+}
+
+@keyframes check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.65) rotate(-10deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* ---------- Date navigator ---------- */
+
+.date-navigator button:hover {
+  border-color: #00f0ff !important;
+  color: #00f0ff !important;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.13);
+  transform: translateY(-1px);
+}
+
+.date-navigator button:focus-visible {
+  outline: 2px solid #00f0ff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.1);
+}
+
+/* ---------- Desktop: sticky full-height sidebar ---------- */
+
+@media (min-width: 900px) {
+  .app-body {
+    flex-direction: row;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    align-self: flex-start;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    width: 232px;
+    min-width: 232px;
+    flex-shrink: 0;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    border-top: none;
+    border-right: 1px solid #232329;
+    padding: 28px 16px;
+    gap: 8px;
+  }
+
+  .sidebar::before {
+    content: "Habit Log";
+    color: #00f0ff;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 0 14px 24px;
+  }
+
+  .sidebar-item {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 11px;
+    font-size: 13px;
+    padding: 12px 14px;
+    width: 100%;
+  }
+
+  .main-content {
+    padding: 48px 64px;
+  }
+}
+
+/* ---------- Narrow content: stack each habit card ---------- */
+
+@media (max-width: 1180px) {
+  .habit-table-header {
+    display: none;
+  }
+
+  .habit-row {
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+
+  .habit-info-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .habit-info-cluster .habit-cell-name {
+    flex-basis: 100%;
+  }
+
+  .habit-type-badge {
+    justify-self: auto;
+  }
+
+  .habit-cell-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .date-navigator {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .date-navigator .date-display {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .date-navigator button:nth-of-type(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .date-navigator button:nth-of-type(1) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .date-navigator button:nth-of-type(3) {
+    grid-column: 2;
+    grid-row: 3;
+  }
+}
+
+/* ---------- Focus dashboard (Timer view) ---------- */
+
+.main-content > .focus-view {
+  max-width: none;
+  min-height: calc(100vh - 136px);
+}
+
+@media (min-width: 900px) {
+  .main-content > .focus-view {
+    min-height: calc(100vh - 96px);
+  }
+}
+
+.focus-dashboard {
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+}
+
+.focus-main {
+  min-width: 0;
+  min-height: 100%;
+  justify-content: center;
+  padding: 32px;
+}
+
+.focus-control-panel {
+  min-width: 0;
+  align-self: stretch;
+}
+
+@media (max-width: 1180px) {
+  .main-content > .focus-view {
+    min-height: 0;
+  }
+
+  .focus-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-control-panel {
+    align-self: auto;
+  }
+
+  .focus-main {
+    min-height: 0;
+    padding: 24px 16px;
+  }
+}

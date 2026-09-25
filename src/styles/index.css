@@ -1,0 +1,63 @@
+:root {
+  --void: #0a0a0c;
+  --surface: #16161a;
+  --surface-raised: #1c1c21;
+  --border: #232329;
+  --border-strong: #303039;
+  --cyan: #00f0ff;
+  --cyan-soft: #00e5ff;
+  --cyan-wash: rgba(0, 240, 255, 0.1);
+  --cyan-glow: rgba(0, 240, 255, 0.22);
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --dim: #71717a;
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 15px/1.5 var(--sans);
+  color: var(--text);
+  background: var(--void);
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--void);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+input,
+select,
+.habit-row,
+.panel,
+.calendar,
+.stat,
+.focus-session-item {
+  transition: all 0.15s ease-in-out;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--cyan-wash);
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+}
