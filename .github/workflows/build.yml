@@ -46,5 +46,5 @@ jobs:
           tagName: app-v__VERSION__
           releaseName: "Synchron v__VERSION__"
           releaseBody: "Automated cross-platform build for Synchron."
-          draft: true
+          releaseDraft: true
           includeUpdaterJson: false
