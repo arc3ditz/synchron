@@ -19,10 +19,10 @@ type FocusTimerProps = {
   habits: Habit[];
   focusSessions: { timestamp: number; durationMinutes: number }[];
   onSessionComplete: (sessionType: "Timer" | "Pomodoro Focus", durationMinutes: number, habitName: string) => void;
+  defaultFocusDuration: number;
+  soundAlerts: boolean;
 };
 
-const DEFAULT_TIMER_MINUTES = 25;
-const DEFAULT_FOCUS_MINUTES = 25;
 const DEFAULT_BREAK_MINUTES = 5;
 const RADIUS = 80;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -70,14 +70,14 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: 20,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     margin: 0,
   },
   modeToggle: {
     display: "flex",
     gap: 4,
-    background: "#0f0f11",
-    border: "1px solid #232329",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-color)",
     borderRadius: 20,
     padding: 3,
   },
@@ -88,12 +88,12 @@ const styles: Record<string, CSSProperties> = {
     padding: "8px 18px",
     fontSize: 14,
     fontWeight: 500,
-    color: "#8a8b91",
+    color: "var(--text-secondary)",
     cursor: "pointer",
   },
   modeButtonActive: {
-    background: "rgba(0, 240, 255, 0.1)",
-    color: "#00f0ff",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    color: "var(--accent-teal)",
   },
   sessionBadge: {
     fontSize: 13,
@@ -104,14 +104,14 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
   sessionFocus: {
-    color: "#00f0ff",
-    background: "rgba(0, 240, 255, 0.08)",
-    border: "1px solid rgba(0, 240, 255, 0.3)",
+    color: "var(--accent-teal)",
+    background: "rgba(var(--accent-rgb), 0.08)",
+    border: "1px solid rgba(var(--accent-rgb), 0.3)",
   },
   sessionBreak: {
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
   },
   ringWrapper: {
     position: "relative",
@@ -126,7 +126,7 @@ const styles: Record<string, CSSProperties> = {
     position: "absolute",
     fontSize: 54,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontVariantNumeric: "tabular-nums",
   },
   durationRow: {
@@ -148,15 +148,15 @@ const styles: Record<string, CSSProperties> = {
   },
   durationCaption: {
     fontSize: 14,
-    color: "#71717a",
+    color: "var(--text-secondary)",
   },
   durationInputField: {
     width: 70,
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "8px 10px",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 15,
     outline: "none",
   },
@@ -172,13 +172,13 @@ const styles: Record<string, CSSProperties> = {
   },
   primaryButton: {
     flex: 1,
-    background: "rgba(0, 240, 255, 0.1)",
-    border: "1px solid rgba(0, 240, 255, 0.42)",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    border: "1px solid rgba(var(--accent-rgb), 0.42)",
     borderRadius: 20,
     padding: "12px 0",
     fontSize: 15,
     fontWeight: 500,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
     cursor: "pointer",
   },
   primaryButtonDisabled: {
@@ -188,12 +188,12 @@ const styles: Record<string, CSSProperties> = {
   secondaryButton: {
     flex: 1,
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "12px 0",
     fontSize: 15,
     fontWeight: 500,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
   },
   habitSelectRow: {
@@ -205,15 +205,15 @@ const styles: Record<string, CSSProperties> = {
   },
   habitSelectLabel: {
     fontSize: 13,
-    color: "#71717a",
+    color: "var(--text-secondary)",
   },
   habitSelect: {
     width: "100%",
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "8px 12px",
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
     cursor: "pointer",
@@ -233,7 +233,7 @@ const styles: Record<string, CSSProperties> = {
   },
   panelSectionTitle: {
     margin: 0,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 13,
     fontWeight: 600,
   },
@@ -244,10 +244,10 @@ const styles: Record<string, CSSProperties> = {
   },
   presetButton: {
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "8px 10px",
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     fontSize: 13,
     cursor: "pointer",
   },
@@ -262,14 +262,14 @@ const styles: Record<string, CSSProperties> = {
   },
   overviewLabel: {
     display: "block",
-    color: "#71717a",
+    color: "var(--text-secondary)",
     fontSize: 11,
     lineHeight: 1.35,
   },
   overviewValue: {
     display: "block",
     marginTop: 6,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
     fontSize: 20,
     fontWeight: 600,
     fontVariantNumeric: "tabular-nums",
@@ -309,16 +309,22 @@ function getAudioContextConstructor(): AudioContextConstructor | null {
   return win.AudioContext ?? win.webkitAudioContext ?? null;
 }
 
-function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProps) {
+function FocusTimer({
+  habits,
+  focusSessions,
+  onSessionComplete,
+  defaultFocusDuration,
+  soundAlerts,
+}: FocusTimerProps) {
   const [mode, setMode] = useState<Mode>("Timer");
-  const [timerMinutes, setTimerMinutes] = useState(DEFAULT_TIMER_MINUTES);
-  const [focusMinutes, setFocusMinutes] = useState(DEFAULT_FOCUS_MINUTES);
+  const [timerMinutes, setTimerMinutes] = useState(defaultFocusDuration);
+  const [focusMinutes, setFocusMinutes] = useState(defaultFocusDuration);
   const [breakMinutes, setBreakMinutes] = useState(DEFAULT_BREAK_MINUTES);
   const [timerRemainingMs, setTimerRemainingMs] = useState(
-    DEFAULT_TIMER_MINUTES * 60000,
+    defaultFocusDuration * 60000,
   );
   const [pomodoroRemainingMs, setPomodoroRemainingMs] = useState(
-    DEFAULT_FOCUS_MINUTES * 60000,
+    defaultFocusDuration * 60000,
   );
   const [timerRunning, setTimerRunning] = useState(false);
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
@@ -330,10 +336,11 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
   const timerRunningRef = useRef(false);
   const pomodoroRunningRef = useRef(false);
   const pomodoroSessionRef = useRef<Session>("Focus");
-  const timerRemainingRef = useRef(DEFAULT_TIMER_MINUTES * 60000);
-  const pomodoroRemainingRef = useRef(DEFAULT_FOCUS_MINUTES * 60000);
-  const timerMinutesRef = useRef(DEFAULT_TIMER_MINUTES);
-  const focusMinutesRef = useRef(DEFAULT_FOCUS_MINUTES);
+  const timerRemainingRef = useRef(defaultFocusDuration * 60000);
+  const pomodoroRemainingRef = useRef(defaultFocusDuration * 60000);
+  const timerMinutesRef = useRef(defaultFocusDuration);
+  const focusMinutesRef = useRef(defaultFocusDuration);
+  const appliedDefaultFocusDurationRef = useRef(defaultFocusDuration);
   const breakMinutesRef = useRef(DEFAULT_BREAK_MINUTES);
   const updateTimerRef = useRef<(now: number) => void>(() => {});
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
@@ -356,6 +363,25 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
       cancelled = true;
     };
   }, []);
+
+  // Synchronize idle timer controls when the saved default changes.
+  useEffect(() => {
+    if (appliedDefaultFocusDurationRef.current === defaultFocusDuration) return;
+    appliedDefaultFocusDurationRef.current = defaultFocusDuration;
+
+    if (!timerRunningRef.current) {
+      timerMinutesRef.current = defaultFocusDuration;
+      setTimerMinutes(defaultFocusDuration);
+      setTimerState(defaultFocusDuration * 60000, false);
+    }
+    if (!pomodoroRunningRef.current) {
+      focusMinutesRef.current = defaultFocusDuration;
+      setFocusMinutes(defaultFocusDuration);
+      if (pomodoroSessionRef.current === "Focus") {
+        setPomodoroState(defaultFocusDuration * 60000, false, "Focus");
+      }
+    }
+  }, [defaultFocusDuration]);
 
   // Track the last logged session to prevent duplicate entries
   const lastLoggedSessionRef = useRef<{ mode: Mode; session: Session; endTimestamp: number } | null>(null);
@@ -508,7 +534,7 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
         markSessionLogged("Timer", "Focus", end);
       }
       
-      playChime();
+      if (soundAlerts) playChime();
       void notifyTimerFinished();
     }
   }
@@ -551,7 +577,7 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
     if (currentSession !== startingSession) {
       pomodoroSessionRef.current = currentSession;
       setPomodoroSession(currentSession);
-      playChime();
+      if (soundAlerts) playChime();
       notifyIfBackgrounded(
         "Session Switch",
         `Now On Your ${currentSession} Session`,
@@ -603,9 +629,13 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
 
   function handleReset() {
     if (mode === "Timer") {
+      timerMinutesRef.current = defaultFocusDuration;
+      setTimerMinutes(defaultFocusDuration);
       timerEndTimestampRef.current = null;
-      setTimerState(timerMinutesRef.current * 60000, false);
+      setTimerState(defaultFocusDuration * 60000, false);
     } else {
+      focusMinutesRef.current = defaultFocusDuration;
+      setFocusMinutes(defaultFocusDuration);
       pomodoroEndTimestampRef.current = null;
       setPomodoroState(
         getSessionTotalMs(
@@ -626,7 +656,7 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
   }
 
   function handleTimerDurationChange(value: string) {
-    const parsed = clampMinutes(value, DEFAULT_TIMER_MINUTES);
+    const parsed = clampMinutes(value, defaultFocusDuration);
     timerMinutesRef.current = parsed;
     setTimerMinutes(parsed);
     if (!timerRunningRef.current) {
@@ -636,7 +666,7 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
   }
 
   function handleFocusDurationChange(value: string) {
-    const parsed = clampMinutes(value, DEFAULT_FOCUS_MINUTES);
+    const parsed = clampMinutes(value, defaultFocusDuration);
     focusMinutesRef.current = parsed;
     setFocusMinutes(parsed);
     if (!pomodoroRunningRef.current && pomodoroSessionRef.current === "Focus") {
@@ -709,10 +739,10 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
   const dashOffset = CIRCUMFERENCE * (1 - fraction);
   const ringColor =
     mode === "Timer"
-      ? "#f59e0b"
+      ? "var(--accent-amber)"
       : session === "Break"
-        ? "#71717a"
-        : "#00f0ff";
+        ? "var(--text-muted)"
+        : "var(--accent-teal)";
 
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < totalMs;
@@ -771,7 +801,7 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
               cy={100}
               r={RADIUS}
               fill="none"
-              stroke="#232329"
+              stroke="var(--border-color)"
               strokeWidth={10}
             />
             <circle
@@ -817,7 +847,7 @@ function FocusTimer({ habits, focusSessions, onSessionComplete }: FocusTimerProp
       <aside className="focus-control-panel" style={styles.controlPanel}>
         <div style={styles.panelSection}>
           <label style={styles.habitSelectLabel} htmlFor="habit-select">
-            Focus On (Optional)
+            Focus On
           </label>
           <select
             id="habit-select"

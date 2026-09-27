@@ -23,6 +23,8 @@ type AnalyticsProps = {
   habits: Habit[];
   focusSessions: FocusSessionRecord[];
   streakFreeze: boolean;
+  dayResetHour: number;
+  weekStart: "Sunday" | "Monday";
 };
 
 type TimeHorizon = "This Week" | "This Month" | "Last 30 Days" | "All Time";
@@ -35,12 +37,12 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: 24,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     margin: "0 0 4px",
   },
   subtitle: {
     fontSize: 14,
-    color: "#71717a",
+    color: "var(--text-secondary)",
     margin: "0 0 24px",
   },
   filterBar: {
@@ -53,19 +55,19 @@ const styles: Record<string, CSSProperties> = {
   },
   filterButton: {
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "8px 16px",
     fontSize: 13,
     fontWeight: 500,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
   filterButtonActive: {
-    background: "rgba(0, 240, 255, 0.1)",
-    color: "#00f0ff",
-    borderColor: "rgba(0, 240, 255, 0.42)",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    color: "var(--accent-teal)",
+    borderColor: "rgba(var(--accent-rgb), 0.42)",
   },
   grid: {
     display: "grid",
@@ -79,7 +81,7 @@ const styles: Record<string, CSSProperties> = {
   panelTitle: {
     fontSize: 15,
     fontWeight: 600,
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     margin: "0 0 16px",
     display: "flex",
     alignItems: "center",
@@ -88,35 +90,35 @@ const styles: Record<string, CSSProperties> = {
   statValue: {
     fontSize: 28,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     margin: "0 0 4px",
   },
   statLabel: {
     fontSize: 13,
-    color: "#71717a",
+    color: "var(--text-secondary)",
     margin: 0,
   },
   statSub: {
     fontSize: 12,
-    color: "#5c5d63",
+    color: "var(--text-secondary)",
     marginTop: 4,
   },
   progressBar: {
     height: 8,
-    background: "#232329",
+    background: "var(--border-color)",
     borderRadius: 4,
     overflow: "hidden",
     marginTop: 8,
   },
   progressFill: {
     height: "100%",
-    background: "#00f0ff",
+    background: "var(--accent-teal)",
     borderRadius: 4,
     transition: "width 0.3s ease",
   },
   ratioBar: {
     height: 24,
-    background: "#232329",
+    background: "var(--border-color)",
     borderRadius: 4,
     overflow: "hidden",
     display: "flex",
@@ -129,14 +131,14 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     fontSize: 11,
     fontWeight: 500,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
   },
   habitItem: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "12px 0",
-    borderBottom: "1px solid #232329",
+    borderBottom: "1px solid var(--border-color)",
   },
   habitItemLast: {
     borderBottom: "none",
@@ -154,11 +156,11 @@ const styles: Record<string, CSSProperties> = {
   habitName: {
     fontSize: 14,
     fontWeight: 500,
-    color: "#d4d4d8",
+    color: "var(--text-body)",
   },
   habitMeta: {
     fontSize: 12,
-    color: "#71717a",
+    color: "var(--text-secondary)",
   },
   habitStats: {
     display: "flex",
@@ -168,14 +170,14 @@ const styles: Record<string, CSSProperties> = {
   habitHours: {
     fontSize: 16,
     fontWeight: 600,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
   },
   habitStreak: {
     display: "flex",
     alignItems: "center",
     gap: 4,
     fontSize: 12,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
   },
   heatmapGrid: {
     display: "grid",
@@ -190,11 +192,11 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     fontSize: 10,
-    color: "#5c5d63",
+    color: "var(--text-dim)",
   },
   heatmapDay: {
     fontSize: 11,
-    color: "#71717a",
+    color: "var(--text-muted)",
     textAlign: "center",
     paddingBottom: 4,
   },
@@ -204,18 +206,18 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   goalInput: {
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "8px 12px",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 14,
     width: 80,
     outline: "none",
   },
   empty: {
     fontSize: 13,
-    color: "#52525b",
+    color: "var(--text-dim)",
     textAlign: "center",
     padding: "32px 20px",
   },
@@ -228,11 +230,21 @@ function getDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function getWeekStart(date: Date): Date {
+function getHabitDateKey(date: Date, resetHour: number): string {
+  const habitDate = new Date(date);
+  if (habitDate.getHours() < resetHour) {
+    habitDate.setDate(habitDate.getDate() - 1);
+  }
+  return getDateKey(habitDate);
+}
+
+function getWeekStart(date: Date, weekStart: "Sunday" | "Monday"): Date {
   const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff));
+  const firstDay = weekStart === "Monday" ? 1 : 0;
+  const daysSinceStart = (d.getDay() - firstDay + 7) % 7;
+  d.setDate(d.getDate() - daysSinceStart);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function getMonthStart(date: Date): Date {
@@ -266,9 +278,9 @@ function isScheduledOnDate(habit: Habit, dateKey: string): boolean {
   return habit.customDays?.includes(WEEKDAYS[weekday]) ?? false;
 }
 
-function calculateStreak(habit: Habit, streakFreeze: boolean): number {
+function calculateStreak(habit: Habit, streakFreeze: boolean, dayResetHour: number): number {
   const dateSet = new Set(habit.completedDates);
-  const todayKey = getDateKey(new Date());
+  const todayKey = getHabitDateKey(new Date(), dayResetHour);
 
   if (habit.frequencyType === "custom" && (habit.customDays?.length ?? 0) === 0) {
     return 0;
@@ -301,7 +313,13 @@ function calculateStreak(habit: Habit, streakFreeze: boolean): number {
   return streak;
 }
 
-function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
+function Analytics({
+  habits,
+  focusSessions,
+  streakFreeze,
+  dayResetHour,
+  weekStart,
+}: AnalyticsProps) {
   const [timeHorizon, setTimeHorizon] = useState<TimeHorizon>("This Week");
   const [weeklyGoalHours, setWeeklyGoalHours] = useState(20);
 
@@ -311,7 +329,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
 
     switch (timeHorizon) {
       case "This Week":
-        startDate = getWeekStart(now);
+        startDate = getWeekStart(now, weekStart);
         break;
       case "This Month":
         startDate = getMonthStart(now);
@@ -327,7 +345,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
       const sessionDate = new Date(session.timestamp);
       return sessionDate >= startDate && sessionDate <= now;
     });
-  }, [focusSessions, timeHorizon]);
+  }, [focusSessions, timeHorizon, weekStart]);
 
   const totalFocusMinutes = useMemo(() => {
     return filteredSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
@@ -335,12 +353,12 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
 
   const currentWeekSessions = useMemo(() => {
     const now = new Date();
-    const weekStart = getWeekStart(now);
+    const weekStartDate = getWeekStart(now, weekStart);
     return focusSessions.filter((session) => {
       const sessionDate = new Date(session.timestamp);
-      return sessionDate >= weekStart && sessionDate <= now;
+      return sessionDate >= weekStartDate && sessionDate <= now;
     });
-  }, [focusSessions]);
+  }, [focusSessions, weekStart]);
 
   const currentWeekMinutes = useMemo(() => {
     return currentWeekSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
@@ -373,12 +391,12 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
       .map((habit) => ({
         ...habit,
         totalMinutes: habitMinutes[habit.id] || 0,
-        streak: calculateStreak(habit, streakFreeze),
+        streak: calculateStreak(habit, streakFreeze, dayResetHour),
       }))
       .filter((habit) => habit.totalMinutes > 0)
       .sort((a, b) => b.totalMinutes - a.totalMinutes)
       .slice(0, 5);
-  }, [filteredSessions, habits, streakFreeze]);
+  }, [filteredSessions, habits, streakFreeze, dayResetHour]);
 
   const weeklyProgress = useMemo(() => {
     const goalMinutes = weeklyGoalHours * 60;
@@ -420,7 +438,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
     const year = now.getFullYear();
     const month = now.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDay = new Date(year, month, 1).getDay();
+    const firstDay = (new Date(year, month, 1).getDay() - (weekStart === "Monday" ? 1 : 0) + 7) % 7;
 
     const dailyMinutes: Record<string, number> = {};
     
@@ -444,15 +462,19 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
     }
 
     return { cells, year, month };
-  }, [focusSessions]);
+  }, [focusSessions, weekStart]);
+
+  const weekdayLabels = Array.from({ length: 7 }, (_, index) =>
+    WEEKDAYS[((weekStart === "Monday" ? 1 : 0) + index) % 7],
+  );
 
   function getHeatmapColor(intensity: number): string {
     const colors = [
-      "#0f0f11",
-      "rgba(0, 240, 255, 0.16)",
-      "rgba(0, 240, 255, 0.34)",
-      "rgba(0, 240, 255, 0.6)",
-      "rgba(0, 240, 255, 0.9)",
+      "var(--bg-inset)",
+      "rgba(var(--accent-rgb), 0.16)",
+      "rgba(var(--accent-rgb), 0.34)",
+      "rgba(var(--accent-rgb), 0.6)",
+      "rgba(var(--accent-rgb), 0.9)",
     ];
     return colors[intensity];
   }
@@ -485,7 +507,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
           </h3>
           <div style={styles.goalSection}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <label style={{ fontSize: 13, color: "#71717a" }}>Target:</label>
+              <label style={{ fontSize: 13, color: "var(--text-muted)" }}>Target:</label>
               <input
                 type="number"
                 min={1}
@@ -494,14 +516,14 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
                 onChange={(e) => setWeeklyGoalHours(Math.max(1, parseInt(e.target.value) || 1))}
                 style={styles.goalInput}
               />
-              <span style={{ fontSize: 13, color: "#71717a" }}>Hours/Week</span>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Hours/Week</span>
             </div>
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: "#d4d4d8" }}>
+                <span style={{ fontSize: 13, color: "var(--text-body)" }}>
                   {formatHours(currentWeekMinutes)} / {weeklyGoalHours}h
                 </span>
-                <span style={{ fontSize: 13, color: "#00f0ff" }}>
+                <span style={{ fontSize: 13, color: "var(--accent-teal)" }}>
                   {weeklyProgress.toFixed(0)}%
                 </span>
               </div>
@@ -557,7 +579,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
                   <div style={styles.habitInfo}>
                     <span style={styles.habitName}>
                       {habit.name}
-                      {habit.isArchived && <span style={{ fontSize: 11, color: "#71717a", marginLeft: 6 }}>(Archived)</span>}
+                      {habit.isArchived && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>(Archived)</span>}
                     </span>
                     <span style={styles.habitMeta}>
                       {habit.completedDates.length} Completions
@@ -585,7 +607,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
           Focus Intensity Heatmap
         </h3>
         <div style={styles.heatmapGrid}>
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          {weekdayLabels.map((day) => (
             <div key={day} style={styles.heatmapDay}>
               {day}
             </div>
@@ -601,7 +623,7 @@ function Analytics({ habits, focusSessions, streakFreeze }: AnalyticsProps) {
                   ...styles.heatmapCell,
                   background: getHeatmapColor(cell.intensity),
                   color:
-                    cell.intensity > 3 ? "#0a0a0c" : cell.intensity > 0 ? "#e4e4e7" : "#5c5d63",
+                    cell.intensity > 3 ? "var(--bg-primary)" : cell.intensity > 0 ? "var(--text-primary)" : "var(--text-dim)",
                 }}
                 title={`${cell.day}: ${formatHours(cell.minutes)}`}
               >

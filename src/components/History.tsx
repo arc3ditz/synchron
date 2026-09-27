@@ -24,6 +24,8 @@ type HistoryProps = {
   focusSessions: FocusSessionRecord[];
   onDeleteFocusSession: (id: number) => void;
   streakFreeze: boolean;
+  dayResetHour: number;
+  weekStart: "Sunday" | "Monday";
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -33,22 +35,22 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: 22,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     margin: "0 0 4px",
   },
   subtitle: {
     fontSize: 14,
-    color: "#71717a",
+    color: "var(--text-secondary)",
     margin: "0 0 20px",
   },
   select: {
     width: "100%",
     maxWidth: 420,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 12px",
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
     cursor: "pointer",
@@ -65,17 +67,17 @@ const styles: Record<string, CSSProperties> = {
   },
   statLabel: {
     display: "block",
-    fontSize: 11,
-    color: "#71717a",
+    fontSize: 10,
+    color: "var(--text-secondary)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   statValue: {
     display: "block",
-    fontSize: 18,
-    fontWeight: 600,
-    color: "#d4d4d8",
+    fontSize: 24,
+    fontWeight: 700,
+    color: "var(--text-primary)",
   },
   calendar: {
     ...CARD_SURFACE,
@@ -90,7 +92,7 @@ const styles: Record<string, CSSProperties> = {
   monthLabel: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#d4d4d8",
+    color: "var(--text-body)",
   },
   monthButton: {
     display: "flex",
@@ -99,20 +101,20 @@ const styles: Record<string, CSSProperties> = {
     width: 30,
     height: 30,
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
     padding: 0,
   },
   todayButton: {
-    background: "rgba(0, 240, 255, 0.1)",
-    border: "1px solid rgba(0, 240, 255, 0.42)",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    border: "1px solid rgba(var(--accent-rgb), 0.42)",
     borderRadius: 20,
     padding: "6px 14px",
     fontSize: 12,
     fontWeight: 500,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
@@ -122,7 +124,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
   },
   weekday: {
-    color: "#5c5d63",
+    color: "var(--text-secondary)",
     fontSize: 11,
     fontWeight: 600,
     textAlign: "center",
@@ -135,21 +137,21 @@ const styles: Record<string, CSSProperties> = {
     aspectRatio: "1",
     minWidth: 0,
     borderRadius: 6,
-    color: "#8a8b91",
+    color: "var(--text-secondary)",
     fontSize: 13,
   },
   unscheduledDay: {
-    color: "#3f3f46",
-    background: "rgba(39, 39, 42, 0.35)",
+    color: "var(--border-strong)",
+    background: "var(--bg-unscheduled)",
   },
   completedDay: {
-    color: "#00f0ff",
-    background: "rgba(0, 240, 255, 0.1)",
-    border: "1px solid rgba(0, 240, 255, 0.42)",
+    color: "var(--accent-teal)",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    border: "1px solid rgba(var(--accent-rgb), 0.42)",
     fontWeight: 600,
   },
   today: {
-    outline: "1px solid rgba(0, 240, 255, 0.5)",
+    outline: "1px solid rgba(var(--accent-rgb), 0.5)",
     outlineOffset: -1,
   },
   empty: {
@@ -157,15 +159,15 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     gap: 8,
-    color: "#71717a",
+    color: "var(--text-muted)",
     textAlign: "center",
     padding: "44px 20px",
   },
   emptyIcon: {
-    color: "#5c5d63",
+    color: "var(--text-dim)",
   },
   emptyTitle: {
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     fontSize: 14,
     fontWeight: 500,
   },
@@ -179,7 +181,7 @@ const styles: Record<string, CSSProperties> = {
   focusSessionsTitle: {
     fontSize: 16,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     margin: "0 0 12px",
   },
   focusSessionsList: {
@@ -204,32 +206,32 @@ const styles: Record<string, CSSProperties> = {
   focusSessionType: {
     fontSize: 13,
     fontWeight: 500,
-    color: "#d4d4d8",
+    color: "var(--text-body)",
   },
   focusSessionMeta: {
     fontSize: 12,
-    color: "#71717a",
+    color: "var(--text-secondary)",
   },
   focusSessionHabit: {
     fontSize: 12,
-    color: "#8a8b91",
+    color: "var(--text-secondary)",
   },
   focusSessionDuration: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
     whiteSpace: "nowrap",
   },
   deleteFocusSessionButton: {
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     width: 28,
     height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#5c5d63",
+    color: "var(--text-dim)",
     cursor: "pointer",
     padding: 0,
     transition: "color 0.15s ease, border-color 0.15s ease",
@@ -237,7 +239,7 @@ const styles: Record<string, CSSProperties> = {
   },
   noFocusSessions: {
     fontSize: 13,
-    color: "#52525b",
+    color: "var(--text-dim)",
     textAlign: "center",
     padding: "20px 0",
   },
@@ -248,6 +250,14 @@ function getDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getHabitDateKey(date: Date, resetHour: number): string {
+  const habitDate = new Date(date);
+  if (habitDate.getHours() < resetHour) {
+    habitDate.setDate(habitDate.getDate() - 1);
+  }
+  return getDateKey(habitDate);
 }
 
 function shiftDateKey(key: string, deltaDays: number): string {
@@ -270,9 +280,13 @@ function isScheduledOnDate(habit: HistoryHabit, dateKey: string): boolean {
   return habit.customDays?.includes(WEEKDAYS[weekday]) ?? false;
 }
 
-function calculateStreak(habit: HistoryHabit, streakFreeze = false): number {
+function calculateStreak(
+  habit: HistoryHabit,
+  streakFreeze: boolean,
+  dayResetHour: number,
+): number {
   const dateSet = new Set(habit.completedDates);
-  const todayKey = getDateKey(new Date());
+  const todayKey = getHabitDateKey(new Date(), dayResetHour);
 
   if (habit.frequencyType === "custom" && (habit.customDays?.length ?? 0) === 0) {
     return 0;
@@ -300,7 +314,14 @@ function calculateStreak(habit: HistoryHabit, streakFreeze = false): number {
   return streak;
 }
 
-function History({ habits, focusSessions, onDeleteFocusSession, streakFreeze }: HistoryProps) {
+function History({
+  habits,
+  focusSessions,
+  onDeleteFocusSession,
+  streakFreeze,
+  dayResetHour,
+  weekStart,
+}: HistoryProps) {
   const [selectedHabitId, setSelectedHabitId] = useState<number | "">("");
   const [displayedMonth, setDisplayedMonth] = useState(() => {
     const today = new Date();
@@ -319,13 +340,18 @@ function History({ habits, focusSessions, onDeleteFocusSession, streakFreeze }: 
   const calendarDays = useMemo(() => {
     const year = displayedMonth.getFullYear();
     const month = displayedMonth.getMonth();
-    const firstWeekday = new Date(year, month, 1).getDay();
+    const firstWeekday = (new Date(year, month, 1).getDay() - (weekStart === "Monday" ? 1 : 0) + 7) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     return Array.from({ length: firstWeekday + daysInMonth }, (_, index) => {
       if (index < firstWeekday) return null;
       return new Date(year, month, index - firstWeekday + 1);
     });
-  }, [displayedMonth]);
+  }, [displayedMonth, weekStart]);
+
+  const weekdayLabels = Array.from({ length: 7 }, (_, index) =>
+    WEEKDAYS[((weekStart === "Monday" ? 1 : 0) + index) % 7],
+  );
+  const todayKey = getHabitDateKey(new Date(), dayResetHour);
 
   const monthPrefix = `${displayedMonth.getFullYear()}-${String(
     displayedMonth.getMonth() + 1,
@@ -338,8 +364,6 @@ function History({ habits, focusSessions, onDeleteFocusSession, streakFreeze }: 
     month: "long",
     year: "numeric",
   });
-  const todayKey = getDateKey(new Date());
-
   const sortedFocusSessions = useMemo(() => {
     return [...focusSessions].sort((a, b) => b.timestamp - a.timestamp);
   }, [focusSessions]);
@@ -362,7 +386,8 @@ function History({ habits, focusSessions, onDeleteFocusSession, streakFreeze }: 
   }
 
   function jumpToToday() {
-    const today = new Date();
+    const [year, month, day] = todayKey.split("-").map(Number);
+    const today = new Date(year, month - 1, day);
     setDisplayedMonth(new Date(today.getFullYear(), today.getMonth(), 1));
   }
 
@@ -393,7 +418,7 @@ function History({ habits, focusSessions, onDeleteFocusSession, streakFreeze }: 
         <div style={styles.stats}>
           <div style={styles.stat}>
             <span style={styles.statLabel}>Current Streak</span>
-            <span style={styles.statValue}>{calculateStreak(selectedHabit, streakFreeze)}</span>
+            <span style={styles.statValue}>{calculateStreak(selectedHabit, streakFreeze, dayResetHour)}</span>
           </div>
           <div style={styles.stat}>
             <span style={styles.statLabel}>Total Completed Days</span>
@@ -445,15 +470,7 @@ function History({ habits, focusSessions, onDeleteFocusSession, streakFreeze }: 
             </button>
           </div>
           <div style={styles.week}>
-            {[
-              "Sun",
-              "Mon",
-              "Tue",
-              "Wed",
-              "Thu",
-              "Fri",
-              "Sat",
-            ].map((day) => (
+            {weekdayLabels.map((day) => (
               <span key={day} style={styles.weekday}>
                 {day}
               </span>

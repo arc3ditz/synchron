@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ListChecks,
   Timer as TimerIcon,
@@ -14,11 +14,16 @@ import {
   ArchiveRestore,
   Snowflake,
   Settings,
+  Clock3,
+  CalendarDays,
+  Keyboard,
 } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
 import FocusTimer from "./components/FocusTimer";
 import History, { type FocusSessionRecord } from "./components/History";
 import Analytics from "./components/Analytics";
+import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import { CARD_SURFACE } from "./theme";
 import "./styles/AppLayout.css";
 
@@ -26,7 +31,17 @@ import "./styles/AppLayout.css";
 type Priority = "Mandatory" | "Optional";
 type HabitType = "Daily" | "Challenge";
 type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
-type View = "Habits" | "Timer" | "History" | "Analytics";
+type WeekStart = "Sunday" | "Monday";
+type Theme = "dark" | "light";
+type View = "Habits" | "Timer" | "History" | "Analytics" | "Settings";
+
+type AppSettings = {
+  dayResetHour: number;
+  weekStart: WeekStart;
+  defaultFocusDuration: number;
+  soundAlerts: boolean;
+  theme: Theme;
+};
 
 type Habit = {
   id: number;
@@ -46,7 +61,16 @@ const STORAGE_KEY = "habits";
 const FOCUS_SESSIONS_KEY = "focusSessions";
 const STREAK_FREEZE_KEY = "streakFreeze";
 const CUSTOM_CATEGORIES_KEY = "habitCategories";
+const APP_SETTINGS_KEY = "appSettings";
 const DEFAULT_DURATION = 30;
+const DEFAULT_SETTINGS: AppSettings = {
+  dayResetHour: 0,
+  weekStart: "Sunday",
+  defaultFocusDuration: 25,
+  soundAlerts: true,
+  theme: "dark",
+};
+const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ALL_CATEGORIES = "All";
 const NO_CATEGORY = "No Category";
@@ -75,12 +99,12 @@ const styles: Record<string, CSSProperties> = {
   h1: {
     fontSize: 22,
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: "#71717a",
+    color: "var(--text-secondary)",
     marginBottom: 20,
   },
   summary: {
@@ -89,16 +113,16 @@ const styles: Record<string, CSSProperties> = {
     gap: 2,
     marginBottom: 32,
     paddingBottom: 20,
-    borderBottom: "1px solid #232329",
+    borderBottom: "1px solid var(--border-color)",
   },
   summaryPrimary: {
     fontSize: 14,
-    color: "#c4c5c9",
+    color: "var(--text-body)",
     fontWeight: 500,
   },
   summarySecondary: {
     fontSize: 12,
-    color: "#6b6c72",
+    color: "var(--text-secondary)",
   },
   dateNavigator: {
     display: "flex",
@@ -114,11 +138,11 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "7px 12px",
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     fontSize: 12,
     fontWeight: 500,
     cursor: "pointer",
@@ -127,7 +151,7 @@ const styles: Record<string, CSSProperties> = {
   dateDisplay: {
     minWidth: 150,
     textAlign: "center",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 14,
     fontWeight: 600,
   },
@@ -137,7 +161,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     gap: 8,
     textAlign: "center",
-    color: "#8a8b91",
+    color: "var(--text-secondary)",
     fontSize: 13,
     marginTop: 12,
     marginBottom: 16,
@@ -157,20 +181,20 @@ const styles: Record<string, CSSProperties> = {
   },
   input: {
     flex: 1,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 14px",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
   },
   select: {
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 12px",
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
     cursor: "pointer",
@@ -182,17 +206,17 @@ const styles: Record<string, CSSProperties> = {
   },
   durationInput: {
     width: 60,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 10px",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
   },
   durationLabel: {
     fontSize: 13,
-    color: "#71717a",
+    color: "var(--text-secondary)",
   },
   frequencyDays: {
     display: "flex",
@@ -204,33 +228,33 @@ const styles: Record<string, CSSProperties> = {
     height: 28,
     padding: 0,
     borderRadius: 14,
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     background: "transparent",
-    color: "#71717a",
+    color: "var(--text-muted)",
     fontSize: 11,
     cursor: "pointer",
   },
   frequencyDayActive: {
-    background: "rgba(0, 240, 255, 0.1)",
-    borderColor: "rgba(0, 240, 255, 0.42)",
-    color: "#00f0ff",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    borderColor: "rgba(var(--accent-rgb), 0.42)",
+    color: "var(--accent-teal)",
   },
   addButton: {
-    background: "#1c1c21",
-    border: "1px solid #303039",
+    background: "var(--bg-raised)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 18px",
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     fontSize: 14,
     cursor: "pointer",
   },
   tableHeaderColors: {
-    color: "#5c5d63",
+    color: "var(--text-secondary)",
     fontSize: 11,
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    borderBottom: "1px solid #232329",
+    borderBottom: "1px solid var(--border-color)",
     marginBottom: 8,
   },
   headerActionsCell: {
@@ -249,17 +273,17 @@ const styles: Record<string, CSSProperties> = {
   },
   itemCompletedColors: {
     ...CARD_SURFACE,
-    background: "#121215",
+    background: "var(--bg-completed)",
     opacity: 0.8,
   },
   habitName: {
     fontSize: 14,
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     wordBreak: "break-word",
     overflowWrap: "break-word",
   },
   habitNameDone: {
-    color: "#6b7280",
+    color: "var(--text-dim)",
     textDecoration: "line-through",
   },
   streak: {
@@ -267,18 +291,18 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 4,
     fontSize: 12,
-    color: "#00f0ff",
-    background: "rgba(0, 240, 255, 0.08)",
-    border: "1px solid rgba(0, 240, 255, 0.3)",
+    color: "var(--accent-teal)",
+    background: "rgba(var(--accent-rgb), 0.08)",
+    border: "1px solid rgba(var(--accent-rgb), 0.3)",
     borderRadius: 20,
     padding: "2px 9px",
     whiteSpace: "nowrap",
     width: "fit-content",
   },
   streakZero: {
-    color: "#5c5d63",
+    color: "var(--text-dim)",
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
   },
   priorityBadge: {
     fontSize: 11,
@@ -290,65 +314,65 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
   },
   priorityMandatory: {
-    color: "#00f0ff",
-    background: "rgba(0, 240, 255, 0.08)",
-    border: "1px solid rgba(0, 240, 255, 0.3)",
+    color: "var(--accent-teal)",
+    background: "rgba(var(--accent-rgb), 0.08)",
+    border: "1px solid rgba(var(--accent-rgb), 0.3)",
   },
   priorityOptional: {
-    color: "#8a8f98",
+    color: "var(--text-muted)",
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
   },
   challengeBadge: {
     ...typeBadgeBase,
-    color: "#00f0ff",
-    background: "rgba(0, 240, 255, 0.08)",
-    border: "1px solid rgba(0, 240, 255, 0.3)",
+    color: "var(--accent-teal)",
+    background: "rgba(var(--accent-rgb), 0.08)",
+    border: "1px solid rgba(var(--accent-rgb), 0.3)",
   },
   challengeBadgeCompleted: {
-    color: "#6f7580",
+    color: "var(--text-dim)",
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
   },
   dailyBadge: {
     ...typeBadgeBase,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
   },
   offDayBadge: {
     ...typeBadgeBase,
-    color: "#666871",
+    color: "var(--text-dim)",
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
   },
   toggleButton: {
-    background: "#1c1c21",
-    border: "1px solid #303039",
+    background: "var(--bg-raised)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "7px 14px",
     fontSize: 12,
     fontWeight: 500,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
     whiteSpace: "nowrap",
     transition: "background 0.15s ease",
   },
   toggleButtonDone: {
-    background: "rgba(0, 240, 255, 0.1)",
-    border: "1px solid rgba(0, 240, 255, 0.42)",
-    color: "#00f0ff",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    border: "1px solid rgba(var(--accent-rgb), 0.42)",
+    color: "var(--accent-teal)",
   },
   iconButton: {
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     width: 28,
     height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#5c5d63",
+    color: "var(--text-dim)",
     cursor: "pointer",
     padding: 0,
     transition: "color 0.15s ease, border-color 0.15s ease",
@@ -356,14 +380,14 @@ const styles: Record<string, CSSProperties> = {
   },
   archiveButton: {
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     width: 28,
     height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#5c5d63",
+    color: "var(--text-dim)",
     cursor: "pointer",
     padding: 0,
     transition: "color 0.15s ease, border-color 0.15s ease",
@@ -374,19 +398,19 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 6,
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "6px 12px",
     fontSize: 12,
     fontWeight: 500,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
     transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
   },
   streakFreezeToggleActive: {
-    background: "rgba(0, 240, 255, 0.08)",
-    color: "#00f0ff",
-    borderColor: "rgba(0, 240, 255, 0.3)",
+    background: "rgba(var(--accent-rgb), 0.08)",
+    color: "var(--accent-teal)",
+    borderColor: "rgba(var(--accent-rgb), 0.3)",
   },
   editRow: {
     gridColumn: "1 / -1",
@@ -403,66 +427,66 @@ const styles: Record<string, CSSProperties> = {
   editInput: {
     flex: 1,
     minWidth: 120,
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 6,
     padding: "6px 10px",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
   },
   editSelect: {
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 6,
     padding: "6px 10px",
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
     cursor: "pointer",
   },
   editDurationInput: {
     width: 56,
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 6,
     padding: "6px 8px",
-    color: "#e4e4e7",
+    color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
   },
   saveButton: {
-    background: "rgba(0, 240, 255, 0.1)",
-    border: "1px solid rgba(0, 240, 255, 0.42)",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    border: "1px solid rgba(var(--accent-rgb), 0.42)",
     borderRadius: 20,
     padding: "8px 16px",
     fontSize: 12,
     fontWeight: 500,
-    color: "#00f0ff",
+    color: "var(--accent-teal)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
   cancelButton: {
     background: "transparent",
-    border: "1px solid #303039",
+    border: "1px solid var(--border-strong)",
     borderRadius: 20,
     padding: "8px 16px",
     fontSize: 12,
     fontWeight: 500,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
   empty: {
     fontSize: 13,
-    color: "#52525b",
+    color: "var(--text-dim)",
     textAlign: "center",
     padding: "24px 0",
   },
   sectionHeader: {
     fontSize: 12,
     fontWeight: 600,
-    color: "#5c5d63",
+    color: "var(--text-secondary)",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     margin: "24px 0 8px",
@@ -474,20 +498,20 @@ const styles: Record<string, CSSProperties> = {
   },
   categoryInput: {
     width: 170,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 12px",
-    color: "#d4d4d8",
+    color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
   },
   categoryBadge: {
     fontSize: 11,
     fontWeight: 500,
-    color: "#a1a1aa",
-    background: "#0f0f11",
-    border: "1px solid #303039",
+    color: "var(--text-secondary)",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 4,
     padding: "1px 7px",
     whiteSpace: "nowrap",
@@ -499,10 +523,10 @@ const styles: Record<string, CSSProperties> = {
     width: 34,
     height: 34,
     padding: 0,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 9,
-    color: "#a1a1aa",
+    color: "var(--text-secondary)",
     cursor: "pointer",
   },
   categoryManager: {
@@ -517,10 +541,10 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     maxWidth: 420,
     padding: 14,
-    background: "#16161a",
-    border: "1px solid #303039",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 10,
-    boxShadow: "0 12px 28px rgba(0, 0, 0, 0.32)",
+    boxShadow: "0 12px 28px var(--shadow-medium)",
   },
   categoryManagerRow: {
     display: "flex",
@@ -530,8 +554,138 @@ const styles: Record<string, CSSProperties> = {
   categoryManagerName: {
     flex: 1,
     minWidth: 0,
-    color: "#f4f4f5",
+    color: "var(--text-primary)",
     fontSize: 13,
+  },
+  settingsPage: {
+    maxWidth: 760,
+    width: "100%",
+  },
+  settingsCard: {
+    ...CARD_SURFACE,
+    display: "flex",
+    flexDirection: "column",
+    gap: 18,
+    marginBottom: 14,
+    padding: 20,
+  },
+  settingsCardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    margin: 0,
+    color: "var(--text-primary)",
+    fontSize: 15,
+    fontWeight: 600,
+  },
+  settingsRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 18,
+    flexWrap: "wrap",
+  },
+  settingsLabel: {
+    color: "var(--text-body)",
+    fontSize: 14,
+    fontWeight: 500,
+  },
+  settingsDescription: {
+    display: "block",
+    marginTop: 4,
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+  settingsSelect: {
+    minWidth: 190,
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 8,
+    padding: "9px 12px",
+    color: "var(--text-body)",
+    fontSize: 13,
+    outline: "none",
+    cursor: "pointer",
+  },
+  settingsSegment: {
+    display: "inline-flex",
+    gap: 4,
+    padding: 3,
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 9,
+  },
+  settingsSegmentButton: {
+    border: "1px solid transparent",
+    borderRadius: 6,
+    padding: "7px 12px",
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  settingsSegmentButtonActive: {
+    color: "var(--accent-teal)",
+    background: "rgba(var(--accent-rgb), 0.1)",
+    border: "1px solid rgba(var(--accent-rgb), 0.3)",
+  },
+  settingsToggle: {
+    width: 44,
+    height: 26,
+    padding: 3,
+    border: "1px solid var(--border-strong)",
+    borderRadius: 20,
+    background: "var(--bg-toggle)",
+    cursor: "pointer",
+    transition: "background 0.15s ease, border-color 0.15s ease",
+  },
+  settingsToggleActive: {
+    background: "rgba(var(--accent-rgb), 0.28)",
+    border: "1px solid rgba(var(--accent-rgb), 0.6)",
+  },
+  settingsToggleThumb: {
+    display: "block",
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    background: "var(--text-secondary)",
+    transition: "transform 0.15s ease, background 0.15s ease",
+  },
+  settingsToggleThumbActive: {
+    transform: "translateX(18px)",
+    background: "var(--accent-teal)",
+  },
+  settingsAboutRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+  },
+  settingsAppName: {
+    color: "var(--text-primary)",
+    fontSize: 15,
+    fontWeight: 600,
+  },
+  settingsVersion: {
+    display: "block",
+    marginTop: 4,
+    color: "var(--text-secondary)",
+    fontSize: 12,
+  },
+  settingsActionButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    border: "1px solid var(--border-strong)",
+    borderRadius: 8,
+    padding: "9px 12px",
+    background: "var(--bg-surface)",
+    color: "var(--text-body)",
+    fontSize: 13,
+    cursor: "pointer",
   },
 };
 
@@ -544,15 +698,23 @@ function getDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function getTodayKey(): string {
-  return getDateKey(new Date());
+function getHabitDateKey(date: Date, resetHour: number): string {
+  const habitDate = new Date(date);
+  if (habitDate.getHours() < resetHour) {
+    habitDate.setDate(habitDate.getDate() - 1);
+  }
+  return getDateKey(habitDate);
 }
 
-function formatDateDisplay(key: string): string {
+function getTodayKey(resetHour = 0): string {
+  return getHabitDateKey(new Date(), resetHour);
+}
+
+function formatDateDisplay(key: string, resetHour: number): string {
   const [year, month, day] = key.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   const today = new Date();
-  const isToday = getDateKey(today) === key;
+  const isToday = getHabitDateKey(today, resetHour) === key;
   
   if (isToday) {
     return `Today - ${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
@@ -620,6 +782,29 @@ function loadCustomCategories(): string[] {
   }
 }
 
+function loadAppSettings(): AppSettings {
+  try {
+    const raw = localStorage.getItem(APP_SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      dayResetHour: [0, 2, 3].includes(parsed.dayResetHour ?? -1)
+        ? parsed.dayResetHour!
+        : DEFAULT_SETTINGS.dayResetHour,
+      weekStart: parsed.weekStart === "Monday" ? "Monday" : "Sunday",
+      defaultFocusDuration: FOCUS_DURATION_PRESETS.includes(parsed.defaultFocusDuration ?? -1)
+        ? parsed.defaultFocusDuration!
+        : DEFAULT_SETTINGS.defaultFocusDuration,
+      soundAlerts: typeof parsed.soundAlerts === "boolean"
+        ? parsed.soundAlerts
+        : DEFAULT_SETTINGS.soundAlerts,
+      theme: parsed.theme === "light" ? "light" : "dark",
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
 function isHabitScheduledOnDate(
   habit: Pick<Habit, "frequencyType" | "customDays">,
   dateKey: string,
@@ -637,9 +822,9 @@ function isHabitScheduledOnDate(
 // Streak is fully derived from completedDates + the real current date,
 // so a missed day breaks the chain automatically without any stored
 // counter to keep in sync.
-function calculateStreak(habit: Habit, streakFreeze = false): number {
+function calculateStreak(habit: Habit, streakFreeze = false, dayResetHour = 0): number {
   const dateSet = new Set(habit.completedDates);
-  const todayKey = getTodayKey();
+  const todayKey = getTodayKey(dayResetHour);
 
   if (getFrequencyType(habit) === "custom" && (habit.customDays?.length ?? 0) === 0) {
     return 0;
@@ -769,8 +954,16 @@ function loadHabits(): Habit[] {
 }
 
 function App() {
+  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+  const shortcutKey = isMac ? "⌘" : "Ctrl";
+
+  const [appSettings, setAppSettings] = useState<AppSettings>(loadAppSettings);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [view, setView] = useState<View>("Habits");
-  const [selectedDateKey, setSelectedDateKey] = useState(getTodayKey);
+  const [selectedDateKey, setSelectedDateKey] = useState(() =>
+    getTodayKey(appSettings.dayResetHour),
+  );
+  const lastLogicalDateKeyRef = useRef(getTodayKey(appSettings.dayResetHour));
 
   const [habits, setHabits] = useState<Habit[]>(loadHabits);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
@@ -819,6 +1012,7 @@ function App() {
   const [customCategoryDraft, setCustomCategoryDraft] = useState("");
   const [habitPendingDeletion, setHabitPendingDeletion] = useState<Habit | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [streakFreeze, setStreakFreeze] = useState(() => {
     try {
       const stored = localStorage.getItem(STREAK_FREEZE_KEY);
@@ -827,6 +1021,55 @@ function App() {
       return false;
     }
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(appSettings));
+    } catch {
+      // localStorage unavailable (e.g. private browsing) — fail silently
+    }
+  }, [appSettings]);
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-theme", appSettings.theme);
+  }, [appSettings.theme]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getVersion()
+      .then((version) => {
+        if (!cancelled) setAppVersion(version);
+      })
+      .catch(() => {
+        if (!cancelled) setAppVersion(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function syncHabitDay() {
+      const currentDateKey = getTodayKey(appSettings.dayResetHour);
+      const previousDateKey = lastLogicalDateKeyRef.current;
+      if (currentDateKey === previousDateKey) return;
+
+      lastLogicalDateKeyRef.current = currentDateKey;
+      setSelectedDateKey((selected) =>
+        selected === previousDateKey ? currentDateKey : selected,
+      );
+    }
+
+    const intervalId = window.setInterval(syncHabitDay, 30_000);
+    window.addEventListener("focus", syncHabitDay);
+    document.addEventListener("visibilitychange", syncHabitDay);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", syncHabitDay);
+      document.removeEventListener("visibilitychange", syncHabitDay);
+    };
+  }, [appSettings.dayResetHour]);
 
   useEffect(() => {
     try {
@@ -859,6 +1102,46 @@ function App() {
       // localStorage unavailable (e.g. private browsing) — fail silently
     }
   }, [customCategories]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+
+      if (!modifier) return;
+
+      switch (event.key) {
+        case "1":
+          event.preventDefault();
+          setView("Habits");
+          break;
+        case "2":
+          event.preventDefault();
+          setView("Timer");
+          break;
+        case "3":
+          event.preventDefault();
+          setView("History");
+          break;
+        case "4":
+          event.preventDefault();
+          setView("Analytics");
+          break;
+        case ",":
+          event.preventDefault();
+          setView("Settings");
+          break;
+        case "/":
+        case "?":
+          event.preventDefault();
+          setShowKeyboardShortcuts((prev) => !prev);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const categoriesInUse = Array.from(
     new Set(
@@ -957,7 +1240,7 @@ function App() {
       ...(newType === "Challenge"
         ? {
             durationDays: Math.max(1, Math.round(Number(newDuration)) || DEFAULT_DURATION),
-            startDate: getTodayKey(),
+            startDate: getTodayKey(appSettings.dayResetHour),
           }
         : {}),
       completedDates: [],
@@ -1230,7 +1513,7 @@ function App() {
     isScheduled = true,
   ) {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
-    const streak = calculateStreak(habit, streakFreeze);
+    const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
     const isEditing = editingId === habit.id;
 
     const rowColorStyle = completed ? styles.itemCompletedColors : styles.itemColors;
@@ -1458,6 +1741,7 @@ function App() {
           >
             <ListChecks size={20} />
             <span>My Habits</span>
+            <span className="sidebar-shortcut">{shortcutKey}1</span>
           </button>
           <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
@@ -1465,6 +1749,7 @@ function App() {
           >
             <TimerIcon size={20} />
             <span>Timer</span>
+            <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
@@ -1472,6 +1757,7 @@ function App() {
           >
             <HistoryIcon size={20} />
             <span>History</span>
+            <span className="sidebar-shortcut">{shortcutKey}3</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -1479,6 +1765,16 @@ function App() {
           >
             <BarChart3 size={20} />
             <span>Analytics</span>
+            <span className="sidebar-shortcut">{shortcutKey}4</span>
+          </button>
+          <div className="sidebar-spacer" />
+          <button
+            className={`sidebar-item ${view === "Settings" ? "active" : ""}`}
+            onClick={() => setView("Settings")}
+          >
+            <Settings size={20} />
+            <span>Settings</span>
+            <span className="sidebar-shortcut">{shortcutKey},</span>
           </button>
         </nav>
 
@@ -1514,7 +1810,7 @@ function App() {
   </button>
   <button
     style={styles.dateButton}
-    onClick={() => setSelectedDateKey(getTodayKey())}
+    onClick={() => setSelectedDateKey(getTodayKey(appSettings.dayResetHour))}
   >
     Today
   </button>
@@ -1528,14 +1824,14 @@ function App() {
 </div>
 
             <div style={styles.currentDateLabel}>
-              {formatDateDisplay(selectedDateKey)}
+              {formatDateDisplay(selectedDateKey, appSettings.dayResetHour)}
               {streakFreeze && (
                 <span
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     verticalAlign: "middle",
-                    color: "#00f0ff",
+                    color: "var(--accent-teal)",
                   }}
                 >
                   <Snowflake size={14} />
@@ -1586,11 +1882,11 @@ function App() {
               </div>
               {showCategoryManager && (
                 <div style={styles.categoryManager}>
-                  <strong style={{ color: "#f4f4f5", fontSize: 13 }}>
+                  <strong style={{ color: "var(--text-primary)", fontSize: 13 }}>
                     Custom Categories
                   </strong>
                   {customCategories.length === 0 ? (
-                    <span style={{ color: "#71717a", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
                       Add a category from the habit form to manage it here.
                     </span>
                   ) : (
@@ -1804,6 +2100,8 @@ function App() {
               habits={habits}
               focusSessions={focusSessions}
               onSessionComplete={addFocusSessionRecord}
+              defaultFocusDuration={appSettings.defaultFocusDuration}
+              soundAlerts={appSettings.soundAlerts}
             />
           </div>
 
@@ -1820,6 +2118,8 @@ function App() {
               focusSessions={focusSessions}
               onDeleteFocusSession={deleteFocusSession}
               streakFreeze={streakFreeze}
+              dayResetHour={appSettings.dayResetHour}
+              weekStart={appSettings.weekStart}
             />
           </div>
 
@@ -1831,7 +2131,173 @@ function App() {
               width: "100%",
             }}
           >
-            <Analytics habits={habits} focusSessions={focusSessions} streakFreeze={streakFreeze} />
+            <Analytics
+              habits={habits}
+              focusSessions={focusSessions}
+              streakFreeze={streakFreeze}
+              dayResetHour={appSettings.dayResetHour}
+              weekStart={appSettings.weekStart}
+            />
+          </div>
+
+          <div
+            style={{
+              display: view === "Settings" ? "flex" : "none",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <div style={styles.settingsPage}>
+              <h1 style={styles.h1}>Settings</h1>
+              <p style={styles.subtitle}>Manage your app preferences and defaults.</p>
+
+              <section style={styles.settingsCard} aria-labelledby="general-settings-title">
+                <h2 id="general-settings-title" style={styles.settingsCardTitle}>
+                  <CalendarDays size={17} />
+                  General
+                </h2>
+                <div className="settings-row" style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Appearance</span>
+                    <span style={styles.settingsDescription}>Choose your preferred color theme.</span>
+                  </div>
+                  <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance theme">
+                    {(["dark", "light"] as Theme[]).map((theme) => (
+                      <button
+                        key={theme}
+                        type="button"
+                        style={{
+                          ...styles.settingsSegmentButton,
+                          ...(appSettings.theme === theme ? styles.settingsSegmentButtonActive : {}),
+                        }}
+                        onClick={() => setAppSettings((current) => ({ ...current, theme }))}
+                        aria-pressed={appSettings.theme === theme}
+                      >
+                        {theme === "dark" ? "Dark" : "Light"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <label htmlFor="day-reset-time" style={styles.settingsLabel}>Day Reset Time</label>
+                    <span style={styles.settingsDescription}>Choose when a new habit day begins.</span>
+                  </div>
+                  <select
+                    id="day-reset-time"
+                    style={styles.settingsSelect}
+                    value={appSettings.dayResetHour}
+                    onChange={(event) => {
+                      const dayResetHour = Number(event.target.value);
+                      setAppSettings((current) => ({ ...current, dayResetHour }));
+                      setSelectedDateKey(getTodayKey(dayResetHour));
+                    }}
+                  >
+                    <option value={0}>12:00 AM</option>
+                    <option value={1}>1:00 AM</option>
+                    <option value={2}>2:00 AM</option>
+                    <option value={3}>3:00 AM</option>
+                  </select>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Start of Week</span>
+                    <span style={styles.settingsDescription}>Used by calendar grids and weekly summaries.</span>
+                  </div>
+                  <div style={styles.settingsSegment} role="group" aria-label="Start of week">
+                    {(["Sunday", "Monday"] as WeekStart[]).map((weekStart) => (
+                      <button
+                        key={weekStart}
+                        type="button"
+                        style={{
+                          ...styles.settingsSegmentButton,
+                          ...(appSettings.weekStart === weekStart ? styles.settingsSegmentButtonActive : {}),
+                        }}
+                        onClick={() => setAppSettings((current) => ({ ...current, weekStart }))}
+                        aria-pressed={appSettings.weekStart === weekStart}
+                      >
+                        {weekStart}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section style={styles.settingsCard} aria-labelledby="focus-defaults-title">
+                <h2 id="focus-defaults-title" style={styles.settingsCardTitle}>
+                  <Clock3 size={17} />
+                  Focus Timer Defaults
+                </h2>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Default Focus Duration</span>
+                    <span style={styles.settingsDescription}>Applied to the Timer and Pomodoro focus duration.</span>
+                  </div>
+                  <div style={styles.settingsSegment} role="group" aria-label="Default focus duration">
+                    {FOCUS_DURATION_PRESETS.map((minutes) => (
+                      <button
+                        key={minutes}
+                        type="button"
+                        style={{
+                          ...styles.settingsSegmentButton,
+                          ...(appSettings.defaultFocusDuration === minutes ? styles.settingsSegmentButtonActive : {}),
+                        }}
+                        onClick={() => setAppSettings((current) => ({ ...current, defaultFocusDuration: minutes }))}
+                        aria-pressed={appSettings.defaultFocusDuration === minutes}
+                      >
+                        {minutes}M
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Sound Alerts</span>
+                    <span style={styles.settingsDescription}>Play chime on timer completion.</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Play chime on timer completion"
+                    aria-checked={appSettings.soundAlerts}
+                    style={{
+                      ...styles.settingsToggle,
+                      ...(appSettings.soundAlerts ? styles.settingsToggleActive : {}),
+                    }}
+                    onClick={() => setAppSettings((current) => ({ ...current, soundAlerts: !current.soundAlerts }))}
+                  >
+                    <span
+                      style={{
+                        ...styles.settingsToggleThumb,
+                        ...(appSettings.soundAlerts ? styles.settingsToggleThumbActive : {}),
+                      }}
+                    />
+                  </button>
+                </div>
+              </section>
+
+              <section style={styles.settingsCard} aria-labelledby="about-system-title">
+                <h2 id="about-system-title" style={styles.settingsCardTitle}>About &amp; System Info</h2>
+                <div style={styles.settingsAboutRow}>
+                  <div>
+                    <span style={styles.settingsAppName}>Synchron</span>
+                    <span style={styles.settingsVersion}>
+                      {appVersion ? `v${appVersion}` : "Version unavailable"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    style={styles.settingsActionButton}
+                    onClick={() => setShowKeyboardShortcuts(true)}
+                  >
+                    <Keyboard size={15} />
+                    Keyboard Shortcuts
+                    <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{shortcutKey}/</span>
+                  </button>
+                </div>
+              </section>
+            </div>
           </div>
 
         </main>
@@ -1869,6 +2335,10 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showKeyboardShortcuts && (
+        <KeyboardShortcutsModal onClose={() => setShowKeyboardShortcuts(false)} shortcutKey={shortcutKey} />
       )}
     </div>
   );
