@@ -507,6 +507,16 @@
   padding: 32px;
 }
 
+.timer-adjust-button:hover {
+  color: var(--accent-teal) !important;
+  border-color: var(--accent-border) !important;
+  transform: scale(1.06);
+}
+
+.timer-adjust-button:active {
+  transform: scale(0.94);
+}
+
 .focus-control-panel {
   min-width: 0;
   align-self: stretch;

@@ -39,6 +39,7 @@ type AppSettings = {
   dayResetHour: number;
   weekStart: WeekStart;
   defaultFocusDuration: number;
+  quickAdjustStepMinutes: number;
   soundAlerts: boolean;
   theme: Theme;
 };
@@ -67,6 +68,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   dayResetHour: 0,
   weekStart: "Sunday",
   defaultFocusDuration: 25,
+  quickAdjustStepMinutes: 5,
   soundAlerts: true,
   theme: "dark",
 };
@@ -795,6 +797,11 @@ function loadAppSettings(): AppSettings {
       defaultFocusDuration: FOCUS_DURATION_PRESETS.includes(parsed.defaultFocusDuration ?? -1)
         ? parsed.defaultFocusDuration!
         : DEFAULT_SETTINGS.defaultFocusDuration,
+      quickAdjustStepMinutes: Number.isInteger(parsed.quickAdjustStepMinutes)
+        && parsed.quickAdjustStepMinutes! >= 1
+        && parsed.quickAdjustStepMinutes! <= 180
+        ? parsed.quickAdjustStepMinutes!
+        : DEFAULT_SETTINGS.quickAdjustStepMinutes,
       soundAlerts: typeof parsed.soundAlerts === "boolean"
         ? parsed.soundAlerts
         : DEFAULT_SETTINGS.soundAlerts,
@@ -2101,6 +2108,10 @@ function App() {
               focusSessions={focusSessions}
               onSessionComplete={addFocusSessionRecord}
               defaultFocusDuration={appSettings.defaultFocusDuration}
+              quickAdjustStepMinutes={appSettings.quickAdjustStepMinutes}
+              onQuickAdjustStepChange={(minutes) =>
+                setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: minutes }))
+              }
               soundAlerts={appSettings.soundAlerts}
             />
           </div>
@@ -2249,6 +2260,53 @@ function App() {
                         {minutes}M
                       </button>
                     ))}
+                  </div>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Quick Adjust Step</span>
+                    <span style={styles.settingsDescription}>Choose the time added or removed by the timer controls.</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <select
+                      style={{ ...styles.settingsSelect, minWidth: 120 }}
+                      value={[1, 5, 10].includes(appSettings.quickAdjustStepMinutes) ? appSettings.quickAdjustStepMinutes : "custom"}
+                      onChange={(event) => {
+                        if (event.target.value !== "custom") {
+                          setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: Number(event.target.value) }));
+                        } else if ([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) {
+                          setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: 2 }));
+                        }
+                      }}
+                      aria-label="Quick adjust step size"
+                    >
+                      <option value={1}>1 minute</option>
+                      <option value={5}>5 minutes</option>
+                      <option value={10}>10 minutes</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
+                      <input
+                        type="number"
+                        min={1}
+                        max={180}
+                        style={{ ...styles.settingsSelect, minWidth: 76, width: 76 }}
+                        value={appSettings.quickAdjustStepMinutes}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          if (Number.isFinite(value) && value >= 1) {
+                            setAppSettings((current) => ({
+                              ...current,
+                              quickAdjustStepMinutes: Math.min(180, Math.round(value)),
+                            }));
+                          }
+                        }}
+                        aria-label="Custom quick adjust step in minutes"
+                      />
+                    )}
+                    {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
+                      <span style={styles.durationLabel}>min</span>
+                    )}
                   </div>
                 </div>
                 <div style={styles.settingsRow}>
