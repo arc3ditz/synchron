@@ -517,6 +517,18 @@
   transform: scale(0.94);
 }
 
+:root[data-theme="light"] .timer-adjust-button {
+  background: var(--accent-teal) !important;
+  border-color: var(--accent-teal) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="light"] .timer-adjust-button:hover {
+  background: #005757 !important;
+  border-color: #005757 !important;
+  color: #ffffff !important;
+}
+
 .focus-control-panel {
   min-width: 0;
   align-self: stretch;

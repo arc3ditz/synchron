@@ -23,6 +23,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import FocusTimer from "./components/FocusTimer";
 import History, { type FocusSessionRecord } from "./components/History";
 import Analytics from "./components/Analytics";
+import Today from "./components/Today";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import { CARD_SURFACE } from "./theme";
 import "./styles/AppLayout.css";
@@ -33,7 +34,7 @@ type HabitType = "Daily" | "Challenge";
 type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 type WeekStart = "Sunday" | "Monday";
 type Theme = "dark" | "light";
-type View = "Habits" | "Timer" | "History" | "Analytics" | "Settings";
+type View = "Today" | "Habits" | "Timer" | "History" | "Analytics" | "Settings";
 
 type AppSettings = {
   dayResetHour: number;
@@ -1120,17 +1121,21 @@ function App() {
       switch (event.key) {
         case "1":
           event.preventDefault();
-          setView("Habits");
+          setView("Today");
           break;
         case "2":
           event.preventDefault();
-          setView("Timer");
+          setView("Habits");
           break;
         case "3":
           event.preventDefault();
-          setView("History");
+          setView("Timer");
           break;
         case "4":
+          event.preventDefault();
+          setView("History");
+          break;
+        case "5":
           event.preventDefault();
           setView("Analytics");
           break;
@@ -1264,14 +1269,15 @@ function App() {
     setNewCategoryName("");
   }
 
-  function toggleHabit(id: number) {
+  function toggleHabit(id: number, dateKey?: string) {
+    const targetDateKey = dateKey ?? selectedDateKey;
     const updatedHabits: Habit[] = habits.map((habit): Habit => {
       if (habit.id !== id) return habit;
 
-      const isDoneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
-      const completedDates = isDoneOnSelectedDate
-        ? habit.completedDates.filter((date) => date !== selectedDateKey)
-        : [...habit.completedDates, selectedDateKey];
+      const isDoneOnTargetDate = habit.completedDates.includes(targetDateKey);
+      const completedDates = isDoneOnTargetDate
+        ? habit.completedDates.filter((date) => date !== targetDateKey)
+        : [...habit.completedDates, targetDateKey];
 
       return { ...habit, completedDates };
     });
@@ -1743,12 +1749,20 @@ function App() {
       <div className="app-body">
         <nav className="sidebar">
           <button
+            className={`sidebar-item ${view === "Today" ? "active" : ""}`}
+            onClick={() => setView("Today")}
+          >
+            <CalendarDays size={20} />
+            <span>Today</span>
+            <span className="sidebar-shortcut">{shortcutKey}1</span>
+          </button>
+          <button
             className={`sidebar-item ${view === "Habits" ? "active" : ""}`}
             onClick={() => setView("Habits")}
           >
             <ListChecks size={20} />
             <span>My Habits</span>
-            <span className="sidebar-shortcut">{shortcutKey}1</span>
+            <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
           <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
@@ -1756,7 +1770,7 @@ function App() {
           >
             <TimerIcon size={20} />
             <span>Timer</span>
-            <span className="sidebar-shortcut">{shortcutKey}2</span>
+            <span className="sidebar-shortcut">{shortcutKey}3</span>
           </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
@@ -1764,7 +1778,7 @@ function App() {
           >
             <HistoryIcon size={20} />
             <span>History</span>
-            <span className="sidebar-shortcut">{shortcutKey}3</span>
+            <span className="sidebar-shortcut">{shortcutKey}4</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -1772,7 +1786,7 @@ function App() {
           >
             <BarChart3 size={20} />
             <span>Analytics</span>
-            <span className="sidebar-shortcut">{shortcutKey}4</span>
+            <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <div className="sidebar-spacer" />
           <button
@@ -1789,6 +1803,25 @@ function App() {
           {/* Both views stay mounted at all times — only visibility is
               toggled — so the Focus Timer's interval and state are
               never interrupted by switching sidebar tabs. */}
+          <div
+            style={{
+              display: view === "Today" ? "flex" : "none",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <Today
+              habits={habits}
+              focusSessions={focusSessions}
+              onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
+              onStartFocus={() => setView("Timer")}
+              onNavigateToHabits={() => setView("Habits")}
+              streakFreeze={streakFreeze}
+              dayResetHour={appSettings.dayResetHour}
+            />
+          </div>
+
           <div style={{ display: view === "Habits" ? "block" : "none" }}>
             <h1 style={styles.h1}>My Habits</h1>
             <p style={styles.subtitle}>Small steps count.</p>
