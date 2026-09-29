@@ -14,6 +14,7 @@ import {
   ArchiveRestore,
   Snowflake,
   Settings,
+  Target,
   Clock3,
   CalendarDays,
   Keyboard,
@@ -24,6 +25,7 @@ import FocusTimer from "./components/FocusTimer";
 import History from "./components/History";
 import Analytics from "./components/Analytics";
 import Today from "./components/Today";
+import Goals from "./components/Goals";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import { CARD_SURFACE } from "./theme";
 import "./styles/AppLayout.css";
@@ -50,6 +52,8 @@ import {
   loadTasks,
   saveTasks,
 } from "./utils/storage";
+import { createGoal } from "./domain/goals";
+import { toggleTaskCompletion } from "./domain/tasks";
 import {
   getTodayKey,
   formatDateDisplay,
@@ -843,8 +847,8 @@ function App() {
   const lastLogicalDateKeyRef = useRef(getTodayKey(appSettings.dayResetHour));
 
   const [habits, setHabits] = useState<Habit[]>(loadHabits);
-  const [goals] = useState<Goal[]>(loadGoals);
-  const [tasks] = useState<Task[]>(loadTasks);
+  const [goals, setGoals] = useState<Goal[]>(loadGoals);
+  const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
     const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
     if (!Array.isArray(parsed)) return [];
@@ -1614,6 +1618,13 @@ function App() {
             <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
           <button
+            className={`sidebar-item ${view === "goals" ? "active" : ""}`}
+            onClick={() => setView("goals")}
+          >
+            <Target size={20} />
+            <span>Goals</span>
+          </button>
+          <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
             onClick={() => setView("Timer")}
           >
@@ -2030,6 +2041,26 @@ function App() {
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
               weekStart={appSettings.weekStart}
+            />
+          </div>
+
+          <div
+            style={{
+              display: view === "goals" ? "flex" : "none",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <Goals
+              goals={goals}
+              tasks={tasks}
+              onAddGoal={(data) => setGoals((current) => [...current, createGoal(data)])}
+              onToggleTask={(taskId) =>
+                setTasks((current) => current.map((task) =>
+                  task.id === taskId ? toggleTaskCompletion(task) : task,
+                ))
+              }
             />
           </div>
 

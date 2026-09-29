@@ -74,6 +74,21 @@
   box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.1);
 }
 
+@media (max-width: 899px) {
+  .sidebar-item {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 2px;
+    font-size: 10px;
+  }
+
+  .sidebar-item > span:not(.sidebar-shortcut) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+}
+
 .main-content {
   flex: 1;
   min-width: 0;

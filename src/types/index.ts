@@ -4,7 +4,7 @@ export type HabitType = "Daily" | "Challenge";
 export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
 export type Theme = "dark" | "light";
-export type View = "Today" | "Habits" | "Timer" | "History" | "Analytics" | "Settings";
+export type View = "Today" | "Habits" | "Timer" | "History" | "Analytics" | "goals" | "Settings";
 
 export interface AppSettings {
   dayResetHour: number;
