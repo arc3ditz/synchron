@@ -12,6 +12,7 @@ export interface AppSettings {
   defaultFocusDuration: number;
   quickAdjustStepMinutes: number;
   soundAlerts: boolean;
+  showMandatoryHabitsInImportantItems?: boolean;
   theme: Theme;
 }
 
@@ -28,6 +29,8 @@ export interface Habit {
   completedDates: string[]; // "YYYY-MM-DD" local calendar days this habit was completed
   isArchived?: boolean; // if true, habit is archived and hidden from active list
   category?: string; // optional Title Case label, e.g. "School"
+  scheduledTime?: string; // "HH:MM" format for time blocking
+  durationMinutes?: number; // estimated duration in minutes for time blocking
 }
 
 export interface Summary {
@@ -53,8 +56,10 @@ export interface FocusSessionRecord {
   sessionType: "Timer" | "Pomodoro Focus";
   durationMinutes: number;
   habitName: string;
+  habitId?: number;
   taskId?: string;
   goalId?: string;
+  milestoneId?: string;
 }
 
 // Analytics component types (subset of Habit)
@@ -100,6 +105,7 @@ export interface Goal {
   targetDate?: string;
   status: 'active' | 'completed' | 'archived';
   createdAt: string;
+  milestones?: Milestone[];
 }
 
 export interface Milestone {
@@ -120,4 +126,6 @@ export interface Task {
   completed: boolean;
   priority: 'low' | 'medium' | 'high';
   createdAt: string;
+  scheduledTime?: string; // "HH:MM" format for time blocking
+  durationMinutes?: number; // estimated duration in minutes for time blocking
 }

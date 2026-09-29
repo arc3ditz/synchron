@@ -1,7 +1,8 @@
-import { useMemo, type CSSProperties } from "react";
-import { Check, Flame, ListChecks, Play, Plus } from "lucide-react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
-import type { Habit, FocusSessionRecord } from "../types";
+import StreakBadge from "./StreakBadge";
+import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
 import {
   getTodayKey,
   isHabitScheduledOnDate,
@@ -12,12 +13,19 @@ import {
 
 type TodayProps = {
   habits: Habit[];
+  tasks: Task[];
+  goals: Goal[];
+  milestones: Milestone[];
   focusSessions: FocusSessionRecord[];
   onToggleHabit: (id: number, dateKey?: string) => void;
+  onToggleTask: (id: string) => void;
   onStartFocus: () => void;
   onNavigateToHabits: () => void;
   streakFreeze: boolean;
   dayResetHour: number;
+  showMandatoryHabitsInImportantItems: boolean;
+  onUpdateHabit: (habit: Habit) => void;
+  onUpdateTask: (task: Task) => void;
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -76,6 +84,11 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 8,
   },
+  taskList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
   habitCard: {
     ...CARD_SURFACE,
     display: "flex",
@@ -119,29 +132,12 @@ const styles: Record<string, CSSProperties> = {
   categoryBadge: {
     fontSize: 11,
     fontWeight: 500,
-    color: "var(--text-secondary)",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 4,
-    padding: "2px 6px",
-    whiteSpace: "nowrap",
-  },
-  streakBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 12,
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.08)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
-    borderRadius: 12,
     padding: "2px 8px",
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    color: "var(--text-secondary)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     whiteSpace: "nowrap",
-  },
-  streakZero: {
-    color: "var(--text-dim)",
-    background: "transparent",
-    border: "1px solid var(--border-strong)",
   },
   habitCardCompleted: {
     ...CARD_SURFACE,
@@ -151,6 +147,29 @@ const styles: Record<string, CSSProperties> = {
   habitNameCompleted: {
     color: "var(--text-dim)",
     textDecoration: "line-through",
+  },
+  taskName: {
+    fontSize: 15,
+    fontWeight: 500,
+    color: "var(--text-body)",
+    margin: "0 0 5px",
+  },
+  taskMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+  },
+  taskNameCompleted: {
+    color: "var(--text-dim)",
+    textDecoration: "line-through",
+  },
+  taskPriority: {
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "capitalize",
   },
   checkbox: {
     width: 24,
@@ -250,6 +269,25 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--accent-teal)",
     cursor: "pointer",
   },
+  secondaryButton: {
+    padding: "8px 12px",
+    border: "1px solid var(--card-surface-border)",
+    borderRadius: 8,
+    background: "transparent",
+    color: "var(--text-body)",
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  submitButton: {
+    padding: "8px 12px",
+    border: "1px solid var(--accent-border)",
+    borderRadius: 8,
+    background: "var(--accent-teal)",
+    color: "var(--bg-primary)",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   quickActionList: {
     display: "flex",
     flexDirection: "column",
@@ -257,7 +295,167 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     maxWidth: "100%",
   },
+  scheduleSection: {
+    marginBottom: 32,
+  },
+  scheduleHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  scheduleTimeSummary: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    fontWeight: 500,
+  },
+  scheduleTimeline: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  scheduleItem: {
+    ...CARD_SURFACE,
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    padding: 16,
+    position: "relative",
+  },
+  scheduleTimeSlot: {
+    flexShrink: 0,
+    width: 70,
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--accent-teal)",
+    textAlign: "right",
+  },
+  scheduleItemInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scheduleItemTitle: {
+    fontSize: 15,
+    fontWeight: 500,
+    color: "var(--text-body)",
+    margin: "0 0 4px",
+  },
+  scheduleItemMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    color: "var(--text-secondary)",
+  },
+  scheduleDuration: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+    color: "var(--text-muted)",
+  },
+  scheduleButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 10px",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 7,
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  scheduleModal: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0, 0, 0, 0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  scheduleModalContent: {
+    ...CARD_SURFACE,
+    maxWidth: 400,
+    width: "90%",
+    padding: 24,
+    maxHeight: "80vh",
+    overflowY: "auto",
+  },
+  scheduleModalTitle: {
+    fontSize: 18,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    margin: "0 0 16px",
+  },
+  scheduleModalClose: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    background: "transparent",
+    border: "none",
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+    padding: 4,
+  },
+  scheduleForm: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  scheduleFormItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  scheduleFormLabel: {
+    fontSize: 13,
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+  },
+  scheduleFormInput: {
+    padding: "10px 12px",
+    border: "1px solid var(--card-surface-border)",
+    borderRadius: 8,
+    background: "var(--card-surface-bg)",
+    color: "var(--text-primary)",
+    fontSize: 14,
+  },
+  scheduleFormActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 8,
+  },
+  unscheduledSection: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTop: "1px solid var(--border-color)",
+  },
 };
+
+function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
+  return (
+    <div style={styles.habitMeta}>
+      <span
+        style={{
+          ...styles.priorityBadge,
+          ...(habit.priority === "Mandatory"
+            ? styles.priorityMandatory
+            : styles.priorityOptional),
+        }}
+      >
+        {habit.priority}
+      </span>
+      {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
+      <StreakBadge streak={streak} />
+    </div>
+  );
+}
 
 function isChallengeActiveOnDate(habit: Habit, dateKey: string): boolean {
   if (habit.type !== "Challenge" || !habit.startDate || !habit.durationDays) {
@@ -269,15 +467,26 @@ function isChallengeActiveOnDate(habit: Habit, dateKey: string): boolean {
 
 function Today({
   habits,
+  tasks,
+  goals,
+  milestones,
   focusSessions,
   onToggleHabit,
+  onToggleTask,
   onStartFocus,
   onNavigateToHabits,
   streakFreeze,
   dayResetHour,
+  showMandatoryHabitsInImportantItems,
+  onUpdateHabit,
+  onUpdateTask,
 }: TodayProps) {
   const todayKey = getTodayKey(dayResetHour);
   const today = useMemo(() => new Date(), []);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [schedulingItem, setSchedulingItem] = useState<{ type: 'habit' | 'task'; id: string | number } | null>(null);
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleDuration, setScheduleDuration] = useState("");
   
   const todayHabits = useMemo(() => {
     return habits.filter(
@@ -288,10 +497,81 @@ function Today({
     );
   }, [habits, todayKey]);
 
-  const completedCount = todayHabits.filter((habit) =>
+  const activeGoalIds = useMemo(
+    () => new Set(goals.filter((goal) => goal.status === "active").map((goal) => goal.id)),
+    [goals],
+  );
+  const activeMilestoneIds = useMemo(
+    () => new Set(milestones
+      .filter((milestone) => !milestone.completed && activeGoalIds.has(milestone.goalId))
+      .map((milestone) => milestone.id)),
+    [milestones, activeGoalIds],
+  );
+  const todayTasks = useMemo(
+    () => tasks.filter((task) => task.dueDate === todayKey || (task.milestoneId && activeMilestoneIds.has(task.milestoneId))),
+    [tasks, todayKey, activeMilestoneIds],
+  );
+
+  const scheduledItems = useMemo(() => {
+    const items: Array<{ type: 'habit' | 'task'; id: string | number; title: string; time: string; duration?: number; meta?: string }> = [];
+    
+    todayHabits.forEach(habit => {
+      if (habit.scheduledTime) {
+        items.push({
+          type: 'habit',
+          id: habit.id,
+          title: habit.name,
+          time: habit.scheduledTime,
+          duration: habit.durationMinutes,
+          meta: habit.category || habit.priority,
+        });
+      }
+    });
+    
+    todayTasks.forEach(task => {
+      if (task.scheduledTime) {
+        const milestone = milestones.find((item) => item.id === task.milestoneId);
+        const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
+        items.push({
+          type: 'task',
+          id: task.id,
+          title: task.title,
+          time: task.scheduledTime,
+          duration: task.durationMinutes || task.estimatedMinutes,
+          meta: goal?.title || task.priority,
+        });
+      }
+    });
+    
+    return items.sort((a, b) => a.time.localeCompare(b.time));
+  }, [todayHabits, todayTasks, milestones, goals]);
+
+  const totalPlannedMinutes = useMemo(() => {
+    return scheduledItems.reduce((total, item) => total + (item.duration || 0), 0);
+  }, [scheduledItems]);
+
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
+
+  const pendingTodayTasks = todayTasks.filter((task) => !task.completed);
+  const pendingMandatoryHabits = showMandatoryHabitsInImportantItems
+    ? todayHabits.filter((habit) =>
+      habit.priority === "Mandatory" && !habit.completedDates.includes(todayKey),
+    )
+    : [];
+
+  const completedHabitCount = todayHabits.filter((habit) =>
     habit.completedDates.includes(todayKey),
   ).length;
-  const totalCount = todayHabits.length;
+  const completedTaskCount = todayTasks.filter((task) => task.completed).length;
+  const completedCount = completedHabitCount + completedTaskCount;
+  const totalCount = todayHabits.length + todayTasks.length;
   const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
   const todayFocusTime = useMemo(() => {
@@ -309,7 +589,55 @@ function Today({
     return Math.max(0, ...todayHabits.map((habit) => calculateStreak(habit, streakFreeze, dayResetHour)));
   }, [todayHabits, streakFreeze, dayResetHour]);
 
-  if (todayHabits.length === 0) {
+  const openScheduleModal = (type: 'habit' | 'task', id: string | number) => {
+    const item = type === 'habit' 
+      ? habits.find(h => h.id === id)
+      : tasks.find(t => t.id === id);
+    
+    if (item) {
+      setSchedulingItem({ type, id });
+      setScheduleTime(item.scheduledTime || "");
+      const estimatedMinutes = "estimatedMinutes" in item ? item.estimatedMinutes : undefined;
+      setScheduleDuration((item.durationMinutes || estimatedMinutes || 30).toString());
+      setScheduleModalOpen(true);
+    }
+  };
+
+  const closeScheduleModal = () => {
+    setScheduleModalOpen(false);
+    setSchedulingItem(null);
+    setScheduleTime("");
+    setScheduleDuration("");
+  };
+
+  const handleScheduleSave = () => {
+    if (!schedulingItem) return;
+    
+    const duration = parseInt(scheduleDuration, 10);
+    if (schedulingItem.type === 'habit') {
+      const habit = habits.find(h => h.id === schedulingItem.id);
+      if (habit) {
+        onUpdateHabit({
+          ...habit,
+          scheduledTime: scheduleTime || undefined,
+          durationMinutes: scheduleTime ? (Number.isFinite(duration) && duration > 0 ? duration : undefined) : undefined,
+        });
+      }
+    } else {
+      const task = tasks.find(t => t.id === schedulingItem.id);
+      if (task) {
+        onUpdateTask({
+          ...task,
+          scheduledTime: scheduleTime || undefined,
+          durationMinutes: scheduleTime ? (Number.isFinite(duration) && duration > 0 ? duration : undefined) : undefined,
+        });
+      }
+    }
+    
+    closeScheduleModal();
+  };
+
+  if (todayHabits.length === 0 && todayTasks.length === 0) {
     return (
       <div style={styles.page}>
         <div style={styles.header}>
@@ -358,7 +686,7 @@ function Today({
 
       <div style={styles.statsGrid}>
         <div style={styles.statCard}>
-          <span style={styles.statLabel}>Habits Completed</span>
+          <span style={styles.statLabel}>Items Completed</span>
           <span style={styles.statValue}>{completedCount}</span>
         </div>
         <div style={styles.statCard}>
@@ -370,15 +698,55 @@ function Today({
           <span style={styles.statValue}>{todayFocusTime}m</span>
         </div>
         <div style={styles.statCard}>
-          <span style={styles.statLabel}>Remaining Habits</span>
+          <span style={styles.statLabel}>Remaining Items</span>
           <span style={styles.statValue}>{totalCount - completedCount}</span>
         </div>
       </div>
 
+      {scheduledItems.length > 0 && (
+        <div style={styles.scheduleSection}>
+          <div style={styles.scheduleHeader}>
+            <h2 style={styles.sectionTitle}>UP NEXT / SCHEDULED TODAY</h2>
+            <span style={styles.scheduleTimeSummary}>
+              {formatDuration(totalPlannedMinutes)} planned
+            </span>
+          </div>
+          <div style={styles.scheduleTimeline}>
+            {scheduledItems.map((item) => (
+              <div key={`${item.type}-${item.id}`} style={styles.scheduleItem}>
+                <div style={styles.scheduleTimeSlot}>{item.time}</div>
+                <div style={styles.scheduleItemInfo}>
+                  <h3 style={styles.scheduleItemTitle}>{item.title}</h3>
+                  <div style={styles.scheduleItemMeta}>
+                    <span style={{ textTransform: 'capitalize' }}>{item.type}</span>
+                    {item.meta && <span>· {item.meta}</span>}
+                  </div>
+                </div>
+                {item.duration && (
+                  <div style={styles.scheduleDuration}>
+                    <Clock size={12} />
+                    {formatDuration(item.duration)}
+                  </div>
+                )}
+                <button
+                  style={styles.scheduleButton}
+                  onClick={() => openScheduleModal(item.type, item.id)}
+                  aria-label={`Schedule ${item.type}`}
+                >
+                  <MoreVertical size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Today's Habits</h2>
         <div style={styles.habitList}>
-          {todayHabits.map((habit) => {
+          {todayHabits.length === 0 ? (
+            <p style={styles.emptyText}>No habits scheduled for today.</p>
+          ) : todayHabits.map((habit) => {
             const isCompleted = habit.completedDates.includes(todayKey);
             const streak = calculateStreak(habit, streakFreeze, dayResetHour);
             
@@ -411,29 +779,59 @@ function Today({
                   >
                     {habit.name}
                   </h3>
-                  <div style={styles.habitMeta}>
-                    <span
-                      style={{
-                        ...styles.priorityBadge,
-                        ...(habit.priority === "Mandatory"
-                          ? styles.priorityMandatory
-                          : styles.priorityOptional),
-                      }}
-                    >
-                      {habit.priority}
-                    </span>
-                    {habit.category && (
-                      <span style={styles.categoryBadge}>{habit.category}</span>
-                    )}
-                    <span
-                      style={{
-                        ...styles.streakBadge,
-                        ...(streak === 0 ? styles.streakZero : {}),
-                      }}
-                    >
-                      <Flame size={12} />
-                      {streak}
-                    </span>
+                  <HabitMetadata habit={habit} streak={streak} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitle}>Important Tasks &amp; Habits</h2>
+        <div style={styles.taskList}>
+          {pendingTodayTasks.length === 0 && pendingMandatoryHabits.length === 0 && (
+            <p style={styles.emptyText}>No pending important tasks or mandatory habits for today.</p>
+          )}
+          {pendingMandatoryHabits.map((habit) => {
+            const streak = calculateStreak(habit, streakFreeze, dayResetHour);
+            return (
+              <div key={`habit-${habit.id}`} style={styles.habitCard}>
+                <button
+                  type="button"
+                  style={styles.checkbox}
+                  onClick={() => onToggleHabit(habit.id, todayKey)}
+                  aria-label={`Complete mandatory habit ${habit.name}`}
+                  aria-checked={false}
+                  role="checkbox"
+                />
+                <div style={styles.habitInfo}>
+                  <h3 style={styles.taskName}>{habit.name}</h3>
+                  <HabitMetadata habit={habit} streak={streak} />
+                </div>
+              </div>
+            );
+          })}
+          {pendingTodayTasks.map((task) => {
+            const milestone = milestones.find((item) => item.id === task.milestoneId);
+            const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
+            return (
+              <div key={task.id} style={styles.habitCard}>
+                <button
+                  type="button"
+                  style={styles.checkbox}
+                  onClick={() => onToggleTask(task.id)}
+                  aria-label={`Complete ${task.title}`}
+                  aria-checked={false}
+                  role="checkbox"
+                />
+                <div style={styles.habitInfo}>
+                  <h3 style={styles.taskName}>{task.title}</h3>
+                  <div style={styles.taskMeta}>
+                    <span style={styles.taskPriority}>{task.priority}</span>
+                    {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
+                    {goal && <span>{goal.title}</span>}
+                    {milestone && <span>{milestone.title}</span>}
                   </div>
                 </div>
               </div>
@@ -455,6 +853,64 @@ function Today({
           </button>
         </div>
       </div>
+
+      {scheduleModalOpen && (
+        <div style={styles.scheduleModal} onClick={closeScheduleModal}>
+          <div style={styles.scheduleModalContent} onClick={(e) => e.stopPropagation()}>
+            <button
+              style={styles.scheduleModalClose}
+              onClick={closeScheduleModal}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+            <h2 style={styles.scheduleModalTitle}>
+              Schedule {schedulingItem?.type === 'habit' ? 'Habit' : 'Task'}
+            </h2>
+            <div style={styles.scheduleForm}>
+              <div style={styles.scheduleFormItem}>
+                <label style={styles.scheduleFormLabel}>Time (HH:MM)</label>
+                <input
+                  type="time"
+                  style={styles.scheduleFormInput}
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  aria-label="Schedule time"
+                />
+              </div>
+              <div style={styles.scheduleFormItem}>
+                <label style={styles.scheduleFormLabel}>Duration (minutes)</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  style={styles.scheduleFormInput}
+                  value={scheduleDuration}
+                  onChange={(e) => setScheduleDuration(e.target.value)}
+                  placeholder="30"
+                  aria-label="Duration in minutes"
+                />
+              </div>
+              <div style={styles.scheduleFormActions}>
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={closeScheduleModal}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  style={styles.submitButton}
+                  onClick={handleScheduleSave}
+                >
+                  Save Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

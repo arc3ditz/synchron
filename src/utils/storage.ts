@@ -2,7 +2,7 @@
  * Storage utility functions for localStorage operations
  */
 
-import type { Goal, Task } from "../types";
+import type { Goal, Milestone, Task, Habit } from "../types";
 
 export const STORAGE_KEYS = {
   HABITS: "habits",
@@ -54,9 +54,42 @@ export function saveGoals(goals: Goal[]): void {
 }
 
 export function loadTasks(): Task[] {
-  return loadStorageData<Task[]>(STORAGE_KEYS.TASKS, []);
+  const parsed = loadStorageData<(Partial<Task> & { id: string; title: string })[]>(STORAGE_KEYS.TASKS, []);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.map((item) => {
+    return {
+      id: item.id,
+      milestoneId: typeof item.milestoneId === "string" ? item.milestoneId : undefined,
+      goalId: typeof item.goalId === "string" ? item.goalId : undefined,
+      title: item.title,
+      dueDate: typeof item.dueDate === "string" ? item.dueDate : undefined,
+      estimatedMinutes: typeof item.estimatedMinutes === "number" && item.estimatedMinutes > 0 ? item.estimatedMinutes : undefined,
+      completed: item.completed === true,
+      priority: item.priority === "high" || item.priority === "low" ? item.priority : "medium",
+      createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+      scheduledTime: typeof item.scheduledTime === "string" ? item.scheduledTime : undefined,
+      durationMinutes: typeof item.durationMinutes === "number" && item.durationMinutes > 0 ? item.durationMinutes : undefined,
+    };
+  });
 }
 
 export function saveTasks(tasks: Task[]): void {
   saveStorageData(STORAGE_KEYS.TASKS, tasks);
+}
+
+export function loadMilestones(): Milestone[] {
+  return loadStorageData<Milestone[]>(STORAGE_KEYS.MILESTONES, []);
+}
+
+export function saveMilestones(milestones: Milestone[]): void {
+  saveStorageData(STORAGE_KEYS.MILESTONES, milestones);
+}
+
+export function loadHabits(): Habit[] {
+  return loadStorageData<Habit[]>(STORAGE_KEYS.HABITS, []);
+}
+
+export function saveHabits(habits: Habit[]): void {
+  saveStorageData(STORAGE_KEYS.HABITS, habits);
 }

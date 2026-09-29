@@ -116,9 +116,71 @@
   transform: scale(0.98);
 }
 
+.main-content button.milestone-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--checkbox-border);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.main-content button.milestone-checkbox:hover:not([aria-pressed="true"]) {
+  border-color: var(--accent-teal) !important;
+  background: transparent;
+  box-shadow: none !important;
+  transform: none;
+}
+
+.main-content button.milestone-checkbox[aria-pressed="true"] {
+  border-color: var(--checkbox-checked-border);
+  background: var(--checkbox-checked-bg);
+  color: #fff;
+}
+
+.milestone-checkbox-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
 .progress-fill {
   background: linear-gradient(90deg, var(--accent-teal-soft), var(--accent-teal)) !important;
   box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.35);
+}
+
+.streak-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--accent-amber);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.streak-pill-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: var(--accent-amber);
+  fill: rgba(245, 158, 11, 0.2);
 }
 
 /* ---------- Delete confirmation modal ---------- */
@@ -272,7 +334,7 @@
 }
 
 .habit-table-header > span:nth-child(4),
-.streak-badge {
+.habit-row .my-habits-streak {
   transform: translateX(40px);
 }
 

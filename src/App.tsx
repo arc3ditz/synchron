@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import {
   ListChecks,
   Timer as TimerIcon,
-  Flame,
   Pencil,
   Trash2,
   History as HistoryIcon,
@@ -26,6 +25,7 @@ import History from "./components/History";
 import Analytics from "./components/Analytics";
 import Today from "./components/Today";
 import Goals from "./components/Goals";
+import StreakBadge from "./components/StreakBadge";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import { CARD_SURFACE } from "./theme";
 import "./styles/AppLayout.css";
@@ -39,6 +39,7 @@ import type {
   AppSettings,
   Habit,
   Goal,
+  Milestone,
   Task,
   Summary,
   FocusSessionRecord,
@@ -51,8 +52,11 @@ import {
   saveGoals,
   loadTasks,
   saveTasks,
+  loadMilestones,
+  saveMilestones,
+  saveHabits,
 } from "./utils/storage";
-import { createGoal, updateGoal, updateGoalStatus } from "./domain/goals";
+import { createGoal, updateGoal, updateGoalStatus, createMilestone, updateMilestone, toggleMilestone, deleteMilestone } from "./domain/goals";
 import { createTask, toggleTaskCompletion, updateTask } from "./domain/tasks";
 import {
   getTodayKey,
@@ -72,6 +76,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultFocusDuration: 25,
   quickAdjustStepMinutes: 5,
   soundAlerts: true,
+  showMandatoryHabitsInImportantItems: false,
   theme: "dark",
 };
 const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
@@ -288,24 +293,6 @@ const styles: Record<string, CSSProperties> = {
   habitNameDone: {
     color: "var(--text-dim)",
     textDecoration: "line-through",
-  },
-  streak: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 12,
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.08)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
-    borderRadius: 20,
-    padding: "2px 9px",
-    whiteSpace: "nowrap",
-    width: "fit-content",
-  },
-  streakZero: {
-    color: "var(--text-dim)",
-    background: "transparent",
-    border: "1px solid var(--border-strong)",
   },
   priorityBadge: {
     fontSize: 11,
@@ -744,6 +731,9 @@ function loadAppSettings(): AppSettings {
     soundAlerts: typeof parsed.soundAlerts === "boolean"
       ? parsed.soundAlerts
       : DEFAULT_SETTINGS.soundAlerts,
+    showMandatoryHabitsInImportantItems: typeof parsed.showMandatoryHabitsInImportantItems === "boolean"
+      ? parsed.showMandatoryHabitsInImportantItems
+      : DEFAULT_SETTINGS.showMandatoryHabitsInImportantItems,
     theme: parsed.theme === "light" ? "light" : "dark",
   };
 }
@@ -795,46 +785,6 @@ function computeSummary(habits: Habit[], dateKey: string): Summary {
   return { total, doneCount, percent, mandatoryTotal, mandatoryDone };
 }
 
-function loadHabits(): Habit[] {
-  const parsed = loadStorageData<(Partial<Habit> & { id: number; name: string })[]>(STORAGE_KEYS.HABITS, []);
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.map((item) => {
-    const hasValidChallengeFields =
-      item.type === "Challenge" &&
-      typeof item.startDate === "string" &&
-      typeof item.durationDays === "number" &&
-      item.durationDays > 0;
-
-    const category =
-      typeof item.category === "string" ? normalizeCategory(item.category) : "";
-
-    return {
-      id: item.id,
-      name: item.name,
-      goalId: typeof item.goalId === "string" ? item.goalId : undefined,
-      priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
-      type: hasValidChallengeFields ? "Challenge" : "Daily",
-      frequencyType:
-        item.frequencyType === "weekdays" ||
-        item.frequencyType === "weekends" ||
-        item.frequencyType === "custom"
-          ? item.frequencyType
-          : "daily",
-      customDays: Array.isArray(item.customDays)
-        ? item.customDays.filter((day): day is string => WEEKDAYS.includes(day))
-        : [],
-      durationDays: hasValidChallengeFields ? item.durationDays : undefined,
-      startDate: hasValidChallengeFields ? item.startDate : undefined,
-      completedDates: Array.isArray(item.completedDates)
-        ? item.completedDates
-        : [],
-      isArchived: item.isArchived === true,
-      category: category || undefined,
-    };
-  });
-}
-
 function App() {
   const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
   const shortcutKey = isMac ? "⌘" : "Ctrl";
@@ -847,9 +797,53 @@ function App() {
   );
   const lastLogicalDateKeyRef = useRef(getTodayKey(appSettings.dayResetHour));
 
-  const [habits, setHabits] = useState<Habit[]>(loadHabits);
+  const [habits, setHabits] = useState<Habit[]>(() => {
+    const localLoadHabits = (): Habit[] => {
+      const parsed = loadStorageData<(Partial<Habit> & { id: number; name: string })[]>(STORAGE_KEYS.HABITS, []);
+      if (!Array.isArray(parsed)) return [];
+
+      return parsed.map((item) => {
+        const hasValidChallengeFields =
+          item.type === "Challenge" &&
+          typeof item.startDate === "string" &&
+          typeof item.durationDays === "number" &&
+          item.durationDays > 0;
+
+        const category =
+          typeof item.category === "string" ? normalizeCategory(item.category) : "";
+
+        return {
+          id: item.id,
+          name: item.name,
+          goalId: typeof item.goalId === "string" ? item.goalId : undefined,
+          priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
+          type: hasValidChallengeFields ? "Challenge" : "Daily",
+          frequencyType:
+            item.frequencyType === "weekdays" ||
+            item.frequencyType === "weekends" ||
+            item.frequencyType === "custom"
+              ? item.frequencyType
+              : "daily",
+          customDays: Array.isArray(item.customDays)
+            ? item.customDays.filter((day): day is string => WEEKDAYS.includes(day))
+            : [],
+          durationDays: hasValidChallengeFields ? item.durationDays : undefined,
+          startDate: hasValidChallengeFields ? item.startDate : undefined,
+          completedDates: Array.isArray(item.completedDates)
+            ? item.completedDates
+            : [],
+          isArchived: item.isArchived === true,
+          category: category || undefined,
+          scheduledTime: typeof item.scheduledTime === "string" ? item.scheduledTime : undefined,
+          durationMinutes: typeof item.durationMinutes === "number" && item.durationMinutes > 0 ? item.durationMinutes : undefined,
+        };
+      });
+    };
+    return localLoadHabits();
+  });
   const [goals, setGoals] = useState<Goal[]>(loadGoals);
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
+  const [milestones, setMilestones] = useState<Milestone[]>(loadMilestones);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
     const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
     if (!Array.isArray(parsed)) return [];
@@ -907,6 +901,10 @@ function App() {
   }, [appSettings.theme]);
 
   useEffect(() => {
+    saveHabits(habits);
+  }, [habits]);
+
+  useEffect(() => {
     let cancelled = false;
     getVersion()
       .then((version) => {
@@ -944,16 +942,16 @@ function App() {
   }, [appSettings.dayResetHour]);
 
   useEffect(() => {
-    saveStorageData(STORAGE_KEYS.HABITS, habits);
-  }, [habits]);
-
-  useEffect(() => {
     saveGoals(goals);
   }, [goals]);
 
   useEffect(() => {
     saveTasks(tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    saveMilestones(milestones);
+  }, [milestones]);
 
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.FOCUS_SESSIONS, focusSessions);
@@ -1250,7 +1248,9 @@ function App() {
     durationMinutes: number,
     habitName: string,
     goalId?: string,
+    milestoneId?: string,
     taskId?: string,
+    habitId?: number,
   ) {
     const newRecord: FocusSessionRecord = {
       id: Date.now(),
@@ -1258,7 +1258,9 @@ function App() {
       sessionType,
       durationMinutes,
       habitName,
+      habitId,
       goalId,
+      milestoneId,
       taskId,
     };
     setFocusSessions((prev) => [...prev, newRecord]);
@@ -1472,7 +1474,7 @@ function App() {
                 onChange={(event) => setEditingGoalId(event.target.value)}
                 aria-label="Linked Goal"
               >
-                <option value="">NO LINKED GOAL</option>
+                <option value="">No Linked Goal</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -1552,16 +1554,7 @@ function App() {
             )}
           </div>
 
-          <span
-            className="streak-badge"
-            style={{
-              ...styles.streak,
-              ...(streak === 0 ? styles.streakZero : {}),
-            }}
-          >
-            <Flame size={12} />
-            {streak}
-          </span>
+          <StreakBadge className="my-habits-streak" streak={streak} />
         </div>
 
         <div className="habit-cell-actions">
@@ -1702,12 +1695,31 @@ function App() {
           >
             <Today
               habits={habits}
+              tasks={tasks}
+              goals={goals}
+              milestones={milestones}
               focusSessions={focusSessions}
               onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
+              onToggleTask={(taskId) =>
+                setTasks((current) => current.map((task) =>
+                  task.id === taskId ? toggleTaskCompletion(task) : task,
+                ))
+              }
               onStartFocus={() => setView("Timer")}
               onNavigateToHabits={() => setView("Habits")}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
+              showMandatoryHabitsInImportantItems={appSettings.showMandatoryHabitsInImportantItems ?? false}
+              onUpdateHabit={(updatedHabit) =>
+                setHabits((current) => current.map((habit) =>
+                  habit.id === updatedHabit.id ? updatedHabit : habit,
+                ))
+              }
+              onUpdateTask={(updatedTask) =>
+                setTasks((current) => current.map((task) =>
+                  task.id === updatedTask.id ? updatedTask : task,
+                ))
+              }
             />
           </div>
 
@@ -2047,6 +2059,7 @@ function App() {
               }
               soundAlerts={appSettings.soundAlerts}
               goals={goals}
+              milestones={milestones}
               tasks={tasks}
             />
           </div>
@@ -2098,8 +2111,10 @@ function App() {
               goals={goals}
               tasks={tasks}
               habits={habits}
+              focusSessions={focusSessions}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
+              milestones={milestones}
               onAddGoal={(data) => setGoals((current) => [...current, createGoal(data)])}
               onAddTask={(data) => setTasks((current) => [...current, createTask(data)])}
               onToggleTask={(taskId) =>
@@ -2122,6 +2137,7 @@ function App() {
               onDeleteGoal={(goalId) => {
                 setGoals((current) => current.filter((goal) => goal.id !== goalId));
                 setTasks((current) => current.filter((task) => task.goalId !== goalId));
+                setMilestones((current) => current.filter((milestone) => milestone.goalId !== goalId));
                 setHabits((current) => current.map((habit) =>
                   habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
                 ));
@@ -2133,6 +2149,22 @@ function App() {
               }
               onDeleteTask={(taskId) =>
                 setTasks((current) => current.filter((task) => task.id !== taskId))
+              }
+              onAddMilestone={(data) => setMilestones((current) => [...current, createMilestone(data)])}
+              onEditMilestone={(milestoneId, data) =>
+                setMilestones((current) => current.map((milestone) =>
+                  milestone.id === milestoneId ? updateMilestone(milestone, data) : milestone,
+                ))
+              }
+              onDeleteMilestone={(milestoneId) =>
+                setMilestones((current) => deleteMilestone(current, milestoneId))
+              }
+              onToggleMilestone={(goalId, milestoneId) =>
+                setMilestones((current) => current.map((milestone) =>
+                  milestone.goalId === goalId && milestone.id === milestoneId
+                    ? toggleMilestone(milestone)
+                    : milestone,
+                ))
               }
             />
           </div>
@@ -2218,6 +2250,40 @@ function App() {
                       </button>
                     ))}
                   </div>
+                </div>
+              </section>
+
+              <section style={styles.settingsCard} aria-labelledby="today-task-settings-title">
+                <h2 id="today-task-settings-title" style={styles.settingsCardTitle}>
+                  <ListChecks size={17} />
+                  Today &amp; Task Settings
+                </h2>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Show Mandatory Habits in Important Items</span>
+                    <span style={styles.settingsDescription}>Include pending mandatory habits in today&apos;s important items.</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Show Mandatory Habits in Important Items"
+                    aria-checked={appSettings.showMandatoryHabitsInImportantItems ?? false}
+                    style={{
+                      ...styles.settingsToggle,
+                      ...((appSettings.showMandatoryHabitsInImportantItems ?? false) ? styles.settingsToggleActive : {}),
+                    }}
+                    onClick={() => setAppSettings((current) => ({
+                      ...current,
+                      showMandatoryHabitsInImportantItems: !(current.showMandatoryHabitsInImportantItems ?? false),
+                    }))}
+                  >
+                    <span
+                      style={{
+                        ...styles.settingsToggleThumb,
+                        ...((appSettings.showMandatoryHabitsInImportantItems ?? false) ? styles.settingsToggleThumbActive : {}),
+                      }}
+                    />
+                  </button>
                 </div>
               </section>
 

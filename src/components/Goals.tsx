@@ -2,14 +2,17 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { CARD_SURFACE } from "../theme";
-import type { Goal, Habit, Milestone, Task } from "../types";
-import { filterTasksByGoal } from "../domain/tasks";
+import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
+import { filterTasksByMilestone } from "../domain/tasks";
+import { calculateGoalProgress } from "../domain/goals";
 import { calculateStreak, formatFullDate } from "../utils/dates";
+import StreakBadge from "./StreakBadge";
 
 type GoalsProps = {
   goals: Goal[];
   tasks: Task[];
   habits: Habit[];
+  focusSessions: FocusSessionRecord[];
   streakFreeze: boolean;
   dayResetHour: number;
   milestones?: Milestone[];
@@ -21,6 +24,10 @@ type GoalsProps = {
   onDeleteGoal: (goalId: string) => void;
   onEditTask: (taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onDeleteTask: (taskId: string) => void;
+  onAddMilestone: (data: Omit<Milestone, "id" | "completed">) => void;
+  onEditMilestone: (milestoneId: string, data: Omit<Milestone, "id" | "completed">) => void;
+  onDeleteMilestone: (milestoneId: string) => void;
+  onToggleMilestone: (goalId: string, milestoneId: string) => void;
 };
 
 const priorityStyles: Record<Task["priority"], CSSProperties> = {
@@ -187,11 +194,58 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 3,
     background: "var(--bg-inset)",
     overflow: "hidden",
+    display: "flex",
   },
   progressFill: {
     height: "100%",
     background: "var(--accent-teal)",
     transition: "width 0.2s ease",
+  },
+  progressSegments: {
+    height: "100%",
+    display: "flex",
+    width: "100%",
+  },
+  progressSegmentTask: {
+    height: "100%",
+    background: "var(--accent-teal)",
+    transition: "width 0.2s ease",
+  },
+  progressSegmentMilestone: {
+    height: "100%",
+    background: "var(--accent-amber)",
+    transition: "width 0.2s ease",
+  },
+  progressSegmentHabit: {
+    height: "100%",
+    background: "var(--accent-purple)",
+    transition: "width 0.2s ease",
+  },
+  progressLegend: {
+    display: "flex",
+    gap: 12,
+    marginTop: 8,
+    fontSize: 11,
+    color: "var(--text-muted)",
+  },
+  progressLegendItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  progressLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+  },
+  progressLegendDotTask: {
+    background: "var(--accent-teal)",
+  },
+  progressLegendDotMilestone: {
+    background: "var(--accent-amber)",
+  },
+  progressLegendDotHabit: {
+    background: "var(--accent-purple)",
   },
   taskList: {
     display: "grid",
@@ -226,12 +280,6 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
-  linkedHabitStreak: {
-    flexShrink: 0,
-    color: "var(--accent-amber)",
-    fontSize: 12,
-    fontWeight: 600,
-  },
   taskRow: {
     display: "flex",
     alignItems: "center",
@@ -254,7 +302,7 @@ const styles: Record<string, CSSProperties> = {
   },
   taskButtonHover: {
     background: "var(--button-hover-bg)",
-    borderColor: "var(--button-hover-border)",
+    border: "1px solid var(--button-hover-border)",
   },
   taskDetails: {
     display: "grid",
@@ -271,7 +319,6 @@ const styles: Record<string, CSSProperties> = {
   },
   priorityBadge: {
     padding: "1px 6px",
-    borderRadius: 10,
     fontSize: 10,
     fontWeight: 600,
     textTransform: "capitalize",
@@ -327,19 +374,36 @@ const styles: Record<string, CSSProperties> = {
   taskCheck: {
     display: "grid",
     placeItems: "center",
-    width: 18,
-    height: 18,
-    flex: "0 0 18px",
+    width: 20,
+    height: 20,
+    flex: "0 0 20px",
     border: "1px solid var(--checkbox-border)",
-    borderRadius: 5,
+    borderRadius: 6,
     background: "transparent",
     color: "#ffffff",
     transition: "all 0.15s ease",
   },
   taskCheckCompleted: {
     background: "var(--checkbox-checked-bg)",
-    borderColor: "var(--checkbox-checked-border)",
+    border: "1px solid var(--checkbox-checked-border)",
     boxShadow: "var(--checkbox-checked-shadow)",
+  },
+  checkbox: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 20,
+    height: 20,
+    minWidth: 20,
+    minHeight: 20,
+    flex: "0 0 20px",
+    flexShrink: 0,
+    padding: 0,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderRadius: 6,
+    cursor: "pointer",
+    transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
   },
   empty: {
     ...CARD_SURFACE,
@@ -348,12 +412,110 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     textAlign: "center",
   },
+  milestonesSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTop: "1px solid var(--border-color)",
+  },
+  milestonesTitle: {
+    margin: "0 0 10px",
+    color: "var(--text-secondary)",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+  },
+  milestoneList: {
+    display: "grid",
+    gap: 8,
+    marginBottom: 12,
+  },
+  milestoneItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "8px 10px",
+    border: "1px solid var(--card-surface-border)",
+    borderRadius: 8,
+    background: "var(--card-surface-bg)",
+  },
+  milestoneContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  milestoneTitle: {
+    margin: 0,
+    color: "var(--text-primary)",
+    fontSize: 13,
+    fontWeight: 500,
+    overflowWrap: "anywhere",
+  },
+  milestoneTitleCompleted: {
+    textDecoration: "line-through",
+    color: "var(--text-muted)",
+  },
+  milestoneMeta: {
+    margin: "2px 0 0",
+    color: "var(--text-muted)",
+    fontSize: 11,
+  },
+  milestoneActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  addMilestoneButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 9px",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 7,
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  milestoneForm: {
+    display: "grid",
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: "1px solid var(--border-color)",
+  },
+  milestoneEditForm: {
+    display: "grid",
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  tasksSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTop: "1px solid var(--border-color)",
+  },
+  tasksTitle: {
+    margin: "0 0 10px",
+    color: "var(--text-secondary)",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+  },
+  taskGroup: {
+    marginBottom: 12,
+  },
+  taskGroupTitle: {
+    margin: "0 0 6px",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    fontWeight: 600,
+  },
 };
 
 export default function Goals({
   goals,
   tasks,
   habits,
+  focusSessions,
   streakFreeze,
   dayResetHour,
   milestones = [],
@@ -365,6 +527,10 @@ export default function Goals({
   onDeleteGoal,
   onEditTask,
   onDeleteTask,
+  onAddMilestone,
+  onEditMilestone,
+  onDeleteMilestone,
+  onToggleMilestone,
 }: GoalsProps) {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -384,6 +550,13 @@ export default function Goals({
   const [taskEditDueDate, setTaskEditDueDate] = useState("");
   const [taskEditEstimatedMinutes, setTaskEditEstimatedMinutes] = useState("");
   const [taskEditPriority, setTaskEditPriority] = useState<Task["priority"]>("medium");
+  const [milestoneGoalId, setMilestoneGoalId] = useState<string | null>(null);
+  const [milestoneTitle, setMilestoneTitle] = useState("");
+  const [milestoneTargetDate, setMilestoneTargetDate] = useState("");
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [milestoneEditTitle, setMilestoneEditTitle] = useState("");
+  const [milestoneEditTargetDate, setMilestoneEditTargetDate] = useState("");
+  const [taskMilestoneId, setTaskMilestoneId] = useState<string>("");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -410,6 +583,7 @@ export default function Goals({
     onAddTask({
       title: trimmedTitle,
       goalId,
+      milestoneId: taskMilestoneId || undefined,
       dueDate: taskDueDate || undefined,
       estimatedMinutes: Number.isFinite(estimatedMinutes) && estimatedMinutes > 0
         ? estimatedMinutes
@@ -420,6 +594,7 @@ export default function Goals({
     setTaskDueDate("");
     setTaskEstimatedMinutes("");
     setTaskPriority("medium");
+    setTaskMilestoneId("");
     setTaskGoalId(null);
   }
 
@@ -468,6 +643,156 @@ export default function Goals({
       milestoneId: task.milestoneId,
     });
     setEditingTaskId(null);
+  }
+
+  function handleMilestoneSubmit(event: FormEvent<HTMLFormElement>, goalId: string) {
+    event.preventDefault();
+    const trimmedTitle = milestoneTitle.trim();
+    if (!trimmedTitle) return;
+
+    onAddMilestone({
+      title: trimmedTitle,
+      goalId,
+      targetDate: milestoneTargetDate || undefined,
+    });
+    setMilestoneTitle("");
+    setMilestoneTargetDate("");
+    setMilestoneGoalId(null);
+  }
+
+  function beginMilestoneEdit(milestone: Milestone) {
+    setEditingMilestoneId(milestone.id);
+    setMilestoneEditTitle(milestone.title);
+    setMilestoneEditTargetDate(milestone.targetDate ?? "");
+  }
+
+  function handleMilestoneEditSubmit(event: FormEvent<HTMLFormElement>, milestoneId: string) {
+    event.preventDefault();
+    const trimmedTitle = milestoneEditTitle.trim();
+    if (!trimmedTitle) return;
+
+    onEditMilestone(milestoneId, {
+      title: trimmedTitle,
+      targetDate: milestoneEditTargetDate || undefined,
+      goalId: milestones?.find((m) => m.id === milestoneId)?.goalId || "",
+    });
+    setEditingMilestoneId(null);
+  }
+
+  function renderTaskItem(task: Task) {
+    return (
+      <li key={task.id}>
+        <div style={styles.taskRow}>
+          {editingTaskId === task.id ? (
+            <form style={styles.taskEditForm} onSubmit={(event) => handleTaskEditSubmit(event, task)}>
+              <input
+                autoFocus
+                required
+                maxLength={120}
+                style={styles.compactInput}
+                value={taskEditTitle}
+                onChange={(event) => setTaskEditTitle(event.target.value)}
+                aria-label="Task title"
+              />
+              <div style={styles.taskFormFields}>
+                <input
+                  type="date"
+                  style={styles.compactInput}
+                  value={taskEditDueDate}
+                  onChange={(event) => setTaskEditDueDate(event.target.value)}
+                  aria-label="Task due date"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  style={styles.compactInput}
+                  value={taskEditEstimatedMinutes}
+                  onChange={(event) => setTaskEditEstimatedMinutes(event.target.value)}
+                  placeholder="Minutes"
+                  aria-label="Estimated minutes"
+                />
+                <select
+                  style={styles.compactInput}
+                  value={taskEditPriority}
+                  onChange={(event) => setTaskEditPriority(event.target.value as Task["priority"])}
+                  aria-label="Task priority"
+                >
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div style={styles.formActions}>
+                <button type="button" style={styles.secondaryButton} onClick={() => setEditingTaskId(null)}>
+                  Cancel
+                </button>
+                <button type="submit" style={styles.submitButton}>Save</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <button
+                type="button"
+                style={styles.taskButton}
+                onClick={() => onToggleTask(task.id)}
+                aria-pressed={task.completed}
+                aria-label={`${task.completed ? "Mark incomplete" : "Complete"}: ${task.title}`}
+                onMouseEnter={(e) => {
+                  Object.assign(e.currentTarget.style, styles.taskButtonHover);
+                }}
+                onMouseLeave={(e) => {
+                  Object.assign(e.currentTarget.style, styles.taskButton);
+                }}
+              >
+                <span
+                  style={{
+                    ...styles.taskCheck,
+                    ...(task.completed ? styles.taskCheckCompleted : {}),
+                  }}
+                >
+                  {task.completed && <Check size={13} />}
+                </span>
+                <span style={styles.taskDetails}>
+                  <span style={{ overflowWrap: "anywhere", textDecoration: task.completed ? "line-through" : "none" }}>
+                    {task.title}
+                  </span>
+                  <span style={styles.taskMetadata}>
+                    <span style={{ ...styles.priorityBadge, ...priorityStyles[task.priority] }}>
+                      {task.priority}
+                    </span>
+                    {task.dueDate && (
+                      <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>
+                    )}
+                    {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                style={styles.iconButton}
+                onClick={() => beginTaskEdit(task)}
+                aria-label={`Edit ${task.title}`}
+                title="Edit task"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                type="button"
+                style={styles.iconButton}
+                onClick={() => {
+                  if (window.confirm(`Delete task "${task.title}"?`)) onDeleteTask(task.id);
+                }}
+                aria-label={`Delete ${task.title}`}
+                title="Delete task"
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      </li>
+    );
   }
 
   return (
@@ -530,13 +855,24 @@ export default function Goals({
         ) : goals.map((goal) => {
           const linkedHabits = habits.filter((habit) => habit.goalId === goal.id);
           const goalMilestones = milestones.filter((milestone) => milestone.goalId === goal.id);
-          const milestoneIds = new Set(goalMilestones.map((milestone) => milestone.id));
-          const goalTasks = filterTasksByGoal(tasks, goal.id).concat(
-            tasks.filter((task) => !task.goalId && task.milestoneId && milestoneIds.has(task.milestoneId)),
-          );
-          const completedCount = goalTasks.filter((task) => task.completed).length;
-          const progress = goalTasks.length ? (completedCount / goalTasks.length) * 100 : 0;
-          const progressPercent = Math.round(progress);
+          const goalMilestoneIds = new Set(goalMilestones.map((milestone) => milestone.id));
+          const goalTaskIds = new Set(tasks
+            .filter((task) => task.goalId === goal.id || (task.milestoneId && goalMilestoneIds.has(task.milestoneId)))
+            .map((task) => task.id));
+          const totalFocusMinutes = focusSessions
+            .filter((session) =>
+              session.goalId === goal.id ||
+              (session.milestoneId && goalMilestoneIds.has(session.milestoneId)) ||
+              (session.taskId && goalTaskIds.has(session.taskId)),
+            )
+            .reduce((total, session) => total + session.durationMinutes, 0);
+          const focusHours = Math.floor(totalFocusMinutes / 60);
+          const focusRemainder = totalFocusMinutes % 60;
+          const focusTimeLabel = focusHours > 0
+            ? `${focusHours}h ${focusRemainder}m`
+            : `${focusRemainder}m`;
+          const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour);
+          const progressPercent = progress.percent;
 
           return (
             <article key={goal.id} style={styles.card}>
@@ -619,84 +955,91 @@ export default function Goals({
               <div
                 style={styles.progressTrack}
                 role="progressbar"
-                aria-label={`${goal.title} task progress`}
+                aria-label={`${goal.title} progress`}
                 aria-valuemin={0}
-                aria-valuemax={goalTasks.length || 1}
-                aria-valuenow={completedCount}
+                aria-valuemax={progress.total || 1}
+                aria-valuenow={progress.completed}
               >
-                <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+                <div style={styles.progressSegments}>
+                  <div 
+                    style={{ 
+                      ...styles.progressSegmentTask, 
+                      width: `${progress.taskSegmentWidth}%` 
+                    }} 
+                  />
+                  <div 
+                    style={{ 
+                      ...styles.progressSegmentMilestone, 
+                      width: `${progress.milestoneSegmentWidth}%` 
+                    }} 
+                  />
+                  <div 
+                    style={{ 
+                      ...styles.progressSegmentHabit, 
+                      width: `${progress.habitSegmentWidth}%` 
+                    }} 
+                  />
+                </div>
+              </div>
+              <div style={styles.progressLegend}>
+                <div style={styles.progressLegendItem}>
+                  <div style={{ ...styles.progressLegendDot, ...styles.progressLegendDotTask }} />
+                  <span>Tasks ({progress.taskWeight}%)</span>
+                </div>
+                <div style={styles.progressLegendItem}>
+                  <div style={{ ...styles.progressLegendDot, ...styles.progressLegendDotMilestone }} />
+                  <span>Milestones ({progress.milestoneWeight}%)</span>
+                </div>
+                <div style={styles.progressLegendItem}>
+                  <div style={{ ...styles.progressLegendDot, ...styles.progressLegendDotHabit }} />
+                  <span>Habit Streak ({progress.habitWeight}%)</span>
+                </div>
               </div>
               <p style={styles.meta}>
-                {completedCount} of {goalTasks.length} tasks complete · {progressPercent}%
+                {progress.completed} of {progress.total} Items Complete · {progressPercent}%
               </p>
+              <p style={{ ...styles.meta, marginTop: 6 }}>Total Focus: {focusTimeLabel}</p>
 
               <section style={styles.linkedHabits} aria-label={`Habits linked to ${goal.title}`}>
                 <h3 style={styles.linkedHabitsTitle}>Linked Habits</h3>
                 {linkedHabits.length === 0 ? (
-                  <p style={{ ...styles.meta, marginTop: 0 }}>No linked habits</p>
+                  <p style={{ ...styles.meta, marginTop: 0 }}>No Linked Habits</p>
                 ) : linkedHabits.map((habit) => (
                   <div key={habit.id} style={styles.linkedHabitRow}>
                     <span style={styles.linkedHabitName}>{habit.name}</span>
-                    <span style={styles.linkedHabitStreak}>
-                      {calculateStreak(habit, streakFreeze, dayResetHour)} day streak
-                    </span>
+                    <StreakBadge streak={calculateStreak(habit, streakFreeze, dayResetHour)} />
                   </div>
                 ))}
               </section>
 
-              {goalMilestones.map((milestone) => (
-                <p key={milestone.id} style={styles.meta}>
-                  {milestone.completed ? "Completed milestone" : "Milestone"}: {milestone.title}
-                </p>
-              ))}
-
-              {goalTasks.length > 0 && (
-                <ul style={styles.taskList}>
-                  {goalTasks.map((task) => (
-                    <li key={task.id}>
-                      <div style={styles.taskRow}>
-                        {editingTaskId === task.id ? (
-                          <form style={styles.taskEditForm} onSubmit={(event) => handleTaskEditSubmit(event, task)}>
+              <section style={styles.milestonesSection} aria-label={`Milestones for ${goal.title}`}>
+                <h3 style={styles.milestonesTitle}>Milestones</h3>
+                  {goalMilestones.length === 0 ? (
+                  <p style={{ ...styles.meta, marginTop: 0, marginBottom: 12 }}>No milestones yet.</p>
+                ) : (
+                  <div style={styles.milestoneList}>
+                    {goalMilestones.map((milestone) => (
+                      <div key={milestone.id} style={styles.milestoneItem}>
+                        {editingMilestoneId === milestone.id ? (
+                          <form style={styles.milestoneEditForm} onSubmit={(event) => handleMilestoneEditSubmit(event, milestone.id)}>
                             <input
                               autoFocus
                               required
                               maxLength={120}
                               style={styles.compactInput}
-                              value={taskEditTitle}
-                              onChange={(event) => setTaskEditTitle(event.target.value)}
-                              aria-label="Task title"
+                              value={milestoneEditTitle}
+                              onChange={(event) => setMilestoneEditTitle(event.target.value)}
+                              aria-label="Milestone title"
                             />
-                            <div style={styles.taskFormFields}>
-                              <input
-                                type="date"
-                                style={styles.compactInput}
-                                value={taskEditDueDate}
-                                onChange={(event) => setTaskEditDueDate(event.target.value)}
-                                aria-label="Task due date"
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                style={styles.compactInput}
-                                value={taskEditEstimatedMinutes}
-                                onChange={(event) => setTaskEditEstimatedMinutes(event.target.value)}
-                                placeholder="Minutes"
-                                aria-label="Estimated minutes"
-                              />
-                              <select
-                                style={styles.compactInput}
-                                value={taskEditPriority}
-                                onChange={(event) => setTaskEditPriority(event.target.value as Task["priority"])}
-                                aria-label="Task priority"
-                              >
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                              </select>
-                            </div>
+                            <input
+                              type="date"
+                              style={styles.compactInput}
+                              value={milestoneEditTargetDate}
+                              onChange={(event) => setMilestoneEditTargetDate(event.target.value)}
+                              aria-label="Milestone target date"
+                            />
                             <div style={styles.formActions}>
-                              <button type="button" style={styles.secondaryButton} onClick={() => setEditingTaskId(null)}>
+                              <button type="button" style={styles.secondaryButton} onClick={() => setEditingMilestoneId(null)}>
                                 Cancel
                               </button>
                               <button type="submit" style={styles.submitButton}>Save</button>
@@ -706,67 +1049,139 @@ export default function Goals({
                           <>
                             <button
                               type="button"
-                              style={styles.taskButton}
-                              onClick={() => onToggleTask(task.id)}
-                              aria-pressed={task.completed}
-                              aria-label={`${task.completed ? "Mark incomplete" : "Complete"}: ${task.title}`}
-                              onMouseEnter={(e) => {
-                                Object.assign(e.currentTarget.style, styles.taskButtonHover);
-                              }}
-                              onMouseLeave={(e) => {
-                                Object.assign(e.currentTarget.style, styles.taskButton);
-                              }}
+                              className="milestone-checkbox"
+                              style={styles.checkbox}
+                              onClick={() => onToggleMilestone(goal.id, milestone.id)}
+                              aria-pressed={milestone.completed}
+                              aria-label={`${milestone.completed ? "Mark incomplete" : "Complete"} milestone: ${milestone.title}`}
                             >
-                              <span
+                              {milestone.completed && (
+                                <Check className="milestone-checkbox-icon" width={14} height={14} strokeWidth={2.5} />
+                              )}
+                            </button>
+                            <div style={styles.milestoneContent}>
+                              <h4
                                 style={{
-                                  ...styles.taskCheck,
-                                  ...(task.completed ? styles.taskCheckCompleted : {}),
+                                  ...styles.milestoneTitle,
+                                  ...(milestone.completed ? styles.milestoneTitleCompleted : {}),
                                 }}
                               >
-                                {task.completed && <Check size={13} />}
-                              </span>
-                              <span style={styles.taskDetails}>
-                                <span style={{ overflowWrap: "anywhere", textDecoration: task.completed ? "line-through" : "none" }}>
-                                  {task.title}
-                                </span>
-                                <span style={styles.taskMetadata}>
-                                  <span style={{ ...styles.priorityBadge, ...priorityStyles[task.priority] }}>
-                                    {task.priority}
-                                  </span>
-                                  {task.dueDate && (
-                                    <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>
-                                  )}
-                                  {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
-                                </span>
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              style={styles.iconButton}
-                              onClick={() => beginTaskEdit(task)}
-                              aria-label={`Edit ${task.title}`}
-                              title="Edit task"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              style={styles.iconButton}
-                              onClick={() => {
-                                if (window.confirm(`Delete task "${task.title}"?`)) onDeleteTask(task.id);
-                              }}
-                              aria-label={`Delete ${task.title}`}
-                              title="Delete task"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                                {milestone.title}
+                              </h4>
+                              {milestone.targetDate && (
+                                <p style={styles.milestoneMeta}>
+                                  Target: <time dateTime={milestone.targetDate}>{formatFullDate(milestone.targetDate)}</time>
+                                </p>
+                              )}
+                            </div>
+                            <div style={styles.milestoneActions}>
+                              <button
+                                type="button"
+                                style={styles.iconButton}
+                                onClick={() => beginMilestoneEdit(milestone)}
+                                aria-label={`Edit ${milestone.title}`}
+                                title="Edit milestone"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                style={styles.iconButton}
+                                onClick={() => {
+                                  if (window.confirm(`Delete milestone "${milestone.title}"?`)) onDeleteMilestone(milestone.id);
+                                }}
+                                aria-label={`Delete ${milestone.title}`}
+                                title="Delete milestone"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </>
                         )}
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                    ))}
+                  </div>
+                )}
+
+                {milestoneGoalId === goal.id ? (
+                  <form style={styles.milestoneForm} onSubmit={(event) => handleMilestoneSubmit(event, goal.id)}>
+                    <input
+                      autoFocus
+                      required
+                      maxLength={120}
+                      style={styles.compactInput}
+                      value={milestoneTitle}
+                      onChange={(event) => setMilestoneTitle(event.target.value)}
+                      placeholder="Milestone title"
+                      aria-label={`Milestone title for ${goal.title}`}
+                    />
+                    <input
+                      type="date"
+                      style={styles.compactInput}
+                      value={milestoneTargetDate}
+                      onChange={(event) => setMilestoneTargetDate(event.target.value)}
+                      aria-label="Milestone target date"
+                    />
+                    <div style={styles.formActions}>
+                      <button type="button" style={styles.secondaryButton} onClick={() => setMilestoneGoalId(null)}>
+                        Cancel
+                      </button>
+                      <button type="submit" style={styles.submitButton}>Add Milestone</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    style={styles.addMilestoneButton}
+                    onClick={() => setMilestoneGoalId(goal.id)}
+                  >
+                    <Plus size={14} />
+                    Add Milestone
+                  </button>
+                )}
+              </section>
+
+              <section style={styles.tasksSection} aria-label={`Tasks for ${goal.title}`}>
+                <h3 style={styles.tasksTitle}>Tasks</h3>
+                
+                {/* Tasks not linked to any milestone */}
+                {(() => {
+                  const unlinkedTasks = tasks.filter(
+                    (task) => task.goalId === goal.id && !task.milestoneId,
+                  );
+                  
+                  if (unlinkedTasks.length > 0) {
+                    return (
+                      <div style={styles.taskGroup}>
+                        <h4 style={styles.taskGroupTitle}>General Tasks</h4>
+                        <ul style={styles.taskList}>
+                          {unlinkedTasks.map((task) => renderTaskItem(task))}
+                        </ul>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Tasks grouped by milestone */}
+                {goalMilestones.map((milestone) => {
+                  const milestoneTasks = filterTasksByMilestone(tasks, milestone.id);
+                  if (milestoneTasks.length === 0) return null;
+                  
+                  return (
+                    <div key={milestone.id} style={styles.taskGroup}>
+                      <h4 style={styles.taskGroupTitle}>{milestone.title}</h4>
+                      <ul style={styles.taskList}>
+                        {milestoneTasks.map((task) => renderTaskItem(task))}
+                      </ul>
+                    </div>
+                  );
+                })}
+
+                {tasks.filter((task) => task.goalId === goal.id).length === 0 && (
+                  <p style={{ ...styles.meta, marginTop: 0 }}>No tasks yet</p>
+                )}
+              </section>
 
               {taskGoalId === goal.id ? (
                 <form style={styles.taskForm} onSubmit={(event) => handleTaskSubmit(event, goal.id)}>
@@ -780,6 +1195,21 @@ export default function Goals({
                     placeholder="Task title"
                     aria-label={`Task title for ${goal.title}`}
                   />
+                  {goalMilestones.length > 0 && (
+                    <select
+                      style={styles.compactInput}
+                      value={taskMilestoneId}
+                      onChange={(event) => setTaskMilestoneId(event.target.value)}
+                      aria-label="Link to milestone (optional)"
+                    >
+                      <option value="">No milestone (general task)</option>
+                      {goalMilestones.map((milestone) => (
+                        <option key={milestone.id} value={milestone.id}>
+                          {milestone.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <div style={styles.taskFormFields}>
                     <input
                       type="date"

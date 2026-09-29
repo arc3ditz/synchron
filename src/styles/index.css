@@ -17,6 +17,7 @@
   --accent-teal: #00f0ff;
   --accent-teal-soft: #00e5ff;
   --accent-amber: #f59e0b;
+  --accent-purple: #a855f7;
   --accent-wash: rgba(var(--accent-rgb), 0.1);
   --accent-wash-soft: rgba(var(--accent-rgb), 0.08);
   --accent-border: rgba(var(--accent-rgb), 0.42);
@@ -92,6 +93,7 @@
   --accent-teal: #006d6d;
   --accent-teal-soft: #008080;
   --accent-amber: #9a5700;
+  --accent-purple: #7c3aed;
   --bg-unscheduled: rgba(148, 163, 184, 0.22);
   --overlay-soft: rgba(15, 23, 42, 0.28);
   color-scheme: light;

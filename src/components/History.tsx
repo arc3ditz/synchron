@@ -330,9 +330,9 @@ function History({
             event.target.value === "" ? "" : Number(event.target.value),
           )
         }
-        aria-label="Select a habit to view history"
+        aria-label="Select a Habit to view history"
       >
-        <option value="">SELECT A HABIT</option>
+        <option value="">Select a Habit</option>
         {habits.map((habit) => (
           <option key={habit.id} value={habit.id}>
             {habit.name}
