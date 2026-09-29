@@ -1783,7 +1783,7 @@ function App() {
             {summary.total > 0 && (
               <div style={styles.summary}>
                 <span style={styles.summaryPrimary}>
-                  {summary.doneCount} of {summary.total} complete ·{" "}
+                  {summary.doneCount} of {summary.total} Complete ·{" "}
                   {summary.percent}%
                 </span>
                 {summary.mandatoryTotal > 0 && (

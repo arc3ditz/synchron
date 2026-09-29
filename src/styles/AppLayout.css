@@ -338,6 +338,12 @@
   transform: translateX(40px);
 }
 
+.habit-row .my-habits-streak {
+  width: fit-content;
+  justify-self: start;
+  flex-shrink: 0;
+}
+
 .habit-row {
   row-gap: 8px;
   align-items: center;

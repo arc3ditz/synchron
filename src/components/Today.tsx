@@ -171,6 +171,34 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     textTransform: "capitalize",
   },
+  goalTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "2px 8px",
+    border: "1px solid rgba(6, 182, 212, 0.2)",
+    borderRadius: 999,
+    background: "rgba(6, 182, 212, 0.1)",
+    color: "#22d3ee",
+    fontSize: 11,
+    fontWeight: 500,
+    overflowWrap: "anywhere",
+  },
+  milestoneTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "2px 8px",
+    border: "1px solid rgba(99, 102, 241, 0.2)",
+    borderRadius: 999,
+    background: "rgba(99, 102, 241, 0.1)",
+    color: "#818cf8",
+    fontSize: 11,
+    fontWeight: 500,
+    overflowWrap: "anywhere",
+  },
   checkbox: {
     width: 24,
     height: 24,
@@ -830,8 +858,8 @@ function Today({
                   <div style={styles.taskMeta}>
                     <span style={styles.taskPriority}>{task.priority}</span>
                     {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
-                    {goal && <span>{goal.title}</span>}
-                    {milestone && <span>{milestone.title}</span>}
+                    {goal && <span style={styles.goalTag}>{goal.title}</span>}
+                    {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
                   </div>
                 </div>
               </div>

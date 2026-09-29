@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { CARD_SURFACE } from "../theme";
 import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
@@ -51,7 +51,7 @@ const priorityStyles: Record<Task["priority"], CSSProperties> = {
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 900,
+    maxWidth: "none",
   },
   header: {
     display: "flex",
@@ -129,12 +129,49 @@ const styles: Record<string, CSSProperties> = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 500px), 1fr))",
     gap: 12,
   },
   card: {
     ...CARD_SURFACE,
+    width: "100%",
     minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    padding: 28,
+  },
+  archivedSection: {
+    display: "grid",
+    gap: 12,
+    marginTop: 24,
+  },
+  archivedToggle: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid var(--card-surface-border)",
+    borderRadius: 8,
+    background: "var(--card-surface-bg)",
+    color: "var(--text-secondary)",
+    fontSize: 13,
+    fontWeight: 600,
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  archivedList: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 500px), 1fr))",
+    gap: 12,
+  },
+  archivedGoalDescription: {
+    margin: 0,
+    color: "var(--text-secondary)",
+    fontSize: 13,
+    overflowWrap: "anywhere",
   },
   cardHeader: {
     display: "flex",
@@ -189,6 +226,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
   },
   progressTrack: {
+    width: "100%",
     height: 5,
     marginTop: 14,
     borderRadius: 3,
@@ -249,16 +287,17 @@ const styles: Record<string, CSSProperties> = {
   },
   taskList: {
     display: "grid",
-    gap: 6,
+    gap: 8,
     margin: "14px 0 0",
-    padding: "0 4px",
+    padding: "0 6px",
     listStyle: "none",
   },
   linkedHabits: {
+    width: "100%",
     display: "grid",
     gap: 7,
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: 0,
+    paddingTop: 16,
     borderTop: "1px solid var(--border-color)",
   },
   linkedHabitsTitle: {
@@ -291,7 +330,7 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     minWidth: 0,
     gap: 9,
-    padding: "8px 10px",
+    padding: "8px 12px",
     border: "1px solid transparent",
     borderRadius: 8,
     background: "transparent",
@@ -413,8 +452,9 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
   milestonesSection: {
-    marginTop: 16,
-    paddingTop: 12,
+    width: "100%",
+    marginTop: 0,
+    paddingTop: 16,
     borderTop: "1px solid var(--border-color)",
   },
   milestonesTitle: {
@@ -426,14 +466,14 @@ const styles: Record<string, CSSProperties> = {
   },
   milestoneList: {
     display: "grid",
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 0,
   },
   milestoneItem: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
+    padding: "8px 12px",
     border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
     background: "var(--card-surface-bg)",
@@ -489,8 +529,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
   },
   tasksSection: {
-    marginTop: 16,
-    paddingTop: 12,
+    width: "100%",
+    marginTop: 0,
+    paddingTop: 16,
     borderTop: "1px solid var(--border-color)",
   },
   tasksTitle: {
@@ -501,7 +542,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
   },
   taskGroup: {
-    marginBottom: 12,
+    marginBottom: 0,
   },
   taskGroupTitle: {
     margin: "0 0 6px",
@@ -533,6 +574,7 @@ export default function Goals({
   onToggleMilestone,
 }: GoalsProps) {
   const [showForm, setShowForm] = useState(false);
+  const [showArchivedGoals, setShowArchivedGoals] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetDate, setTargetDate] = useState("");
@@ -557,6 +599,9 @@ export default function Goals({
   const [milestoneEditTitle, setMilestoneEditTitle] = useState("");
   const [milestoneEditTargetDate, setMilestoneEditTargetDate] = useState("");
   const [taskMilestoneId, setTaskMilestoneId] = useState<string>("");
+
+  const activeGoals = goals.filter((goal) => goal.status !== "archived");
+  const archivedGoals = goals.filter((goal) => goal.status === "archived");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -850,9 +895,9 @@ export default function Goals({
       )}
 
       <div style={styles.grid}>
-        {goals.length === 0 ? (
-          <div style={styles.empty}>No goals yet. Create one to get started.</div>
-        ) : goals.map((goal) => {
+        {activeGoals.length === 0 ? (
+          <div style={styles.empty}>No active goals. Create one to get started.</div>
+        ) : activeGoals.map((goal) => {
           const linkedHabits = habits.filter((habit) => habit.goalId === goal.id);
           const goalMilestones = milestones.filter((milestone) => milestone.goalId === goal.id);
           const goalMilestoneIds = new Set(goalMilestones.map((milestone) => milestone.id));
@@ -1260,6 +1305,53 @@ export default function Goals({
           );
         })}
       </div>
+
+      {archivedGoals.length > 0 && (
+        <section style={styles.archivedSection} aria-label="Archived goals">
+          <button
+            type="button"
+            style={styles.archivedToggle}
+            onClick={() => setShowArchivedGoals((visible) => !visible)}
+            aria-expanded={showArchivedGoals}
+          >
+            <span>
+              {showArchivedGoals ? "Hide" : "Show"} Archived Goals ({archivedGoals.length})
+            </span>
+            {showArchivedGoals ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {showArchivedGoals && (
+            <div style={styles.archivedList}>
+              {archivedGoals.map((goal) => (
+                <article key={goal.id} style={styles.card}>
+                  <div style={styles.cardHeader}>
+                    <h2 style={styles.goalTitle}>{goal.title}</h2>
+                    <div style={styles.cardActions}>
+                      <span style={styles.status}>archived</span>
+                      <button
+                        type="button"
+                        style={styles.iconButton}
+                        onClick={() => onToggleGoalArchive(goal.id)}
+                        aria-label={`Restore ${goal.title}`}
+                        title="Restore goal"
+                      >
+                        <ArchiveRestore size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  {goal.description && (
+                    <p style={styles.archivedGoalDescription}>{goal.description}</p>
+                  )}
+                  {goal.targetDate && (
+                    <p style={styles.meta}>
+                      Target: <time dateTime={goal.targetDate}>{formatFullDate(goal.targetDate)}</time>
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </section>
   );
 }

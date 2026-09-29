@@ -1034,7 +1034,7 @@ function FocusTimer({
             style={styles.habitSelect}
             value={selectedGoalId}
             onChange={(event) => handleGoalChange(event.target.value)}
-            disabled={isRunning || !selectedGoalId}
+            disabled={isRunning}
             aria-label="Select a goal to link this session to"
           >
             <option value="">No Linked Goal</option>
@@ -1055,7 +1055,7 @@ function FocusTimer({
             style={styles.habitSelect}
             value={selectedMilestoneId}
             onChange={(event) => handleMilestoneChange(event.target.value)}
-            disabled={isRunning || !selectedMilestoneId}
+            disabled={isRunning || !selectedGoalId}
             aria-label="Select a milestone to link this session to"
           >
             <option value="">No Linked Milestone</option>
