@@ -7,16 +7,18 @@ import {
 } from "@tauri-apps/plugin-notification";
 
 import { CARD_SURFACE } from "../theme";
-import type { Mode, Session, FocusTimerHabit } from "../types";
+import type { Mode, Session, FocusTimerHabit, Goal, Task } from "../types";
 
 type FocusTimerProps = {
   habits: FocusTimerHabit[];
   focusSessions: { timestamp: number; durationMinutes: number }[];
-  onSessionComplete: (sessionType: "Timer" | "Pomodoro Focus", durationMinutes: number, habitName: string) => void;
+  onSessionComplete: (sessionType: "Timer" | "Pomodoro Focus", durationMinutes: number, habitName: string, goalId?: string, taskId?: string) => void;
   defaultFocusDuration: number;
   quickAdjustStepMinutes: number;
   onQuickAdjustStepChange: (minutes: number) => void;
   soundAlerts: boolean;
+  goals: Goal[];
+  tasks: Task[];
 };
 
 const DEFAULT_BREAK_MINUTES = 5;
@@ -363,6 +365,8 @@ function FocusTimer({
   quickAdjustStepMinutes,
   onQuickAdjustStepChange,
   soundAlerts,
+  goals,
+  tasks,
 }: FocusTimerProps) {
   const [mode, setMode] = useState<Mode>("Timer");
   const [timerMinutes, setTimerMinutes] = useState(defaultFocusDuration);
@@ -380,6 +384,8 @@ function FocusTimer({
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
   const [pomodoroSession, setPomodoroSession] = useState<Session>("Focus");
   const [selectedHabitId, setSelectedHabitId] = useState<number | "">("");
+  const [selectedGoalId, setSelectedGoalId] = useState<string>("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [timerDurationDraft, setTimerDurationDraft] = useState<string | null>(null);
   const [focusDurationDraft, setFocusDurationDraft] = useState<string | null>(null);
   const [breakDurationDraft, setBreakDurationDraft] = useState<string | null>(null);
@@ -472,8 +478,23 @@ function FocusTimer({
     durationMinutes: number,
     habitName: string,
   ) {
-    onSessionComplete(sessionType, durationMinutes, habitName);
+    onSessionComplete(sessionType, durationMinutes, habitName, selectedGoalId || undefined, selectedTaskId || undefined);
   }
+
+  function handleGoalChange(goalId: string) {
+    setSelectedGoalId(goalId);
+    // Reset task selection when goal changes
+    setSelectedTaskId("");
+  }
+
+  function handleTaskChange(taskId: string) {
+    setSelectedTaskId(taskId);
+  }
+
+  // Filter tasks based on selected goal
+  const availableTasks = selectedGoalId
+    ? tasks.filter((task) => task.goalId === selectedGoalId)
+    : tasks;
 
   function shouldLogSession(mode: Mode, session: Session, endTimestamp: number): boolean {
     const lastLogged = lastLoggedSessionRef.current;
@@ -983,6 +1004,48 @@ function FocusTimer({
       </main>
 
       <aside className="focus-control-panel" style={styles.controlPanel}>
+        <div style={styles.panelSection}>
+          <label style={styles.habitSelectLabel} htmlFor="goal-select">
+            Link to Goal (Optional)
+          </label>
+          <select
+            id="goal-select"
+            style={styles.habitSelect}
+            value={selectedGoalId}
+            onChange={(event) => handleGoalChange(event.target.value)}
+            disabled={isRunning}
+            aria-label="Select a goal to link this session to"
+          >
+            <option value="">No Goal</option>
+            {goals.filter((goal) => goal.status === 'active').map((goal) => (
+              <option key={goal.id} value={goal.id}>
+                {goal.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.panelSection}>
+          <label style={styles.habitSelectLabel} htmlFor="task-select">
+            Link to Task (Optional)
+          </label>
+          <select
+            id="task-select"
+            style={styles.habitSelect}
+            value={selectedTaskId}
+            onChange={(event) => handleTaskChange(event.target.value)}
+            disabled={isRunning}
+            aria-label="Select a task to link this session to"
+          >
+            <option value="">No Task</option>
+            {availableTasks.filter((task) => !task.completed).map((task) => (
+              <option key={task.id} value={task.id}>
+                {task.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div style={styles.panelSection}>
           <label style={styles.habitSelectLabel} htmlFor="habit-select">
             Focus On

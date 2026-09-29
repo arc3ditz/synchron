@@ -52,8 +52,8 @@ import {
   loadTasks,
   saveTasks,
 } from "./utils/storage";
-import { createGoal } from "./domain/goals";
-import { toggleTaskCompletion } from "./domain/tasks";
+import { createGoal, updateGoal, updateGoalStatus } from "./domain/goals";
+import { createTask, toggleTaskCompletion, updateTask } from "./domain/tasks";
 import {
   getTodayKey,
   formatDateDisplay,
@@ -812,6 +812,7 @@ function loadHabits(): Habit[] {
     return {
       id: item.id,
       name: item.name,
+      goalId: typeof item.goalId === "string" ? item.goalId : undefined,
       priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
       type: hasValidChallengeFields ? "Challenge" : "Daily",
       frequencyType:
@@ -858,11 +859,14 @@ function App() {
         typeof item.timestamp === "number" &&
         (item.sessionType === "Timer" || item.sessionType === "Pomodoro Focus") &&
         typeof item.durationMinutes === "number" &&
-        typeof item.habitName === "string"
+        typeof item.habitName === "string" &&
+        (item.taskId === undefined || typeof item.taskId === "string") &&
+        (item.goalId === undefined || typeof item.goalId === "string")
       );
     });
   });
   const [newHabit, setNewHabit] = useState("");
+  const [newGoalId, setNewGoalId] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("Optional");
   const [newType, setNewType] = useState<HabitType>("Daily");
   const [newFrequencyType, setNewFrequencyType] = useState<FrequencyType>("daily");
@@ -873,6 +877,7 @@ function App() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingGoalId, setEditingGoalId] = useState("");
   const [editingPriority, setEditingPriority] = useState<Priority>("Optional");
   const [editingType, setEditingType] = useState<HabitType>("Daily");
   const [editingFrequencyType, setEditingFrequencyType] = useState<FrequencyType>("daily");
@@ -982,13 +987,17 @@ function App() {
           break;
         case "3":
           event.preventDefault();
-          setView("Timer");
+          setView("goals");
           break;
         case "4":
           event.preventDefault();
-          setView("History");
+          setView("Timer");
           break;
         case "5":
+          event.preventDefault();
+          setView("History");
+          break;
+        case "6":
           event.preventDefault();
           setView("Analytics");
           break;
@@ -1097,6 +1106,7 @@ function App() {
     const habit: Habit = {
       id: Date.now(),
       name,
+      goalId: newGoalId || undefined,
       category: category || undefined,
       priority: newPriority,
       type: newType,
@@ -1113,6 +1123,7 @@ function App() {
 
     setHabits([...habits, habit]);
     setNewHabit("");
+    setNewGoalId("");
     setNewPriority("Optional");
     setNewType("Daily");
     setNewFrequencyType("daily");
@@ -1153,6 +1164,7 @@ function App() {
   function startEdit(habit: Habit) {
     setEditingId(habit.id);
     setEditingName(habit.name);
+    setEditingGoalId(habit.goalId ?? "");
     setEditingPriority(habit.priority);
     setEditingType(habit.type);
     setEditingFrequencyType(getFrequencyType(habit));
@@ -1165,6 +1177,7 @@ function App() {
   function cancelEdit() {
     setEditingId(null);
     setEditingName("");
+    setEditingGoalId("");
     setEditingPriority("Optional");
     setEditingType("Daily");
     setEditingFrequencyType("daily");
@@ -1195,6 +1208,7 @@ function App() {
           return {
             ...habit,
             name,
+            goalId: editingGoalId || undefined,
             priority: editingPriority,
             type: "Daily",
             frequencyType: editingFrequencyType,
@@ -1216,6 +1230,7 @@ function App() {
         return {
           ...habit,
           name,
+          goalId: editingGoalId || undefined,
           priority: editingPriority,
           type: "Challenge",
           frequencyType: editingFrequencyType,
@@ -1236,6 +1251,8 @@ function App() {
     sessionType: "Timer" | "Pomodoro Focus",
     durationMinutes: number,
     habitName: string,
+    goalId?: string,
+    taskId?: string,
   ) {
     const newRecord: FocusSessionRecord = {
       id: Date.now(),
@@ -1243,6 +1260,8 @@ function App() {
       sessionType,
       durationMinutes,
       habitName,
+      goalId,
+      taskId,
     };
     setFocusSessions((prev) => [...prev, newRecord]);
   }
@@ -1449,6 +1468,17 @@ function App() {
                 styles.editSelect,
                 styles.editInput,
               )}
+              <select
+                style={styles.editSelect}
+                value={editingGoalId}
+                onChange={(event) => setEditingGoalId(event.target.value)}
+                aria-label="Linked Goal"
+              >
+                <option value="">No linked goal</option>
+                {goals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>{goal.title}</option>
+                ))}
+              </select>
             </div>
             <div className="habit-cell-actions">
               <button style={styles.saveButton} onClick={() => saveEdit(habit.id)}>
@@ -1623,6 +1653,7 @@ function App() {
           >
             <Target size={20} />
             <span>Goals</span>
+            <span className="sidebar-shortcut">{shortcutKey}3</span>
           </button>
           <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
@@ -1630,7 +1661,7 @@ function App() {
           >
             <TimerIcon size={20} />
             <span>Timer</span>
-            <span className="sidebar-shortcut">{shortcutKey}3</span>
+            <span className="sidebar-shortcut">{shortcutKey}4</span>
           </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
@@ -1638,7 +1669,7 @@ function App() {
           >
             <HistoryIcon size={20} />
             <span>History</span>
-            <span className="sidebar-shortcut">{shortcutKey}4</span>
+            <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -1646,7 +1677,7 @@ function App() {
           >
             <BarChart3 size={20} />
             <span>Analytics</span>
-            <span className="sidebar-shortcut">{shortcutKey}5</span>
+            <span className="sidebar-shortcut">{shortcutKey}6</span>
           </button>
           <div className="sidebar-spacer" />
           <button
@@ -1898,6 +1929,17 @@ function App() {
                 styles.select,
                 styles.categoryInput,
               )}
+              <select
+                style={styles.select}
+                value={newGoalId}
+                onChange={(event) => setNewGoalId(event.target.value)}
+                aria-label="Linked Goal"
+              >
+                <option value="">No linked goal</option>
+                {goals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>{goal.title}</option>
+                ))}
+              </select>
             </div>
 
             {activeHabits.length === 0 && offDayHabits.length === 0 ? (
@@ -2006,6 +2048,8 @@ function App() {
                 setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: minutes }))
               }
               soundAlerts={appSettings.soundAlerts}
+              goals={goals}
+              tasks={tasks}
             />
           </div>
 
@@ -2055,11 +2099,42 @@ function App() {
             <Goals
               goals={goals}
               tasks={tasks}
+              habits={habits}
+              streakFreeze={streakFreeze}
+              dayResetHour={appSettings.dayResetHour}
               onAddGoal={(data) => setGoals((current) => [...current, createGoal(data)])}
+              onAddTask={(data) => setTasks((current) => [...current, createTask(data)])}
               onToggleTask={(taskId) =>
                 setTasks((current) => current.map((task) =>
                   task.id === taskId ? toggleTaskCompletion(task) : task,
                 ))
+              }
+              onToggleGoalArchive={(goalId) =>
+                setGoals((current) => current.map((goal) =>
+                  goal.id === goalId
+                    ? updateGoalStatus(goal, goal.status === "archived" ? "active" : "archived")
+                    : goal,
+                ))
+              }
+              onEditGoal={(goalId, data) =>
+                setGoals((current) => current.map((goal) =>
+                  goal.id === goalId ? updateGoal(goal, data) : goal,
+                ))
+              }
+              onDeleteGoal={(goalId) => {
+                setGoals((current) => current.filter((goal) => goal.id !== goalId));
+                setTasks((current) => current.filter((task) => task.goalId !== goalId));
+                setHabits((current) => current.map((habit) =>
+                  habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
+                ));
+              }}
+              onEditTask={(taskId, data) =>
+                setTasks((current) => current.map((task) =>
+                  task.id === taskId ? updateTask(task, data) : task,
+                ))
+              }
+              onDeleteTask={(taskId) =>
+                setTasks((current) => current.filter((task) => task.id !== taskId))
               }
             />
           </div>

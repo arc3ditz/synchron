@@ -18,6 +18,7 @@ export interface AppSettings {
 export interface Habit {
   id: number;
   name: string;
+  goalId?: string;
   priority: Priority;
   type: HabitType;
   frequencyType?: FrequencyType;
@@ -52,6 +53,8 @@ export interface FocusSessionRecord {
   sessionType: "Timer" | "Pomodoro Focus";
   durationMinutes: number;
   habitName: string;
+  taskId?: string;
+  goalId?: string;
 }
 
 // Analytics component types (subset of Habit)

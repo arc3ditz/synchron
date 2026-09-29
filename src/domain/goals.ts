@@ -13,6 +13,13 @@ export function updateGoalStatus(goal: Goal, status: Goal["status"]): Goal {
   return { ...goal, status };
 }
 
+export function updateGoal(
+  goal: Goal,
+  data: Omit<Goal, "id" | "createdAt" | "status">,
+): Goal {
+  return { ...goal, ...data };
+}
+
 export function createMilestone(data: Omit<Milestone, "id" | "completed">): Milestone {
   return {
     ...data,

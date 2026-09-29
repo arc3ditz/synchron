@@ -13,6 +13,13 @@ export function toggleTaskCompletion(task: Task): Task {
   return { ...task, completed: !task.completed };
 }
 
+export function updateTask(
+  task: Task,
+  data: Omit<Task, "id" | "createdAt" | "completed">,
+): Task {
+  return { ...task, ...data };
+}
+
 export function filterTasksByGoal(tasks: Task[], goalId: string): Task[] {
   return tasks.filter((task) => task.goalId === goalId);
 }
