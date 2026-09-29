@@ -859,9 +859,7 @@ function App() {
         typeof item.timestamp === "number" &&
         (item.sessionType === "Timer" || item.sessionType === "Pomodoro Focus") &&
         typeof item.durationMinutes === "number" &&
-        typeof item.habitName === "string" &&
-        (item.taskId === undefined || typeof item.taskId === "string") &&
-        (item.goalId === undefined || typeof item.goalId === "string")
+        typeof item.habitName === "string"
       );
     });
   });
@@ -1369,7 +1367,7 @@ function App() {
           onChange={(event) => onChange(event.target.value)}
           aria-label="Category"
         >
-          <option value="">{NO_CATEGORY}</option>
+          <option value="">No Category</option>
           {categoryOptions.map((category) => (
             <option key={category} value={category}>
               {category}
@@ -1474,7 +1472,7 @@ function App() {
                 onChange={(event) => setEditingGoalId(event.target.value)}
                 aria-label="Linked Goal"
               >
-                <option value="">No linked goal</option>
+                <option value="">NO LINKED GOAL</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -1935,7 +1933,7 @@ function App() {
                 onChange={(event) => setNewGoalId(event.target.value)}
                 aria-label="Linked Goal"
               >
-                <option value="">No linked goal</option>
+                <option value="">No Linked Goal</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}

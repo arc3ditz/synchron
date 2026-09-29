@@ -7,6 +7,7 @@ import {
   isHabitScheduledOnDate,
   diffInDays,
   calculateStreak,
+  formatFullDate,
 } from "../utils/dates";
 
 type TodayProps = {
@@ -155,7 +156,7 @@ const styles: Record<string, CSSProperties> = {
     width: 24,
     height: 24,
     borderRadius: 6,
-    border: "2px solid var(--border-strong)",
+    border: "2px solid var(--checkbox-border)",
     background: "transparent",
     cursor: "pointer",
     display: "flex",
@@ -165,11 +166,12 @@ const styles: Record<string, CSSProperties> = {
     transition: "all 0.15s ease",
   },
   checkboxChecked: {
-    background: "rgba(var(--accent-rgb), 0.1)",
-    borderColor: "rgba(var(--accent-rgb), 0.42)",
+    background: "var(--checkbox-checked-bg)",
+    borderColor: "var(--checkbox-checked-border)",
+    boxShadow: "var(--checkbox-checked-shadow)",
   },
   checkboxHover: {
-    borderColor: "rgba(var(--accent-rgb), 0.42)",
+    borderColor: "var(--checkbox-checked-border)",
   },
   statsGrid: {
     display: "grid",
@@ -180,6 +182,7 @@ const styles: Record<string, CSSProperties> = {
   statCard: {
     ...CARD_SURFACE,
     padding: 16,
+    border: "1px solid var(--stat-card-border)",
   },
   statLabel: {
     display: "block",
@@ -306,20 +309,12 @@ function Today({
     return Math.max(0, ...todayHabits.map((habit) => calculateStreak(habit, streakFreeze, dayResetHour)));
   }, [todayHabits, streakFreeze, dayResetHour]);
 
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString(undefined, {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
   if (todayHabits.length === 0) {
     return (
       <div style={styles.page}>
         <div style={styles.header}>
           <h1 style={styles.title}>Today</h1>
-          <p style={styles.date}>{formatDate(today)}</p>
+          <p style={styles.date}>{formatFullDate(today)}</p>
         </div>
         
         <div style={styles.emptyState}>
@@ -344,7 +339,7 @@ function Today({
     <div style={styles.page}>
       <div style={styles.header}>
         <h1 style={styles.title}>Today</h1>
-        <p style={styles.date}>{formatDate(today)}</p>
+        <p style={styles.date}>{formatFullDate(today)}</p>
         
         <div style={styles.progressSection}>
           <span style={styles.progressText}>
@@ -404,7 +399,7 @@ function Today({
                   aria-label={`Toggle ${habit.name}`}
                   aria-checked={isCompleted}
                 >
-                  {isCompleted && <Check size={14} color="var(--accent-teal)" />}
+                  {isCompleted && <Check size={14} color="#ffffff" />}
                 </button>
                 
                 <div style={styles.habitInfo}>

@@ -4,7 +4,7 @@ import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2 } from "lucide-rea
 import { CARD_SURFACE } from "../theme";
 import type { Goal, Habit, Milestone, Task } from "../types";
 import { filterTasksByGoal } from "../domain/tasks";
-import { calculateStreak } from "../utils/dates";
+import { calculateStreak, formatFullDate } from "../utils/dates";
 
 type GoalsProps = {
   goals: Goal[];
@@ -24,9 +24,21 @@ type GoalsProps = {
 };
 
 const priorityStyles: Record<Task["priority"], CSSProperties> = {
-  high: { color: "var(--danger-text)", background: "var(--danger)" },
-  medium: { color: "var(--accent-amber)", background: "rgba(245, 158, 11, 0.12)" },
-  low: { color: "var(--text-secondary)", background: "var(--bg-inset)" },
+  high: {
+    color: "var(--priority-high-text)",
+    background: "var(--priority-high-bg)",
+    border: "1px solid var(--priority-high-border)",
+  },
+  medium: {
+    color: "var(--priority-medium-text)",
+    background: "var(--priority-medium-bg)",
+    border: "1px solid var(--priority-medium-border)",
+  },
+  low: {
+    color: "var(--priority-low-text)",
+    background: "var(--priority-low-bg)",
+    border: "1px solid var(--priority-low-border)",
+  },
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -78,9 +90,9 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     minWidth: 0,
     padding: "10px 12px",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
-    background: "var(--bg-inset)",
+    background: "var(--card-surface-bg)",
     color: "var(--text-primary)",
     fontSize: 14,
   },
@@ -91,7 +103,7 @@ const styles: Record<string, CSSProperties> = {
   },
   secondaryButton: {
     padding: "8px 12px",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
     background: "transparent",
     color: "var(--text-body)",
@@ -135,7 +147,7 @@ const styles: Record<string, CSSProperties> = {
     width: 30,
     height: 30,
     padding: 0,
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 7,
     background: "transparent",
     color: "var(--text-secondary)",
@@ -185,7 +197,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 6,
     margin: "14px 0 0",
-    padding: 0,
+    padding: "0 4px",
     listStyle: "none",
   },
   linkedHabits: {
@@ -232,11 +244,17 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     gap: 9,
     padding: "8px 10px",
-    border: 0,
+    border: "1px solid transparent",
+    borderRadius: 8,
     background: "transparent",
     color: "var(--text-body)",
     textAlign: "left",
     cursor: "pointer",
+    transition: "all 0.15s ease",
+  },
+  taskButtonHover: {
+    background: "var(--button-hover-bg)",
+    borderColor: "var(--button-hover-border)",
   },
   taskDetails: {
     display: "grid",
@@ -295,9 +313,9 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     minWidth: 0,
     padding: "7px 9px",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 7,
-    background: "var(--bg-inset)",
+    background: "var(--card-surface-bg)",
     color: "var(--text-primary)",
     fontSize: 12,
   },
@@ -312,9 +330,16 @@ const styles: Record<string, CSSProperties> = {
     width: 18,
     height: 18,
     flex: "0 0 18px",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--checkbox-border)",
     borderRadius: 5,
-    color: "var(--bg-primary)",
+    background: "transparent",
+    color: "#ffffff",
+    transition: "all 0.15s ease",
+  },
+  taskCheckCompleted: {
+    background: "var(--checkbox-checked-bg)",
+    borderColor: "var(--checkbox-checked-border)",
+    boxShadow: "var(--checkbox-checked-shadow)",
   },
   empty: {
     ...CARD_SURFACE,
@@ -588,7 +613,7 @@ export default function Goals({
               {goal.description && <p style={styles.description}>{goal.description}</p>}
               {goal.targetDate && (
                 <p style={styles.meta}>
-                  Target <time dateTime={goal.targetDate}>{goal.targetDate}</time>
+                  Target: <time dateTime={goal.targetDate}>{formatFullDate(goal.targetDate)}</time>
                 </p>
               )}
               <div
@@ -685,11 +710,17 @@ export default function Goals({
                               onClick={() => onToggleTask(task.id)}
                               aria-pressed={task.completed}
                               aria-label={`${task.completed ? "Mark incomplete" : "Complete"}: ${task.title}`}
+                              onMouseEnter={(e) => {
+                                Object.assign(e.currentTarget.style, styles.taskButtonHover);
+                              }}
+                              onMouseLeave={(e) => {
+                                Object.assign(e.currentTarget.style, styles.taskButton);
+                              }}
                             >
                               <span
                                 style={{
                                   ...styles.taskCheck,
-                                  ...(task.completed ? { background: "var(--accent-teal)", borderColor: "var(--accent-teal)" } : {}),
+                                  ...(task.completed ? styles.taskCheckCompleted : {}),
                                 }}
                               >
                                 {task.completed && <Check size={13} />}
@@ -702,7 +733,9 @@ export default function Goals({
                                   <span style={{ ...styles.priorityBadge, ...priorityStyles[task.priority] }}>
                                     {task.priority}
                                   </span>
-                                  {task.dueDate && <time dateTime={task.dueDate}>Due {task.dueDate}</time>}
+                                  {task.dueDate && (
+                                    <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>
+                                  )}
                                   {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
                                 </span>
                               </span>

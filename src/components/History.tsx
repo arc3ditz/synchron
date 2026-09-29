@@ -9,6 +9,7 @@ import {
   WEEKDAYS,
   isHabitScheduledOnDate,
   calculateStreak,
+  formatFullDate,
 } from "../utils/dates";
 
 export type { FocusSessionRecord };
@@ -297,13 +298,11 @@ function History({
 
   function formatTimestamp(timestamp: number): string {
     const date = new Date(timestamp);
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
+    const time = date.toLocaleTimeString(undefined, {
       minute: "2-digit",
+      hour: "2-digit",
     });
+    return `${formatFullDate(date)} · ${time}`;
   }
 
   function moveMonth(delta: number) {
@@ -333,7 +332,7 @@ function History({
         }
         aria-label="Select a habit to view history"
       >
-        <option value="">Select a habit</option>
+        <option value="">SELECT A HABIT</option>
         {habits.map((habit) => (
           <option key={habit.id} value={habit.id}>
             {habit.name}

@@ -7,6 +7,25 @@ import type { FrequencyType } from "../types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/** Format a date key or Date as a full, human-readable calendar date. */
+export function formatFullDate(dateValue: string | Date): string {
+  let date: Date;
+  if (dateValue instanceof Date) {
+    date = dateValue;
+  } else {
+    const dateKeyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+    date = dateKeyMatch
+      ? new Date(Number(dateKeyMatch[1]), Number(dateKeyMatch[2]) - 1, Number(dateKeyMatch[3]))
+      : new Date(dateValue);
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 /**
  * Convert a Date object to a YYYY-MM-DD string key
  * @param date - The date to convert
@@ -53,12 +72,12 @@ export function formatDateDisplay(key: string, resetHour: number): string {
   const date = new Date(year, month - 1, day);
   const today = new Date();
   const isToday = getHabitDateKey(today, resetHour) === key;
-  
+
   if (isToday) {
-    return `Today - ${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+    return `Today - ${formatFullDate(date)}`;
   }
-  
-  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+  return formatFullDate(date);
 }
 
 /**

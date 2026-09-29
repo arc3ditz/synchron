@@ -147,8 +147,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     padding: 0,
-    background: "rgba(255, 255, 255, 0.1)",
-    border: "1px solid rgba(255, 255, 255, 0.24)",
+    background: "var(--card-surface-bg)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: "50%",
     color: "#e4e4e7",
     cursor: "pointer",
@@ -183,8 +183,8 @@ const styles: Record<string, CSSProperties> = {
     flex: "0 0 96px",
     width: 96,
     minWidth: 96,
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
+    background: "var(--card-surface-bg)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
     padding: "8px 10px",
     color: "var(--text-primary)",
@@ -229,7 +229,7 @@ const styles: Record<string, CSSProperties> = {
   secondaryButton: {
     flex: 1,
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 20,
     padding: "12px 0",
     fontSize: 15,
@@ -250,8 +250,8 @@ const styles: Record<string, CSSProperties> = {
   },
   habitSelect: {
     width: "100%",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
+    background: "var(--card-surface-bg)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
     padding: "8px 12px",
     color: "var(--text-body)",
@@ -285,7 +285,7 @@ const styles: Record<string, CSSProperties> = {
   },
   presetButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 20,
     padding: "8px 10px",
     color: "var(--text-secondary)",
@@ -1016,7 +1016,7 @@ function FocusTimer({
             disabled={isRunning}
             aria-label="Select a goal to link this session to"
           >
-            <option value="">No Goal</option>
+            <option value="">NO LINKED GOAL</option>
             {goals.filter((goal) => goal.status === 'active').map((goal) => (
               <option key={goal.id} value={goal.id}>
                 {goal.title}
@@ -1025,26 +1025,28 @@ function FocusTimer({
           </select>
         </div>
 
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="task-select">
-            Link to Task (Optional)
-          </label>
-          <select
-            id="task-select"
-            style={styles.habitSelect}
-            value={selectedTaskId}
-            onChange={(event) => handleTaskChange(event.target.value)}
-            disabled={isRunning}
-            aria-label="Select a task to link this session to"
-          >
-            <option value="">No Task</option>
-            {availableTasks.filter((task) => !task.completed).map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-          </select>
-        </div>
+        {selectedGoalId && (
+          <div style={styles.panelSection}>
+            <label style={styles.habitSelectLabel} htmlFor="task-select">
+              Link to Task (Optional)
+            </label>
+            <select
+              id="task-select"
+              style={styles.habitSelect}
+              value={selectedTaskId}
+              onChange={(event) => handleTaskChange(event.target.value)}
+              disabled={isRunning}
+              aria-label="Select a task to link this session to"
+            >
+              <option value="">NO LINKED TASK</option>
+              {availableTasks.filter((task) => !task.completed).map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div style={styles.panelSection}>
           <label style={styles.habitSelectLabel} htmlFor="habit-select">
@@ -1062,7 +1064,7 @@ function FocusTimer({
             disabled={isRunning}
             aria-label="Select a habit to focus on"
           >
-            <option value="">General Focus</option>
+            <option value="">GENERAL FOCUS</option>
             {habits.map((habit) => (
               <option key={habit.id} value={habit.id}>
                 {habit.name}

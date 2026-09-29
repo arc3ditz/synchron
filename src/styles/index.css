@@ -53,6 +53,24 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --card-surface-bg: rgba(255, 255, 255, 0.05);
+  --card-surface-border: rgba(255, 255, 255, 0.1);
+  --checkbox-border: var(--border-strong);
+  --checkbox-checked-bg: linear-gradient(135deg, #06b6d4, #0e7490);
+  --checkbox-checked-border: #06b6d4;
+  --checkbox-checked-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+  --priority-high-text: #fca5a5;
+  --priority-high-bg: rgba(220, 38, 38, 0.14);
+  --priority-high-border: rgba(248, 113, 113, 0.34);
+  --priority-medium-text: #fbbf24;
+  --priority-medium-bg: rgba(245, 158, 11, 0.12);
+  --priority-medium-border: rgba(245, 158, 11, 0.3);
+  --priority-low-text: var(--text-secondary);
+  --priority-low-bg: rgba(255, 255, 255, 0.035);
+  --priority-low-border: var(--border-strong);
+  --stat-card-border: rgba(255, 255, 255, 0.1);
+  --button-hover-bg: rgba(255, 255, 255, 0.05);
+  --button-hover-border: rgba(255, 255, 255, 0.15);
 }
 
 :root[data-theme="light"] {
@@ -63,13 +81,13 @@
   --bg-completed: #edf1f4;
   --bg-toggle: #e2e8f0;
   --bg-nav: rgba(248, 249, 250, 0.96);
-  --border-color: #e2e8f0;
+  --border-color: #cbd5e1;
   --border-strong: #cbd5e1;
   --text-primary: #0f172a;
   --text-body: #1e293b;
-  --text-secondary: #64748b;
-  --text-muted: #64748b;
-  --text-dim: #64748b;
+  --text-secondary: #475569;
+  --text-muted: #475569;
+  --text-dim: #475569;
   --accent-rgb: 0, 109, 109;
   --accent-teal: #006d6d;
   --accent-teal-soft: #008080;
@@ -77,6 +95,24 @@
   --bg-unscheduled: rgba(148, 163, 184, 0.22);
   --overlay-soft: rgba(15, 23, 42, 0.28);
   color-scheme: light;
+  --card-surface-bg: rgba(255, 255, 255, 0.8);
+  --card-surface-border: rgba(0, 0, 0, 0.18);
+  --checkbox-border: #64748b;
+  --checkbox-checked-bg: #0891b2;
+  --checkbox-checked-border: #0891b2;
+  --checkbox-checked-shadow: 0 0 10px rgba(6, 182, 212, 0.28);
+  --priority-high-text: #b91c1c;
+  --priority-high-bg: rgba(220, 38, 38, 0.08);
+  --priority-high-border: rgba(185, 28, 28, 0.24);
+  --priority-medium-text: #92400e;
+  --priority-medium-bg: rgba(245, 158, 11, 0.1);
+  --priority-medium-border: rgba(146, 64, 14, 0.24);
+  --priority-low-text: var(--text-secondary);
+  --priority-low-bg: rgba(15, 23, 42, 0.025);
+  --priority-low-border: var(--border-strong);
+  --stat-card-border: rgba(0, 0, 0, 0.18);
+  --button-hover-bg: rgba(0, 0, 0, 0.05);
+  --button-hover-border: rgba(0, 0, 0, 0.2);
 }
 
 * {
@@ -91,13 +127,15 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
 button,
 input,
 select,
+textarea,
 .habit-row,
 .panel,
 .calendar,
@@ -108,10 +146,16 @@ select,
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--cyan-wash);
+}
+
+input[type="date"] {
+  color-scheme: inherit;
+  accent-color: #06b6d4;
 }
 
 #root {
