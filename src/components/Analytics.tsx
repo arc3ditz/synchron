@@ -6,28 +6,25 @@ import {
   Flame,
   Calendar,
 } from "lucide-react";
-import type { FocusSessionRecord } from "./History";
 
 import { CARD_SURFACE } from "../theme";
-
-type Habit = {
-  id: number;
-  name: string;
-  completedDates: string[];
-  frequencyType?: "daily" | "weekdays" | "weekends" | "custom";
-  customDays?: string[];
-  isArchived?: boolean;
-};
+import type { AnalyticsHabit, TimeHorizon, FocusSessionRecord } from "../types";
+import {
+  getDateKey,
+  getWeekStart,
+  getMonthStart,
+  getDaysAgo,
+  WEEKDAYS,
+  calculateStreak,
+} from "../utils/dates";
 
 type AnalyticsProps = {
-  habits: Habit[];
+  habits: AnalyticsHabit[];
   focusSessions: FocusSessionRecord[];
   streakFreeze: boolean;
   dayResetHour: number;
   weekStart: "Sunday" | "Monday";
 };
-
-type TimeHorizon = "This Week" | "This Month" | "Last 30 Days" | "All Time";
 
 const styles: Record<string, CSSProperties> = {
   page: {
@@ -223,94 +220,12 @@ const styles: Record<string, CSSProperties> = {
   },
 };
 
-function getDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getHabitDateKey(date: Date, resetHour: number): string {
-  const habitDate = new Date(date);
-  if (habitDate.getHours() < resetHour) {
-    habitDate.setDate(habitDate.getDate() - 1);
-  }
-  return getDateKey(habitDate);
-}
-
-function getWeekStart(date: Date, weekStart: "Sunday" | "Monday"): Date {
-  const d = new Date(date);
-  const firstDay = weekStart === "Monday" ? 1 : 0;
-  const daysSinceStart = (d.getDay() - firstDay + 7) % 7;
-  d.setDate(d.getDate() - daysSinceStart);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getMonthStart(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function getDaysAgo(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
-}
-
 function formatHours(minutes: number): string {
   const hours = minutes / 60;
   if (hours < 1) {
     return `${Math.round(minutes)}m`;
   }
   return `${hours.toFixed(1)}h`;
-}
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function isScheduledOnDate(habit: Habit, dateKey: string): boolean {
-  const frequencyType = habit.frequencyType ?? "daily";
-  if (frequencyType === "daily") return true;
-
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const weekday = new Date(year, month - 1, day).getDay();
-  if (frequencyType === "weekdays") return weekday >= 1 && weekday <= 5;
-  if (frequencyType === "weekends") return weekday === 0 || weekday === 6;
-  return habit.customDays?.includes(WEEKDAYS[weekday]) ?? false;
-}
-
-function calculateStreak(habit: Habit, streakFreeze: boolean, dayResetHour: number): number {
-  const dateSet = new Set(habit.completedDates);
-  const todayKey = getHabitDateKey(new Date(), dayResetHour);
-
-  if (habit.frequencyType === "custom" && (habit.customDays?.length ?? 0) === 0) {
-    return 0;
-  }
-
-  const shiftDate = (key: string, deltaDays: number): string => {
-    const [year, month, day] = key.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
-    date.setDate(date.getDate() + deltaDays);
-    return getDateKey(date);
-  };
-
-  if (streakFreeze) {
-    return [...dateSet].filter(
-      (date) => date <= todayKey && isScheduledOnDate(habit, date),
-    ).length;
-  }
-
-  let cursor = dateSet.has(todayKey) ? todayKey : shiftDate(todayKey, -1);
-  let streak = 0;
-  while (true) {
-    if (!isScheduledOnDate(habit, cursor)) {
-      cursor = shiftDate(cursor, -1);
-      continue;
-    }
-    if (!dateSet.has(cursor)) break;
-    streak++;
-    cursor = shiftDate(cursor, -1);
-  }
-  return streak;
 }
 
 function Analytics({

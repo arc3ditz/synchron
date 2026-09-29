@@ -7,17 +7,10 @@ import {
 } from "@tauri-apps/plugin-notification";
 
 import { CARD_SURFACE } from "../theme";
-
-type Mode = "Timer" | "Pomodoro";
-type Session = "Focus" | "Break";
-
-type Habit = {
-  id: number;
-  name: string;
-};
+import type { Mode, Session, FocusTimerHabit } from "../types";
 
 type FocusTimerProps = {
-  habits: Habit[];
+  habits: FocusTimerHabit[];
   focusSessions: { timestamp: number; durationMinutes: number }[];
   onSessionComplete: (sessionType: "Timer" | "Pomodoro Focus", durationMinutes: number, habitName: string) => void;
   defaultFocusDuration: number;

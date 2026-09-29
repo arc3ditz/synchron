@@ -1,13 +1,6 @@
 import { X } from "lucide-react";
 import { type CSSProperties } from "react";
-
-type ShortcutGroup = {
-  title: string;
-  shortcuts: {
-    keys: string;
-    description: string;
-  }[];
-};
+import type { ShortcutGroup, KeyboardShortcutsModalProps } from "../types";
 
 const styles: Record<string, CSSProperties> = {
   overlay: {
@@ -119,11 +112,6 @@ const shortcutGroups: ShortcutGroup[] = [
     ],
   },
 ];
-
-type KeyboardShortcutsModalProps = {
-  onClose: () => void;
-  shortcutKey: string;
-};
 
 function KeyboardShortcutsModal({ onClose, shortcutKey }: KeyboardShortcutsModalProps) {
   const displayGroups = shortcutGroups.map((group) => ({

@@ -21,49 +21,36 @@ import {
 import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
 import FocusTimer from "./components/FocusTimer";
-import History, { type FocusSessionRecord } from "./components/History";
+import History from "./components/History";
 import Analytics from "./components/Analytics";
 import Today from "./components/Today";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import { CARD_SURFACE } from "./theme";
 import "./styles/AppLayout.css";
+import type {
+  Priority,
+  HabitType,
+  FrequencyType,
+  WeekStart,
+  Theme,
+  View,
+  AppSettings,
+  Habit,
+  Summary,
+  FocusSessionRecord,
+} from "./types";
+import { STORAGE_KEYS, loadStorageData, saveStorageData } from "./utils/storage";
+import {
+  getTodayKey,
+  formatDateDisplay,
+  shiftDateKey,
+  diffInDays,
+  getFrequencyType,
+  isHabitScheduledOnDate,
+  calculateStreak,
+  WEEKDAYS,
+} from "./utils/dates";
 
-
-type Priority = "Mandatory" | "Optional";
-type HabitType = "Daily" | "Challenge";
-type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
-type WeekStart = "Sunday" | "Monday";
-type Theme = "dark" | "light";
-type View = "Today" | "Habits" | "Timer" | "History" | "Analytics" | "Settings";
-
-type AppSettings = {
-  dayResetHour: number;
-  weekStart: WeekStart;
-  defaultFocusDuration: number;
-  quickAdjustStepMinutes: number;
-  soundAlerts: boolean;
-  theme: Theme;
-};
-
-type Habit = {
-  id: number;
-  name: string;
-  priority: Priority;
-  type: HabitType;
-  frequencyType?: FrequencyType;
-  customDays?: string[];
-  durationDays?: number; // only meaningful when type === "Challenge"
-  startDate?: string; // "YYYY-MM-DD", only meaningful when type === "Challenge"
-  completedDates: string[]; // "YYYY-MM-DD" local calendar days this habit was completed
-  isArchived?: boolean; // if true, habit is archived and hidden from active list
-  category?: string; // optional Title Case label, e.g. "School"
-};
-
-const STORAGE_KEY = "habits";
-const FOCUS_SESSIONS_KEY = "focusSessions";
-const STREAK_FREEZE_KEY = "streakFreeze";
-const CUSTOM_CATEGORIES_KEY = "habitCategories";
-const APP_SETTINGS_KEY = "appSettings";
 const DEFAULT_DURATION = 30;
 const DEFAULT_SETTINGS: AppSettings = {
   dayResetHour: 0,
@@ -74,7 +61,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
 };
 const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ALL_CATEGORIES = "All";
 const NO_CATEGORY = "No Category";
 const ADD_CATEGORY_VALUE = "__add_category__";
@@ -692,59 +678,6 @@ const styles: Record<string, CSSProperties> = {
   },
 };
 
-// --- date helpers (local calendar days, not UTC, not a rolling timer) ---
-
-function getDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getHabitDateKey(date: Date, resetHour: number): string {
-  const habitDate = new Date(date);
-  if (habitDate.getHours() < resetHour) {
-    habitDate.setDate(habitDate.getDate() - 1);
-  }
-  return getDateKey(habitDate);
-}
-
-function getTodayKey(resetHour = 0): string {
-  return getHabitDateKey(new Date(), resetHour);
-}
-
-function formatDateDisplay(key: string, resetHour: number): string {
-  const [year, month, day] = key.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  const today = new Date();
-  const isToday = getHabitDateKey(today, resetHour) === key;
-  
-  if (isToday) {
-    return `Today - ${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
-  }
-  
-  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-}
-
-function shiftDateKey(key: string, deltaDays: number): string {
-  const [year, month, day] = key.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + deltaDays);
-  return getDateKey(date);
-}
-
-function diffInDays(aKey: string, bKey: string): number {
-  const [ay, am, ad] = aKey.split("-").map(Number);
-  const [by, bm, bd] = bKey.split("-").map(Number);
-  const a = new Date(ay, am - 1, ad).getTime();
-  const b = new Date(by, bm - 1, bd).getTime();
-  return Math.round((a - b) / 86400000);
-}
-
-function getFrequencyType(habit: Pick<Habit, "frequencyType">): FrequencyType {
-  return habit.frequencyType ?? "daily";
-}
-
 function formatFrequencyLabel(
   habit: Pick<Habit, "frequencyType" | "customDays">,
 ): string {
@@ -767,98 +700,38 @@ function normalizeCategory(value: string): string {
 }
 
 function loadCustomCategories(): string[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_CATEGORIES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return Array.from(
-      new Set(
-        parsed
-          .filter((category): category is string => typeof category === "string")
-          .map(normalizeCategory)
-          .filter(Boolean),
-      ),
-    ).sort();
-  } catch {
-    return [];
-  }
+  const parsed = loadStorageData<string[]>(STORAGE_KEYS.CUSTOM_CATEGORIES, []);
+  if (!Array.isArray(parsed)) return [];
+  return Array.from(
+    new Set(
+      parsed
+        .filter((category): category is string => typeof category === "string")
+        .map(normalizeCategory)
+        .filter(Boolean),
+    ),
+  ).sort();
 }
 
 function loadAppSettings(): AppSettings {
-  try {
-    const raw = localStorage.getItem(APP_SETTINGS_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return {
-      dayResetHour: [0, 2, 3].includes(parsed.dayResetHour ?? -1)
-        ? parsed.dayResetHour!
-        : DEFAULT_SETTINGS.dayResetHour,
-      weekStart: parsed.weekStart === "Monday" ? "Monday" : "Sunday",
-      defaultFocusDuration: FOCUS_DURATION_PRESETS.includes(parsed.defaultFocusDuration ?? -1)
-        ? parsed.defaultFocusDuration!
-        : DEFAULT_SETTINGS.defaultFocusDuration,
-      quickAdjustStepMinutes: Number.isInteger(parsed.quickAdjustStepMinutes)
-        && parsed.quickAdjustStepMinutes! >= 1
-        && parsed.quickAdjustStepMinutes! <= 180
-        ? parsed.quickAdjustStepMinutes!
-        : DEFAULT_SETTINGS.quickAdjustStepMinutes,
-      soundAlerts: typeof parsed.soundAlerts === "boolean"
-        ? parsed.soundAlerts
-        : DEFAULT_SETTINGS.soundAlerts,
-      theme: parsed.theme === "light" ? "light" : "dark",
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
-function isHabitScheduledOnDate(
-  habit: Pick<Habit, "frequencyType" | "customDays">,
-  dateKey: string,
-): boolean {
-  const frequencyType = getFrequencyType(habit);
-  if (frequencyType === "daily") return true;
-
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const weekday = new Date(year, month - 1, day).getDay();
-  if (frequencyType === "weekdays") return weekday >= 1 && weekday <= 5;
-  if (frequencyType === "weekends") return weekday === 0 || weekday === 6;
-  return habit.customDays?.includes(WEEKDAYS[weekday]) ?? false;
-}
-
-// Streak is fully derived from completedDates + the real current date,
-// so a missed day breaks the chain automatically without any stored
-// counter to keep in sync.
-function calculateStreak(habit: Habit, streakFreeze = false, dayResetHour = 0): number {
-  const dateSet = new Set(habit.completedDates);
-  const todayKey = getTodayKey(dayResetHour);
-
-  if (getFrequencyType(habit) === "custom" && (habit.customDays?.length ?? 0) === 0) {
-    return 0;
-  }
-
-  if (streakFreeze) {
-    // Protection keeps missed days from breaking the active streak.
-    return [...dateSet].filter(
-      (date) => date <= todayKey && isHabitScheduledOnDate(habit, date),
-    ).length;
-  }
-
-  let cursor = dateSet.has(todayKey) ? todayKey : shiftDateKey(todayKey, -1);
-  let streak = 0;
-
-  while (true) {
-    if (!isHabitScheduledOnDate(habit, cursor)) {
-      cursor = shiftDateKey(cursor, -1);
-      continue;
-    }
-    if (!dateSet.has(cursor)) break;
-    streak++;
-    cursor = shiftDateKey(cursor, -1);
-  }
-
-  return streak;
+  const parsed = loadStorageData<Partial<AppSettings>>(STORAGE_KEYS.SETTINGS, {});
+  return {
+    dayResetHour: [0, 2, 3].includes(parsed.dayResetHour ?? -1)
+      ? parsed.dayResetHour!
+      : DEFAULT_SETTINGS.dayResetHour,
+    weekStart: parsed.weekStart === "Monday" ? "Monday" : "Sunday",
+    defaultFocusDuration: FOCUS_DURATION_PRESETS.includes(parsed.defaultFocusDuration ?? -1)
+      ? parsed.defaultFocusDuration!
+      : DEFAULT_SETTINGS.defaultFocusDuration,
+    quickAdjustStepMinutes: Number.isInteger(parsed.quickAdjustStepMinutes)
+      && parsed.quickAdjustStepMinutes! >= 1
+      && parsed.quickAdjustStepMinutes! <= 180
+      ? parsed.quickAdjustStepMinutes!
+      : DEFAULT_SETTINGS.quickAdjustStepMinutes,
+    soundAlerts: typeof parsed.soundAlerts === "boolean"
+      ? parsed.soundAlerts
+      : DEFAULT_SETTINGS.soundAlerts,
+    theme: parsed.theme === "light" ? "light" : "dark",
+  };
 }
 
 // Day number is (days since start) + 1, so starting today is Day 1.
@@ -894,14 +767,6 @@ function formatCompletedDays(count: number): string {
   return `${count} ${count === 1 ? "Day" : "Days"} Completed`;
 }
 
-type Summary = {
-  total: number;
-  doneCount: number;
-  percent: number;
-  mandatoryTotal: number;
-  mandatoryDone: number;
-};
-
 function computeSummary(habits: Habit[], dateKey: string): Summary {
   const total = habits.length;
   const doneCount = habits.filter((h) => h.completedDates.includes(dateKey))
@@ -917,48 +782,42 @@ function computeSummary(habits: Habit[], dateKey: string): Summary {
 }
 
 function loadHabits(): Habit[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+  const parsed = loadStorageData<(Partial<Habit> & { id: number; name: string })[]>(STORAGE_KEYS.HABITS, []);
+  if (!Array.isArray(parsed)) return [];
 
-    return parsed.map((item: Partial<Habit> & { id: number; name: string }) => {
-      const hasValidChallengeFields =
-        item.type === "Challenge" &&
-        typeof item.startDate === "string" &&
-        typeof item.durationDays === "number" &&
-        item.durationDays > 0;
+  return parsed.map((item) => {
+    const hasValidChallengeFields =
+      item.type === "Challenge" &&
+      typeof item.startDate === "string" &&
+      typeof item.durationDays === "number" &&
+      item.durationDays > 0;
 
-      const category =
-        typeof item.category === "string" ? normalizeCategory(item.category) : "";
+    const category =
+      typeof item.category === "string" ? normalizeCategory(item.category) : "";
 
-      return {
-        id: item.id,
-        name: item.name,
-        priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
-        type: hasValidChallengeFields ? "Challenge" : "Daily",
-        frequencyType:
-          item.frequencyType === "weekdays" ||
-          item.frequencyType === "weekends" ||
-          item.frequencyType === "custom"
-            ? item.frequencyType
-            : "daily",
-        customDays: Array.isArray(item.customDays)
-          ? item.customDays.filter((day): day is string => WEEKDAYS.includes(day))
-          : [],
-        durationDays: hasValidChallengeFields ? item.durationDays : undefined,
-        startDate: hasValidChallengeFields ? item.startDate : undefined,
-        completedDates: Array.isArray(item.completedDates)
-          ? item.completedDates
-          : [],
-        isArchived: item.isArchived === true,
-        category: category || undefined,
-      };
-    });
-  } catch {
-    return [];
-  }
+    return {
+      id: item.id,
+      name: item.name,
+      priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
+      type: hasValidChallengeFields ? "Challenge" : "Daily",
+      frequencyType:
+        item.frequencyType === "weekdays" ||
+        item.frequencyType === "weekends" ||
+        item.frequencyType === "custom"
+          ? item.frequencyType
+          : "daily",
+      customDays: Array.isArray(item.customDays)
+        ? item.customDays.filter((day): day is string => WEEKDAYS.includes(day))
+        : [],
+      durationDays: hasValidChallengeFields ? item.durationDays : undefined,
+      startDate: hasValidChallengeFields ? item.startDate : undefined,
+      completedDates: Array.isArray(item.completedDates)
+        ? item.completedDates
+        : [],
+      isArchived: item.isArchived === true,
+      category: category || undefined,
+    };
+  });
 }
 
 function App() {
@@ -975,23 +834,17 @@ function App() {
 
   const [habits, setHabits] = useState<Habit[]>(loadHabits);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
-    try {
-      const raw = localStorage.getItem(FOCUS_SESSIONS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item: FocusSessionRecord) => {
-        return (
-          typeof item.id === "number" &&
-          typeof item.timestamp === "number" &&
-          (item.sessionType === "Timer" || item.sessionType === "Pomodoro Focus") &&
-          typeof item.durationMinutes === "number" &&
-          typeof item.habitName === "string"
-        );
-      });
-    } catch {
-      return [];
-    }
+    const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item: FocusSessionRecord) => {
+      return (
+        typeof item.id === "number" &&
+        typeof item.timestamp === "number" &&
+        (item.sessionType === "Timer" || item.sessionType === "Pomodoro Focus") &&
+        typeof item.durationMinutes === "number" &&
+        typeof item.habitName === "string"
+      );
+    });
   });
   const [newHabit, setNewHabit] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("Optional");
@@ -1022,20 +875,12 @@ function App() {
   const [showArchived, setShowArchived] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [streakFreeze, setStreakFreeze] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STREAK_FREEZE_KEY);
-      return stored === "true";
-    } catch {
-      return false;
-    }
+    const stored = loadStorageData<string>(STORAGE_KEYS.STREAK_FREEZE, "false");
+    return stored === "true";
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(appSettings));
-    } catch {
-      // localStorage unavailable (e.g. private browsing) — fail silently
-    }
+    saveStorageData(STORAGE_KEYS.SETTINGS, appSettings);
   }, [appSettings]);
 
   useLayoutEffect(() => {
@@ -1080,35 +925,19 @@ function App() {
   }, [appSettings.dayResetHour]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
-    } catch {
-      // localStorage unavailable (e.g. private browsing) — fail silently
-    }
+    saveStorageData(STORAGE_KEYS.HABITS, habits);
   }, [habits]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(FOCUS_SESSIONS_KEY, JSON.stringify(focusSessions));
-    } catch {
-      // localStorage unavailable (e.g. private browsing) — fail silently
-    }
+    saveStorageData(STORAGE_KEYS.FOCUS_SESSIONS, focusSessions);
   }, [focusSessions]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STREAK_FREEZE_KEY, String(streakFreeze));
-    } catch {
-      // localStorage unavailable (e.g. private browsing) — fail silently
-    }
+    saveStorageData(STORAGE_KEYS.STREAK_FREEZE, String(streakFreeze));
   }, [streakFreeze]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(customCategories));
-    } catch {
-      // localStorage unavailable (e.g. private browsing) — fail silently
-    }
+    saveStorageData(STORAGE_KEYS.CUSTOM_CATEGORIES, customCategories);
   }, [customCategories]);
 
   useEffect(() => {
