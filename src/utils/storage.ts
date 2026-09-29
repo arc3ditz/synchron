@@ -2,6 +2,8 @@
  * Storage utility functions for localStorage operations
  */
 
+import type { Goal, Task } from "../types";
+
 export const STORAGE_KEYS = {
   HABITS: "habits",
   SETTINGS: "appSettings",
@@ -41,4 +43,20 @@ export function saveStorageData<T>(key: string, data: T): void {
   } catch {
     // localStorage unavailable (e.g. private browsing) — fail silently
   }
+}
+
+export function loadGoals(): Goal[] {
+  return loadStorageData<Goal[]>(STORAGE_KEYS.GOALS, []);
+}
+
+export function saveGoals(goals: Goal[]): void {
+  saveStorageData(STORAGE_KEYS.GOALS, goals);
+}
+
+export function loadTasks(): Task[] {
+  return loadStorageData<Task[]>(STORAGE_KEYS.TASKS, []);
+}
+
+export function saveTasks(tasks: Task[]): void {
+  saveStorageData(STORAGE_KEYS.TASKS, tasks);
 }

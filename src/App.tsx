@@ -36,10 +36,20 @@ import type {
   View,
   AppSettings,
   Habit,
+  Goal,
+  Task,
   Summary,
   FocusSessionRecord,
 } from "./types";
-import { STORAGE_KEYS, loadStorageData, saveStorageData } from "./utils/storage";
+import {
+  STORAGE_KEYS,
+  loadStorageData,
+  saveStorageData,
+  loadGoals,
+  saveGoals,
+  loadTasks,
+  saveTasks,
+} from "./utils/storage";
 import {
   getTodayKey,
   formatDateDisplay,
@@ -833,6 +843,8 @@ function App() {
   const lastLogicalDateKeyRef = useRef(getTodayKey(appSettings.dayResetHour));
 
   const [habits, setHabits] = useState<Habit[]>(loadHabits);
+  const [goals] = useState<Goal[]>(loadGoals);
+  const [tasks] = useState<Task[]>(loadTasks);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
     const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
     if (!Array.isArray(parsed)) return [];
@@ -927,6 +939,14 @@ function App() {
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.HABITS, habits);
   }, [habits]);
+
+  useEffect(() => {
+    saveGoals(goals);
+  }, [goals]);
+
+  useEffect(() => {
+    saveTasks(tasks);
+  }, [tasks]);
 
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.FOCUS_SESSIONS, focusSessions);
