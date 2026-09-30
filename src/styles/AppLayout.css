@@ -100,6 +100,78 @@
   margin-inline: auto;
 }
 
+.main-content > .analytics-view {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+@container analytics-insights (min-width: 652px) and (max-width: 983px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(2n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 984px) and (max-width: 1315px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(3n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 1316px) and (max-width: 1647px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(4n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 1648px) and (max-width: 1979px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(5n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 1980px) and (max-width: 2311px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(6n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 2312px) and (max-width: 2643px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(7n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 2644px) and (max-width: 2975px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(8n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 2976px) and (max-width: 3307px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(9n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 3308px) and (max-width: 3639px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(10n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 3640px) and (max-width: 3971px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(11n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container analytics-insights (min-width: 3972px) {
+  .analytics-insights-grid > .analytics-insight-card:last-child:nth-child(12n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ---------- Shared interactive states ---------- */
 
 .main-content input:hover,

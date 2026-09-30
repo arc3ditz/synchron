@@ -48,16 +48,14 @@ export interface ActionableInsight {
 }
 
 /**
- * Calculates habit completion rates over a specified day window.
+ * Calculates habit completion rates over each habit's active lifetime.
  * @param habits - Array of habits to analyze
  * @param logs - Array of habit completion logs (can be derived from habit.completedDates)
- * @param daysWindow - Number of days to look back (default: 30)
  * @returns Performance diagnostics with strongest/weakest habits and overall rate
  */
 export function getHabitPerformanceDiagnostics(
   habits: Habit[],
   _logs?: string[][],
-  daysWindow: number = 30,
 ): HabitPerformanceDiagnostics {
   if (!habits || habits.length === 0) {
     return {
@@ -68,8 +66,8 @@ export function getHabitPerformanceDiagnostics(
   }
 
   const today = new Date();
-  const cutoffDate = new Date(today);
-  cutoffDate.setDate(today.getDate() - daysWindow);
+  today.setHours(0, 0, 0, 0);
+  const todayKey = toLocalDateKey(today);
 
   let totalExpectedCompletions = 0;
   let totalActualCompletions = 0;
@@ -78,27 +76,23 @@ export function getHabitPerformanceDiagnostics(
   for (const habit of habits) {
     if (habit.isArchived) continue;
 
-    // Get completion dates for this habit
-    const completedDates = habit.completedDates || [];
-    
-    // Calculate expected completions based on frequency
+    const completedDates = new Set(habit.completedDates || []);
+    const startDateKey = getHabitActiveStartDate(habit, todayKey);
+    const startDate = parseLocalDateKey(startDateKey);
+
     let expectedDays = 0;
-    for (let i = 0; i < daysWindow; i++) {
-      const checkDate = new Date(today);
-      checkDate.setDate(today.getDate() - i);
+    let checkDate = new Date(today);
+    while (checkDate >= startDate) {
       const dayName = checkDate.toLocaleDateString("en-US", { weekday: "long" });
-      
-      const isScheduled = isHabitScheduledForDay(habit, dayName);
-      if (isScheduled) expectedDays++;
+      if (isHabitScheduledForDay(habit, dayName)) expectedDays++;
+      checkDate.setDate(checkDate.getDate() - 1);
     }
 
     if (expectedDays === 0) continue;
 
-    // Count completions within the window
-    const completionsInWindow = completedDates.filter((dateStr) => {
-      const date = new Date(dateStr);
-      return date >= cutoffDate && date <= today;
-    }).length;
+    const completionsInWindow = Array.from(completedDates).filter(
+      (dateKey) => dateKey >= startDateKey && dateKey <= todayKey,
+    ).length;
 
     const rate = expectedDays > 0 ? (completionsInWindow / expectedDays) * 100 : 0;
     
@@ -363,13 +357,12 @@ export function generateActionableInsights(params: {
   tasks?: Task[];
   focusSessions: FocusSessionRecord[];
   goals: Goal[];
-  daysWindow?: number;
 }): ActionableInsight[] {
   const insights: ActionableInsight[] = [];
-  const { habits, habitLogs, tasks, focusSessions, goals, daysWindow = 30 } = params;
+  const { habits, habitLogs, tasks, focusSessions, goals } = params;
 
   // Habit performance insights
-  const habitDiagnostics = getHabitPerformanceDiagnostics(habits, habitLogs, daysWindow);
+  const habitDiagnostics = getHabitPerformanceDiagnostics(habits, habitLogs);
   
   if (habitDiagnostics.strongestHabits.length > 0) {
     const habitNames = habitDiagnostics.strongestHabits
@@ -453,6 +446,41 @@ export function generateActionableInsights(params: {
 }
 
 // Helper functions
+
+function getHabitActiveStartDate(habit: Habit, todayKey: string): string {
+  const creationDate = habit.createdAt
+    ? toDateKey(habit.createdAt)
+    : undefined;
+  if (creationDate) return creationDate > todayKey ? todayKey : creationDate;
+
+  const firstCompletion = (habit.completedDates || [])
+    .map(toDateKey)
+    .filter((dateKey): dateKey is string => typeof dateKey === "string" && dateKey <= todayKey)
+    .sort()[0];
+  if (firstCompletion) return firstCompletion;
+
+  const challengeStart = habit.startDate ? toDateKey(habit.startDate) : undefined;
+  return challengeStart && challengeStart <= todayKey ? challengeStart : todayKey;
+}
+
+function toDateKey(value: string): string | undefined {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  if (!match) return undefined;
+  const parsed = parseLocalDateKey(match[1]);
+  return toLocalDateKey(parsed) === match[1] ? match[1] : undefined;
+}
+
+function parseLocalDateKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toLocalDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function isHabitScheduledForDay(habit: Habit, dayName: string): boolean {
   const frequency = habit.frequencyType || "daily";

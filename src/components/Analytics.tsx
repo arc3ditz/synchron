@@ -41,8 +41,10 @@ type AnalyticsProps = {
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: 1200,
+    maxWidth: "100%",
     width: "100%",
+    boxSizing: "border-box",
+    padding: "0 clamp(16px, 2vw, 32px)",
   },
   title: {
     fontSize: 24,
@@ -81,12 +83,15 @@ const styles: Record<string, CSSProperties> = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 16,
     marginBottom: 24,
   },
   panel: {
     ...CARD_SURFACE,
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   },
   frictionPanel: {
     gridColumn: "1 / -1",
@@ -104,6 +109,9 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   statValue: {
     fontSize: 28,
@@ -122,6 +130,9 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
   },
   progressBar: {
+    flex: 1,
+    width: "100%",
+    minWidth: 0,
     height: 8,
     background: "var(--border-color)",
     borderRadius: 4,
@@ -130,6 +141,7 @@ const styles: Record<string, CSSProperties> = {
   },
   progressFill: {
     height: "100%",
+    maxWidth: "100%",
     background: "var(--accent-teal)",
     borderRadius: 4,
     transition: "width 0.3s ease",
@@ -140,6 +152,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 4,
     overflow: "hidden",
     display: "flex",
+    minWidth: 0,
     marginTop: 12,
   },
   ratioSegment: {
@@ -157,6 +170,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     padding: "12px 0",
     borderBottom: "1px solid var(--border-color)",
+    minWidth: 0,
   },
   habitItemLast: {
     borderBottom: "none",
@@ -175,6 +189,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 500,
     color: "var(--text-body)",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   habitMeta: {
     fontSize: 12,
@@ -184,6 +200,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 12,
+    flexShrink: 0,
   },
   habitHours: {
     fontSize: 16,
@@ -199,12 +216,15 @@ const styles: Record<string, CSSProperties> = {
   },
   heatmapGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
+    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
     gap: 4,
     marginTop: 16,
+    width: "100%",
+    minWidth: 0,
   },
   heatmapCell: {
     aspectRatio: 1,
+    minWidth: 0,
     borderRadius: 4,
     display: "flex",
     alignItems: "center",
@@ -242,6 +262,9 @@ const styles: Record<string, CSSProperties> = {
   // Decision Support Banner styles
   insightsSection: {
     marginBottom: 24,
+    width: "100%",
+    containerType: "inline-size",
+    containerName: "analytics-insights",
   },
   insightsTitle: {
     fontSize: 16,
@@ -251,14 +274,20 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   insightsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: 12,
+    minWidth: 0,
   },
   insightCard: {
     ...CARD_SURFACE,
+    minWidth: 0,
+    boxSizing: "border-box",
     padding: 16,
     borderRadius: 12,
     borderLeft: "4px solid",
@@ -282,24 +311,32 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    minWidth: 0,
   },
   insightTitle: {
     fontSize: 14,
     fontWeight: 600,
     color: "var(--text-primary)",
     margin: 0,
+    flex: 1,
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   insightDescription: {
     fontSize: 13,
     color: "var(--text-secondary)",
     margin: 0,
     lineHeight: 1.4,
+    flex: 1,
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   // Performance widget styles
   performanceSection: {
     display: "flex",
     flexDirection: "column",
     gap: 12,
+    minWidth: 0,
   },
   performanceItem: {
     display: "flex",
@@ -307,6 +344,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     padding: "10px 0",
     borderBottom: "1px solid var(--border-color)",
+    minWidth: 0,
   },
   performanceItemLast: {
     borderBottom: "none",
@@ -315,6 +353,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     color: "var(--text-body)",
     flex: 1,
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   performanceRate: {
     fontSize: 14,
@@ -328,6 +368,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 6,
     overflow: "hidden",
     marginTop: 12,
+    width: "100%",
+    minWidth: 0,
   },
   timeBucketSegment: {
     display: "flex",
@@ -337,6 +379,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 500,
     color: "var(--text-primary)",
     transition: "flex 0.3s ease",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   timeBucketLegend: {
     display: "flex",
@@ -365,11 +409,16 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 4,
+    gap: 8,
+    minWidth: 0,
   },
   goalAllocationName: {
     fontSize: 13,
     color: "var(--text-body)",
     fontWeight: 500,
+    flex: 1,
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
   goalAllocationPercent: {
     fontSize: 13,
@@ -417,12 +466,11 @@ function Analytics({
       tasks,
       focusSessions,
       goals,
-      daysWindow: 30,
     });
   }, [habits, tasks, focusSessions, goals]);
 
   const habitPerformance = useMemo(() => {
-    return getHabitPerformanceDiagnostics(habits, undefined, 30);
+    return getHabitPerformanceDiagnostics(habits);
   }, [habits]);
 
   const timeOfDayInsights = useMemo(() => {
@@ -557,7 +605,7 @@ function Analytics({
             <Lightbulb size={18} />
             Actionable Insights & Recommendations
           </h2>
-          <div style={styles.insightsGrid}>
+          <div className="analytics-insights-grid" style={styles.insightsGrid}>
             {actionableInsights.map((insight) => {
               const getInsightStyle = (type: ActionableInsight["type"]) => {
                 switch (type) {
@@ -588,6 +636,7 @@ function Analytics({
                     ...styles.insightCard,
                     ...getInsightStyle(insight.type),
                   }}
+                  className="analytics-insight-card"
                 >
                   <div style={styles.insightHeader}>
                     {getInsightIcon(insight.type)}
@@ -611,11 +660,11 @@ function Analytics({
           <div style={styles.performanceSection}>
             <div style={{ marginBottom: 12 }}>
               <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
-                TOP PERFORMING (80%+)
+                Top Performing (80% & Above)
               </span>
               {habitPerformance.strongestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  No habits at 80%+ completion yet
+                  No habits at 80% completion or above yet.
                 </p>
               ) : (
                 habitPerformance.strongestHabits.slice(0, 3).map((habit, index) => (
@@ -634,7 +683,7 @@ function Analytics({
             </div>
             <div>
               <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
-                NEEDS ATTENTION (&lt;50%)
+                Needs Attention (Under 50%)
               </span>
               {habitPerformance.weakestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>

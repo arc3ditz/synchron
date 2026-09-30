@@ -815,6 +815,7 @@ function App() {
         return {
           id: item.id,
           name: item.name,
+          createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
           goalId: typeof item.goalId === "string" ? item.goalId : undefined,
           priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
           type: hasValidChallengeFields ? "Challenge" : "Daily",
@@ -1120,6 +1121,7 @@ function App() {
     const habit: Habit = {
       id: Date.now(),
       name,
+      createdAt: getTodayKey(appSettings.dayResetHour),
       goalId: newGoalId || undefined,
       category: category || undefined,
       priority: newPriority,
@@ -2119,6 +2121,7 @@ function App() {
           </div>
 
           <div
+            className="analytics-view"
             style={{
               display: view === "Analytics" ? "flex" : "none",
               flexDirection: "column",

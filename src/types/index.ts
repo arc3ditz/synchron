@@ -19,6 +19,7 @@ export interface AppSettings {
 export interface Habit {
   id: number;
   name: string;
+  createdAt?: string; // Local calendar date in YYYY-MM-DD format
   goalId?: string;
   priority: Priority;
   type: HabitType;
