@@ -30,6 +30,13 @@ type GoalsProps = {
   onToggleMilestone: (goalId: string, milestoneId: string) => void;
 };
 
+type PendingDeletion = {
+  type: "goal" | "milestone" | "task";
+  id: string;
+  goalId?: string;
+  title: string;
+};
+
 const priorityStyles: Record<Task["priority"], CSSProperties> = {
   high: {
     color: "var(--priority-high-text)",
@@ -366,11 +373,11 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    marginTop: 14,
-    padding: "6px 9px",
-    border: "1px solid var(--border-strong)",
+    marginTop: 12,
+    padding: "8px 12px",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 7,
-    background: "transparent",
+    background: "var(--card-surface-bg)",
     color: "var(--text-secondary)",
     fontSize: 12,
     cursor: "pointer",
@@ -507,10 +514,11 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    padding: "6px 9px",
-    border: "1px solid var(--border-strong)",
+    marginTop: 12,
+    padding: "8px 12px",
+    border: "1px solid var(--card-surface-border)",
     borderRadius: 7,
-    background: "transparent",
+    background: "var(--card-surface-bg)",
     color: "var(--text-secondary)",
     fontSize: 12,
     cursor: "pointer",
@@ -599,9 +607,19 @@ export default function Goals({
   const [milestoneEditTitle, setMilestoneEditTitle] = useState("");
   const [milestoneEditTargetDate, setMilestoneEditTargetDate] = useState("");
   const [taskMilestoneId, setTaskMilestoneId] = useState<string>("");
+  const [itemToDelete, setItemToDelete] = useState<PendingDeletion | null>(null);
 
   const activeGoals = goals.filter((goal) => goal.status !== "archived");
   const archivedGoals = goals.filter((goal) => goal.status === "archived");
+
+  function confirmItemDeletion() {
+    if (!itemToDelete) return;
+
+    if (itemToDelete.type === "goal") onDeleteGoal(itemToDelete.id);
+    if (itemToDelete.type === "milestone") onDeleteMilestone(itemToDelete.id);
+    if (itemToDelete.type === "task") onDeleteTask(itemToDelete.id);
+    setItemToDelete(null);
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -825,9 +843,7 @@ export default function Goals({
               <button
                 type="button"
                 style={styles.iconButton}
-                onClick={() => {
-                  if (window.confirm(`Delete task "${task.title}"?`)) onDeleteTask(task.id);
-                }}
+                onClick={() => setItemToDelete({ type: "task", id: task.id, goalId: task.goalId, title: task.title })}
                 aria-label={`Delete ${task.title}`}
                 title="Delete task"
               >
@@ -946,11 +962,7 @@ export default function Goals({
                   <button
                     type="button"
                     style={styles.iconButton}
-                    onClick={() => {
-                      if (window.confirm(`Delete "${goal.title}"? Its linked tasks will be deleted and habits unlinked.`)) {
-                        onDeleteGoal(goal.id);
-                      }
-                    }}
+                    onClick={() => setItemToDelete({ type: "goal", id: goal.id, title: goal.title })}
                     aria-label={`Delete ${goal.title}`}
                     title="Delete goal"
                   >
@@ -1132,9 +1144,12 @@ export default function Goals({
                               <button
                                 type="button"
                                 style={styles.iconButton}
-                                onClick={() => {
-                                  if (window.confirm(`Delete milestone "${milestone.title}"?`)) onDeleteMilestone(milestone.id);
-                                }}
+                                onClick={() => setItemToDelete({
+                                  type: "milestone",
+                                  id: milestone.id,
+                                  goalId: milestone.goalId,
+                                  title: milestone.title,
+                                })}
                                 aria-label={`Delete ${milestone.title}`}
                                 title="Delete milestone"
                               >
@@ -1351,6 +1366,41 @@ export default function Goals({
             </div>
           )}
         </section>
+      )}
+
+      {itemToDelete && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setItemToDelete(null)}
+        >
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="goals-delete-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="goals-delete-modal-title">Delete {itemToDelete.title}?</h2>
+            <p>This action cannot be undone.</p>
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-cancel"
+                onClick={() => setItemToDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-confirm"
+                onClick={confirmItemDeletion}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

@@ -7,7 +7,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 
 import { CARD_SURFACE } from "../theme";
-import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task } from "../types";
+import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task, Habit } from "../types";
 
 type FocusTimerProps = {
   habits: FocusTimerHabit[];
@@ -20,6 +20,8 @@ type FocusTimerProps = {
   goals: Goal[];
   milestones: Milestone[];
   tasks: Task[];
+  allHabits?: Habit[];
+  initialEntityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string };
 };
 
 const DEFAULT_BREAK_MINUTES = 5;
@@ -369,6 +371,8 @@ function FocusTimer({
   goals,
   milestones,
   tasks,
+  allHabits,
+  initialEntityId,
 }: FocusTimerProps) {
   const [mode, setMode] = useState<Mode>("Timer");
   const [timerMinutes, setTimerMinutes] = useState(defaultFocusDuration);
@@ -389,10 +393,33 @@ function FocusTimer({
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [previousInitialEntityId, setPreviousInitialEntityId] = useState(initialEntityId);
   const [timerDurationDraft, setTimerDurationDraft] = useState<string | null>(null);
   const [focusDurationDraft, setFocusDurationDraft] = useState<string | null>(null);
   const [breakDurationDraft, setBreakDurationDraft] = useState<string | null>(null);
   const [quickAdjustStepDraft, setQuickAdjustStepDraft] = useState(String(quickAdjustStepMinutes));
+
+  if (initialEntityId !== previousInitialEntityId) {
+    setPreviousInitialEntityId(initialEntityId);
+    if (initialEntityId?.taskId) {
+      setSelectedTaskId(initialEntityId.taskId);
+      const task = tasks.find((item) => item.id === initialEntityId.taskId);
+      setSelectedGoalId(task?.goalId ?? "");
+      setSelectedMilestoneId(task?.milestoneId ?? "");
+      setSelectedHabitId("");
+    } else if (initialEntityId?.habitId) {
+      setSelectedHabitId(initialEntityId.habitId);
+      const habit = allHabits?.find((item) => item.id === initialEntityId.habitId);
+      setSelectedGoalId(habit?.goalId ?? "");
+      setSelectedMilestoneId("");
+      setSelectedTaskId("");
+    } else if (initialEntityId?.goalId) {
+      setSelectedGoalId(initialEntityId.goalId);
+      setSelectedMilestoneId("");
+      setSelectedTaskId("");
+      setSelectedHabitId("");
+    }
+  }
 
   const timerEndTimestampRef = useRef<number | null>(null);
   const pomodoroEndTimestampRef = useRef<number | null>(null);
@@ -1046,47 +1073,51 @@ function FocusTimer({
           </select>
         </div>
 
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="milestone-select">
-            Link to Milestone (Optional)
-          </label>
-          <select
-            id="milestone-select"
-            style={styles.habitSelect}
-            value={selectedMilestoneId}
-            onChange={(event) => handleMilestoneChange(event.target.value)}
-            disabled={isRunning || !selectedGoalId}
-            aria-label="Select a milestone to link this session to"
-          >
-            <option value="">No Linked Milestone</option>
-            {availableMilestones.map((milestone) => (
-              <option key={milestone.id} value={milestone.id}>
-                {milestone.title}
-              </option>
-            ))}
-          </select>
-        </div>
+        {selectedGoalId !== "" && (
+          <div style={styles.panelSection}>
+            <label style={styles.habitSelectLabel} htmlFor="milestone-select">
+              Link to Milestone (Optional)
+            </label>
+            <select
+              id="milestone-select"
+              style={styles.habitSelect}
+              value={selectedMilestoneId}
+              onChange={(event) => handleMilestoneChange(event.target.value)}
+              disabled={isRunning}
+              aria-label="Select a milestone to link this session to"
+            >
+              <option value="">No Linked Milestone</option>
+              {availableMilestones.map((milestone) => (
+                <option key={milestone.id} value={milestone.id}>
+                  {milestone.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="task-select">
-            Link to Task (Optional)
-          </label>
-          <select
-            id="task-select"
-            style={styles.habitSelect}
-            value={selectedTaskId}
-            onChange={(event) => handleTaskChange(event.target.value)}
-            disabled={isRunning}
-            aria-label="Select a task to link this session to"
-          >
-            <option value="">No Linked Task</option>
-            {availableTasks.filter((task) => !task.completed).map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-          </select>
-        </div>
+        {selectedMilestoneId !== "" && (
+          <div style={styles.panelSection}>
+            <label style={styles.habitSelectLabel} htmlFor="task-select">
+              Link to Task (Optional)
+            </label>
+            <select
+              id="task-select"
+              style={styles.habitSelect}
+              value={selectedTaskId}
+              onChange={(event) => handleTaskChange(event.target.value)}
+              disabled={isRunning}
+              aria-label="Select a task to link this session to"
+            >
+              <option value="">No Linked Task</option>
+              {availableTasks.filter((task) => !task.completed).map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div style={styles.panelSection}>
           <label style={styles.habitSelectLabel} htmlFor="habit-select">

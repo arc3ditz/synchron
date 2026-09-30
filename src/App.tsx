@@ -57,7 +57,7 @@ import {
   saveHabits,
 } from "./utils/storage";
 import { createGoal, updateGoal, updateGoalStatus, createMilestone, updateMilestone, toggleMilestone, deleteMilestone } from "./domain/goals";
-import { createTask, toggleTaskCompletion, updateTask } from "./domain/tasks";
+import { createTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
 import {
   getTodayKey,
   formatDateDisplay,
@@ -885,12 +885,19 @@ function App() {
   const [editingCustomCategory, setEditingCustomCategory] = useState<string | null>(null);
   const [customCategoryDraft, setCustomCategoryDraft] = useState("");
   const [habitPendingDeletion, setHabitPendingDeletion] = useState<Habit | null>(null);
+  const [focusSessionPendingDeletion, setFocusSessionPendingDeletion] = useState<FocusSessionRecord | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [streakFreeze, setStreakFreeze] = useState(() => {
     const stored = loadStorageData<string>(STORAGE_KEYS.STREAK_FREEZE, "false");
     return stored === "true";
   });
+  const [initialFocusEntityId, setInitialFocusEntityId] = useState<{
+    taskId?: string;
+    habitId?: number;
+    goalId?: string;
+    title?: string;
+  } | undefined>(undefined);
 
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.SETTINGS, appSettings);
@@ -975,14 +982,17 @@ function App() {
       switch (event.key) {
         case "1":
           event.preventDefault();
+          setInitialFocusEntityId(undefined);
           setView("Today");
           break;
         case "2":
           event.preventDefault();
+          setInitialFocusEntityId(undefined);
           setView("Habits");
           break;
         case "3":
           event.preventDefault();
+          setInitialFocusEntityId(undefined);
           setView("goals");
           break;
         case "4":
@@ -991,14 +1001,17 @@ function App() {
           break;
         case "5":
           event.preventDefault();
+          setInitialFocusEntityId(undefined);
           setView("History");
           break;
         case "6":
           event.preventDefault();
+          setInitialFocusEntityId(undefined);
           setView("Analytics");
           break;
         case ",":
           event.preventDefault();
+          setInitialFocusEntityId(undefined);
           setView("Settings");
           break;
         case "/":
@@ -1024,6 +1037,11 @@ function App() {
     new Set([...customCategories, ...categoriesInUse]),
   ).sort();
   const categoryTabs = [ALL_CATEGORIES, NO_CATEGORY, ...categoriesInUse];
+  function navigateToView(nextView: View) {
+    if (nextView !== "Timer") setInitialFocusEntityId(undefined);
+    setView(nextView);
+  }
+
   const currentCategory = categoryTabs.includes(activeCategory)
     ? activeCategory
     : ALL_CATEGORIES;
@@ -1268,6 +1286,19 @@ function App() {
 
   function deleteFocusSession(id: number) {
     setFocusSessions((prev) => prev.filter((session) => session.id !== id));
+  }
+
+  function requestFocusSessionDeletion(id: number) {
+    const session = focusSessions.find((item) => item.id === id);
+    if (!session) return;
+    setFocusSessionPendingDeletion(session);
+  }
+
+  function confirmFocusSessionDeletion() {
+    if (!focusSessionPendingDeletion) return;
+
+    deleteFocusSession(focusSessionPendingDeletion.id);
+    setFocusSessionPendingDeletion(null);
   }
 
   function archiveHabit(id: number) {
@@ -1624,7 +1655,7 @@ function App() {
         <nav className="sidebar">
           <button
             className={`sidebar-item ${view === "Today" ? "active" : ""}`}
-            onClick={() => setView("Today")}
+            onClick={() => navigateToView("Today")}
           >
             <CalendarDays size={20} />
             <span>Today</span>
@@ -1632,7 +1663,7 @@ function App() {
           </button>
           <button
             className={`sidebar-item ${view === "Habits" ? "active" : ""}`}
-            onClick={() => setView("Habits")}
+            onClick={() => navigateToView("Habits")}
           >
             <ListChecks size={20} />
             <span>My Habits</span>
@@ -1640,7 +1671,7 @@ function App() {
           </button>
           <button
             className={`sidebar-item ${view === "goals" ? "active" : ""}`}
-            onClick={() => setView("goals")}
+            onClick={() => navigateToView("goals")}
           >
             <Target size={20} />
             <span>Goals</span>
@@ -1648,7 +1679,7 @@ function App() {
           </button>
           <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
-            onClick={() => setView("Timer")}
+            onClick={() => navigateToView("Timer")}
           >
             <TimerIcon size={20} />
             <span>Timer</span>
@@ -1656,7 +1687,7 @@ function App() {
           </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
-            onClick={() => setView("History")}
+            onClick={() => navigateToView("History")}
           >
             <HistoryIcon size={20} />
             <span>History</span>
@@ -1664,7 +1695,7 @@ function App() {
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
-            onClick={() => setView("Analytics")}
+            onClick={() => navigateToView("Analytics")}
           >
             <BarChart3 size={20} />
             <span>Analytics</span>
@@ -1673,7 +1704,7 @@ function App() {
           <div className="sidebar-spacer" />
           <button
             className={`sidebar-item ${view === "Settings" ? "active" : ""}`}
-            onClick={() => setView("Settings")}
+            onClick={() => navigateToView("Settings")}
           >
             <Settings size={20} />
             <span>Settings</span>
@@ -1705,8 +1736,11 @@ function App() {
                   task.id === taskId ? toggleTaskCompletion(task) : task,
                 ))
               }
-              onStartFocus={() => setView("Timer")}
-              onNavigateToHabits={() => setView("Habits")}
+              onStartFocus={(entityId) => {
+                setInitialFocusEntityId(entityId);
+                navigateToView("Timer");
+              }}
+              onNavigateToHabits={() => navigateToView("Habits")}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
               showMandatoryHabitsInImportantItems={appSettings.showMandatoryHabitsInImportantItems ?? false}
@@ -2061,6 +2095,8 @@ function App() {
               goals={goals}
               milestones={milestones}
               tasks={tasks}
+              allHabits={habits}
+              initialEntityId={initialFocusEntityId}
             />
           </div>
 
@@ -2075,7 +2111,7 @@ function App() {
             <History
               habits={habits}
               focusSessions={focusSessions}
-              onDeleteFocusSession={deleteFocusSession}
+              onRequestDeleteFocusSession={requestFocusSessionDeletion}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
               weekStart={appSettings.weekStart}
@@ -2092,6 +2128,8 @@ function App() {
           >
             <Analytics
               habits={habits}
+              tasks={tasks}
+              goals={goals}
               focusSessions={focusSessions}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
@@ -2148,7 +2186,7 @@ function App() {
                 ))
               }
               onDeleteTask={(taskId) =>
-                setTasks((current) => current.filter((task) => task.id !== taskId))
+                setTasks((current) => deleteTask(current, taskId))
               }
               onAddMilestone={(data) => setMilestones((current) => [...current, createMilestone(data)])}
               onEditMilestone={(milestoneId, data) =>
@@ -2439,6 +2477,43 @@ function App() {
                 type="button"
                 className="delete-modal-confirm"
                 onClick={confirmHabitDeletion}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {focusSessionPendingDeletion && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setFocusSessionPendingDeletion(null)}
+        >
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-focus-session-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-focus-session-modal-title">
+              Delete this {focusSessionPendingDeletion.sessionType} session?
+            </h2>
+            <p>This action cannot be undone.</p>
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-cancel"
+                onClick={() => setFocusSessionPendingDeletion(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-confirm"
+                onClick={confirmFocusSessionDeletion}
               >
                 Delete
               </button>

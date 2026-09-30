@@ -17,7 +17,7 @@ export type { FocusSessionRecord };
 type HistoryProps = {
   habits: HistoryHabit[];
   focusSessions: FocusSessionRecord[];
-  onDeleteFocusSession: (id: number) => void;
+  onRequestDeleteFocusSession: (id: number) => void;
   streakFreeze: boolean;
   dayResetHour: number;
   weekStart: "Sunday" | "Monday";
@@ -245,7 +245,7 @@ const styles: Record<string, CSSProperties> = {
 function History({
   habits,
   focusSessions,
-  onDeleteFocusSession,
+  onRequestDeleteFocusSession,
   streakFreeze,
   dayResetHour,
   weekStart,
@@ -444,7 +444,7 @@ function History({
                 <span style={styles.focusSessionDuration}>{session.durationMinutes}m</span>
                 <button
                   style={styles.deleteFocusSessionButton}
-                  onClick={() => onDeleteFocusSession(session.id)}
+                  onClick={() => onRequestDeleteFocusSession(session.id)}
                   aria-label={`Delete focus session`}
                 >
                   <Trash2 size={14} />

@@ -20,6 +20,10 @@ export function updateTask(
   return { ...task, ...data };
 }
 
+export function deleteTask(tasks: Task[], taskId: string): Task[] {
+  return tasks.filter((task) => task.id !== taskId);
+}
+
 export function filterTasksByGoal(tasks: Task[], goalId: string): Task[] {
   return tasks.filter((task) => task.goalId === goalId);
 }

@@ -1,14 +1,17 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import {
   Target,
-  TrendingUp,
   Clock,
   Flame,
   Calendar,
+  AlertTriangle,
+  CheckCircle,
+  Lightbulb,
+  Zap,
 } from "lucide-react";
 
 import { CARD_SURFACE } from "../theme";
-import type { AnalyticsHabit, TimeHorizon, FocusSessionRecord } from "../types";
+import type { Habit, Task, Goal, TimeHorizon, FocusSessionRecord } from "../types";
 import {
   getDateKey,
   getWeekStart,
@@ -17,9 +20,19 @@ import {
   WEEKDAYS,
   calculateStreak,
 } from "../utils/dates";
+import {
+  getHabitPerformanceDiagnostics,
+  getTimeOfDayInsights,
+  getWeekdayFrictionMetrics,
+  getGoalFocusAllocation,
+  generateActionableInsights,
+  type ActionableInsight,
+} from "../domain/analytics";
 
 type AnalyticsProps = {
-  habits: AnalyticsHabit[];
+  habits: Habit[];
+  tasks: Task[];
+  goals: Goal[];
   focusSessions: FocusSessionRecord[];
   streakFreeze: boolean;
   dayResetHour: number;
@@ -74,6 +87,14 @@ const styles: Record<string, CSSProperties> = {
   },
   panel: {
     ...CARD_SURFACE,
+  },
+  frictionPanel: {
+    gridColumn: "1 / -1",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
   },
   panelTitle: {
     fontSize: 15,
@@ -218,6 +239,156 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     padding: "32px 20px",
   },
+  // Decision Support Banner styles
+  insightsSection: {
+    marginBottom: 24,
+  },
+  insightsTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    margin: "0 0 12px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  insightsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gap: 12,
+  },
+  insightCard: {
+    ...CARD_SURFACE,
+    padding: 16,
+    borderRadius: 12,
+    borderLeft: "4px solid",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  insightCardPositive: {
+    borderColor: "rgba(34, 197, 94, 0.5)",
+    background: "rgba(34, 197, 94, 0.05)",
+  },
+  insightCardWarning: {
+    borderColor: "rgba(234, 179, 8, 0.5)",
+    background: "rgba(234, 179, 8, 0.05)",
+  },
+  insightCardActionable: {
+    borderColor: "rgba(6, 182, 212, 0.5)",
+    background: "rgba(6, 182, 212, 0.05)",
+  },
+  insightHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  insightTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    margin: 0,
+  },
+  insightDescription: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    margin: 0,
+    lineHeight: 1.4,
+  },
+  // Performance widget styles
+  performanceSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  performanceItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 0",
+    borderBottom: "1px solid var(--border-color)",
+  },
+  performanceItemLast: {
+    borderBottom: "none",
+  },
+  performanceName: {
+    fontSize: 14,
+    color: "var(--text-body)",
+    flex: 1,
+  },
+  performanceRate: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--accent-teal)",
+  },
+  // Time bucket styles
+  timeBucketBar: {
+    display: "flex",
+    height: 32,
+    borderRadius: 6,
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  timeBucketSegment: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 11,
+    fontWeight: 500,
+    color: "var(--text-primary)",
+    transition: "flex 0.3s ease",
+  },
+  timeBucketLegend: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 12,
+  },
+  timeBucketLegendItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "var(--text-secondary)",
+  },
+  timeBucketDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+  },
+  // Goal allocation styles
+  goalAllocationItem: {
+    marginBottom: 12,
+  },
+  goalAllocationHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  goalAllocationName: {
+    fontSize: 13,
+    color: "var(--text-body)",
+    fontWeight: 500,
+  },
+  goalAllocationPercent: {
+    fontSize: 13,
+    color: "var(--accent-teal)",
+    fontWeight: 600,
+  },
+  // Friction day styles
+  frictionDayBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 14px",
+    borderRadius: 20,
+    fontSize: 13,
+    fontWeight: 500,
+    background: "rgba(234, 179, 8, 0.1)",
+    color: "rgba(234, 179, 8, 0.9)",
+    border: "1px solid rgba(234, 179, 8, 0.3)",
+  },
 };
 
 function formatHours(minutes: number): string {
@@ -230,13 +401,41 @@ function formatHours(minutes: number): string {
 
 function Analytics({
   habits,
+  tasks,
+  goals,
   focusSessions,
   streakFreeze,
   dayResetHour,
   weekStart,
 }: AnalyticsProps) {
   const [timeHorizon, setTimeHorizon] = useState<TimeHorizon>("This Week");
-  const [weeklyGoalHours, setWeeklyGoalHours] = useState(20);
+
+  // Decision Support Analytics
+  const actionableInsights = useMemo(() => {
+    return generateActionableInsights({
+      habits,
+      tasks,
+      focusSessions,
+      goals,
+      daysWindow: 30,
+    });
+  }, [habits, tasks, focusSessions, goals]);
+
+  const habitPerformance = useMemo(() => {
+    return getHabitPerformanceDiagnostics(habits, undefined, 30);
+  }, [habits]);
+
+  const timeOfDayInsights = useMemo(() => {
+    return getTimeOfDayInsights(focusSessions);
+  }, [focusSessions]);
+
+  const weekdayFriction = useMemo(() => {
+    return getWeekdayFrictionMetrics(habits, undefined, tasks);
+  }, [habits, tasks]);
+
+  const goalFocusAllocation = useMemo(() => {
+    return getGoalFocusAllocation(focusSessions, goals);
+  }, [focusSessions, goals]);
 
   const filteredSessions = useMemo(() => {
     const now = new Date();
@@ -262,35 +461,7 @@ function Analytics({
     });
   }, [focusSessions, timeHorizon, weekStart]);
 
-  const totalFocusMinutes = useMemo(() => {
-    return filteredSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
-  }, [filteredSessions]);
 
-  const currentWeekSessions = useMemo(() => {
-    const now = new Date();
-    const weekStartDate = getWeekStart(now, weekStart);
-    return focusSessions.filter((session) => {
-      const sessionDate = new Date(session.timestamp);
-      return sessionDate >= weekStartDate && sessionDate <= now;
-    });
-  }, [focusSessions, weekStart]);
-
-  const currentWeekMinutes = useMemo(() => {
-    return currentWeekSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
-  }, [currentWeekSessions]);
-
-  const currentMonthSessions = useMemo(() => {
-    const now = new Date();
-    const monthStart = getMonthStart(now);
-    return focusSessions.filter((session) => {
-      const sessionDate = new Date(session.timestamp);
-      return sessionDate >= monthStart && sessionDate <= now;
-    });
-  }, [focusSessions]);
-
-  const currentMonthMinutes = useMemo(() => {
-    return currentMonthSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
-  }, [currentMonthSessions]);
 
   const habitStats = useMemo(() => {
     const habitMinutes: Record<number, number> = {};
@@ -312,41 +483,6 @@ function Analytics({
       .sort((a, b) => b.totalMinutes - a.totalMinutes)
       .slice(0, 5);
   }, [filteredSessions, habits, streakFreeze, dayResetHour]);
-
-  const weeklyProgress = useMemo(() => {
-    const goalMinutes = weeklyGoalHours * 60;
-    return Math.min(100, (currentWeekMinutes / goalMinutes) * 100);
-  }, [currentWeekMinutes, weeklyGoalHours]);
-
-  const peakFocusWindow = useMemo(() => {
-    const hourCounts: Record<number, number> = {};
-    
-    focusSessions.forEach((session) => {
-      const hour = new Date(session.timestamp).getHours();
-      hourCounts[hour] = (hourCounts[hour] || 0) + session.durationMinutes;
-    });
-
-    let maxMinutes = 0;
-    let peakHour = 9; // Default to 9 AM
-
-    Object.entries(hourCounts).forEach(([hour, minutes]) => {
-      if (minutes > maxMinutes) {
-        maxMinutes = minutes;
-        peakHour = parseInt(hour);
-      }
-    });
-
-    const startHour = peakHour;
-    const endHour = (peakHour + 2) % 24;
-    
-    const formatHour = (h: number) => {
-      const period = h >= 12 ? "PM" : "AM";
-      const displayHour = h % 12 || 12;
-      return `${displayHour} ${period}`;
-    };
-
-    return `${formatHour(startHour)} - ${formatHour(endHour)}`;
-  }, [focusSessions]);
 
   const heatmapData = useMemo(() => {
     const now = new Date();
@@ -414,61 +550,271 @@ function Analytics({
         ))}
       </div>
 
+      {/* Decision Support Banner */}
+      {actionableInsights.length > 0 && (
+        <div style={styles.insightsSection}>
+          <h2 style={styles.insightsTitle}>
+            <Lightbulb size={18} />
+            Actionable Insights & Recommendations
+          </h2>
+          <div style={styles.insightsGrid}>
+            {actionableInsights.map((insight) => {
+              const getInsightStyle = (type: ActionableInsight["type"]) => {
+                switch (type) {
+                  case "positive":
+                    return styles.insightCardPositive;
+                  case "warning":
+                    return styles.insightCardWarning;
+                  case "actionable":
+                    return styles.insightCardActionable;
+                }
+              };
+
+              const getInsightIcon = (type: ActionableInsight["type"]) => {
+                switch (type) {
+                  case "positive":
+                    return <CheckCircle size={16} color="rgba(34, 197, 94, 0.8)" />;
+                  case "warning":
+                    return <AlertTriangle size={16} color="rgba(234, 179, 8, 0.8)" />;
+                  case "actionable":
+                    return <Zap size={16} color="rgba(6, 182, 212, 0.8)" />;
+                }
+              };
+
+              return (
+                <div
+                  key={insight.id}
+                  style={{
+                    ...styles.insightCard,
+                    ...getInsightStyle(insight.type),
+                  }}
+                >
+                  <div style={styles.insightHeader}>
+                    {getInsightIcon(insight.type)}
+                    <h3 style={styles.insightTitle}>{insight.title}</h3>
+                  </div>
+                  <p style={styles.insightDescription}>{insight.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={styles.grid}>
+        {/* Habit Performance Widget */}
         <div style={styles.panel}>
           <h3 style={styles.panelTitle}>
-            <Target size={18} />
-            Weekly Focus Goal
+            <Flame size={18} />
+            Habit Performance
           </h3>
-          <div style={styles.goalSection}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <label style={{ fontSize: 13, color: "var(--text-muted)" }}>Target:</label>
-              <input
-                type="number"
-                min={1}
-                max={168}
-                value={weeklyGoalHours}
-                onChange={(e) => setWeeklyGoalHours(Math.max(1, parseInt(e.target.value) || 1))}
-                style={styles.goalInput}
-              />
-              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Hours/Week</span>
+          <div style={styles.performanceSection}>
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
+                TOP PERFORMING (80%+)
+              </span>
+              {habitPerformance.strongestHabits.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
+                  No habits at 80%+ completion yet
+                </p>
+              ) : (
+                habitPerformance.strongestHabits.slice(0, 3).map((habit, index) => (
+                  <div
+                    key={habit.id}
+                    style={{
+                      ...styles.performanceItem,
+                      ...(index === Math.min(habitPerformance.strongestHabits.length - 1, 2) ? styles.performanceItemLast : {}),
+                    }}
+                  >
+                    <span style={styles.performanceName}>{habit.name}</span>
+                    <span style={styles.performanceRate}>Strong</span>
+                  </div>
+                ))
+              )}
             </div>
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: "var(--text-body)" }}>
-                  {formatHours(currentWeekMinutes)} / {weeklyGoalHours}h
-                </span>
-                <span style={{ fontSize: 13, color: "var(--accent-teal)" }}>
-                  {weeklyProgress.toFixed(0)}%
-                </span>
-              </div>
-              <div style={styles.progressBar}>
-                <div className="progress-fill" style={{ ...styles.progressFill, width: `${weeklyProgress}%` }} />
+              <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
+                NEEDS ATTENTION (&lt;50%)
+              </span>
+              {habitPerformance.weakestHabits.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
+                  All habits performing well
+                </p>
+              ) : (
+                habitPerformance.weakestHabits.slice(0, 3).map((habit, index) => (
+                  <div
+                    key={habit.id}
+                    style={{
+                      ...styles.performanceItem,
+                      ...(index === Math.min(habitPerformance.weakestHabits.length - 1, 2) ? styles.performanceItemLast : {}),
+                    }}
+                  >
+                    <span style={styles.performanceName}>{habit.name}</span>
+                    <span style={{ ...styles.performanceRate, color: "rgba(234, 179, 8, 0.9)" }}>
+                      Needs Work
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-color)" }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Overall Completion Rate</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+              <span style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)" }}>
+                {habitPerformance.overallCompletionRate}%
+              </span>
+              <div style={{ flex: 1, ...styles.progressBar }}>
+                <div style={{ ...styles.progressFill, width: `${habitPerformance.overallCompletionRate}%` }} />
               </div>
             </div>
           </div>
         </div>
 
+        {/* Peak Focus Window Widget */}
         <div style={styles.panel}>
           <h3 style={styles.panelTitle}>
             <Clock size={18} />
-            Total Focus Hours
-          </h3>
-          <p style={styles.statValue}>{formatHours(totalFocusMinutes)}</p>
-          <p style={styles.statLabel}>Selected Period</p>
-          <p style={styles.statSub}>
-            This Month: {formatHours(currentMonthMinutes)} · This Week: {formatHours(currentWeekMinutes)}
-          </p>
-        </div>
-
-        <div style={styles.panel}>
-          <h3 style={styles.panelTitle}>
-            <TrendingUp size={18} />
             Peak Focus Window
           </h3>
-          <p style={styles.statValue}>{peakFocusWindow}</p>
-          <p style={styles.statLabel}>Most Productive Time</p>
-          <p style={styles.statSub}>Based on your session history</p>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+            Your most productive time is <strong style={{ color: "var(--text-primary)" }}>{timeOfDayInsights.peakFocusWindow}</strong>
+          </p>
+          <div style={styles.timeBucketBar}>
+            <div
+              style={{
+                ...styles.timeBucketSegment,
+                flex: timeOfDayInsights.morningMinutes || 1,
+                background: timeOfDayInsights.peakFocusWindow === "Morning" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
+              }}
+            >
+              {timeOfDayInsights.morningMinutes > 0 ? formatHours(timeOfDayInsights.morningMinutes) : ""}
+            </div>
+            <div
+              style={{
+                ...styles.timeBucketSegment,
+                flex: timeOfDayInsights.afternoonMinutes || 1,
+                background: timeOfDayInsights.peakFocusWindow === "Afternoon" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
+              }}
+            >
+              {timeOfDayInsights.afternoonMinutes > 0 ? formatHours(timeOfDayInsights.afternoonMinutes) : ""}
+            </div>
+            <div
+              style={{
+                ...styles.timeBucketSegment,
+                flex: timeOfDayInsights.eveningMinutes || 1,
+                background: timeOfDayInsights.peakFocusWindow === "Evening" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
+              }}
+            >
+              {timeOfDayInsights.eveningMinutes > 0 ? formatHours(timeOfDayInsights.eveningMinutes) : ""}
+            </div>
+            <div
+              style={{
+                ...styles.timeBucketSegment,
+                flex: timeOfDayInsights.nightMinutes || 1,
+                background: timeOfDayInsights.peakFocusWindow === "Night" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
+              }}
+            >
+              {timeOfDayInsights.nightMinutes > 0 ? formatHours(timeOfDayInsights.nightMinutes) : ""}
+            </div>
+          </div>
+          <div style={styles.timeBucketLegend}>
+            <div style={styles.timeBucketLegendItem}>
+              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Morning" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
+              Morning
+            </div>
+            <div style={styles.timeBucketLegendItem}>
+              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Afternoon" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
+              Afternoon
+            </div>
+            <div style={styles.timeBucketLegendItem}>
+              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Evening" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
+              Evening
+            </div>
+            <div style={styles.timeBucketLegendItem}>
+              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Night" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
+              Night
+            </div>
+          </div>
+        </div>
+
+        {/* Goal Focus Allocation Widget */}
+        <div style={styles.panel}>
+          <h3 style={styles.panelTitle}>
+            <Target size={18} />
+            Goal Focus Allocation
+          </h3>
+          {goalFocusAllocation.allocations.length === 0 && goalFocusAllocation.unlinkedMinutes === 0 ? (
+            <p style={styles.empty}>Complete focus sessions to see goal allocation</p>
+          ) : (
+            <div style={styles.performanceSection}>
+              {goalFocusAllocation.allocations.map((allocation, index) => (
+                <div
+                  key={allocation.goalId}
+                  style={{
+                    ...styles.goalAllocationItem,
+                    ...(index === goalFocusAllocation.allocations.length - 1 ? { marginBottom: 0 } : {}),
+                  }}
+                >
+                  <div style={styles.goalAllocationHeader}>
+                    <span style={styles.goalAllocationName}>{allocation.goalTitle}</span>
+                    <span style={styles.goalAllocationPercent}>{allocation.percentage.toFixed(0)}%</span>
+                  </div>
+                  <div style={styles.progressBar}>
+                    <div style={{ ...styles.progressFill, width: `${allocation.percentage}%` }} />
+                  </div>
+                </div>
+              ))}
+              {goalFocusAllocation.unlinkedMinutes > 0 && (
+                <div style={styles.goalAllocationItem}>
+                  <div style={styles.goalAllocationHeader}>
+                    <span style={styles.goalAllocationName}>Unlinked Focus</span>
+                    <span style={{ ...styles.goalAllocationPercent, color: "var(--text-secondary)" }}>
+                      {goalFocusAllocation.unlinkedPercentage.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div style={styles.progressBar}>
+                    <div style={{ ...styles.progressFill, width: `${goalFocusAllocation.unlinkedPercentage}%`, background: "var(--border-color)" }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Friction Days Widget */}
+        <div style={{ ...styles.panel, ...styles.frictionPanel }}>
+          <h3 style={styles.panelTitle}>
+            <AlertTriangle size={18} />
+            Friction Days
+          </h3>
+          {weekdayFriction.highestFrictionDay ? (
+            <div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                Highest concentration of incomplete items
+              </p>
+              <div style={styles.frictionDayBadge}>
+                <AlertTriangle size={14} />
+                {weekdayFriction.highestFrictionDay}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-secondary)" }}>
+                {(() => {
+                  const dayMap: Record<string, { frictionRate: number }> = {
+                    monday: weekdayFriction.monday,
+                    tuesday: weekdayFriction.tuesday,
+                    wednesday: weekdayFriction.wednesday,
+                    thursday: weekdayFriction.thursday,
+                    friday: weekdayFriction.friday,
+                    saturday: weekdayFriction.saturday,
+                    sunday: weekdayFriction.sunday,
+                  };
+                  return `${dayMap[weekdayFriction.highestFrictionDay.toLowerCase()].frictionRate.toFixed(0)}% friction rate`;
+                })()}
+              </div>
+            </div>
+          ) : (
+            <p style={styles.empty}>Complete more habits and tasks to identify friction patterns</p>
+          )}
         </div>
       </div>
 

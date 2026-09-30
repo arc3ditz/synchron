@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X } from "lucide-react";
+import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
 import StreakBadge from "./StreakBadge";
 import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
@@ -10,6 +10,7 @@ import {
   calculateStreak,
   formatFullDate,
 } from "../utils/dates";
+import { calculateGoalProgress } from "../domain/goals";
 
 type TodayProps = {
   habits: Habit[];
@@ -19,7 +20,7 @@ type TodayProps = {
   focusSessions: FocusSessionRecord[];
   onToggleHabit: (id: number, dateKey?: string) => void;
   onToggleTask: (id: string) => void;
-  onStartFocus: () => void;
+  onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
   onNavigateToHabits: () => void;
   streakFreeze: boolean;
   dayResetHour: number;
@@ -464,6 +465,50 @@ const styles: Record<string, CSSProperties> = {
     paddingTop: 16,
     borderTop: "1px solid var(--border-color)",
   },
+  // High Priority Focus section
+  prioritySection: {
+    marginBottom: 32,
+  },
+  // Goal Progress Snapshot
+  goalProgressSection: {
+    marginBottom: 32,
+  },
+  goalProgressList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  goalProgressItem: {
+    ...CARD_SURFACE,
+    padding: 14,
+  },
+  goalProgressHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  goalProgressTitle: {
+    fontSize: 14,
+    fontWeight: 500,
+    color: "var(--text-body)",
+  },
+  goalProgressPercent: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--accent-teal)",
+  },
+  goalProgressBar: {
+    height: 6,
+    background: "var(--bg-inset)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  goalProgressFill: {
+    height: "100%",
+    background: "linear-gradient(90deg, var(--accent-teal-soft), var(--accent-teal))",
+    transition: "width 0.3s ease",
+  },
 };
 
 function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
@@ -588,11 +633,6 @@ function Today({
   };
 
   const pendingTodayTasks = todayTasks.filter((task) => !task.completed);
-  const pendingMandatoryHabits = showMandatoryHabitsInImportantItems
-    ? todayHabits.filter((habit) =>
-      habit.priority === "Mandatory" && !habit.completedDates.includes(todayKey),
-    )
-    : [];
 
   const completedHabitCount = todayHabits.filter((habit) =>
     habit.completedDates.includes(todayKey),
@@ -616,6 +656,132 @@ function Today({
   const bestStreak = useMemo(() => {
     return Math.max(0, ...todayHabits.map((habit) => calculateStreak(habit, streakFreeze, dayResetHour)));
   }, [todayHabits, streakFreeze, dayResetHour]);
+
+  // High Priority Focus items
+  const highPriorityTasks = useMemo(() => {
+    return todayTasks.filter((task) => !task.completed && task.priority === "high");
+  }, [todayTasks]);
+
+  const highPriorityHabits = useMemo(() => {
+    if (!showMandatoryHabitsInImportantItems) return [];
+    return todayHabits.filter((habit) => !habit.completedDates.includes(todayKey) && habit.priority === "Mandatory");
+  }, [todayHabits, todayKey, showMandatoryHabitsInImportantItems]);
+
+  // Goal Progress Snapshot
+  const activeGoals = useMemo(() => {
+    return goals.filter((goal) => goal.status === "active");
+  }, [goals]);
+
+  const goalProgressData = useMemo(() => {
+    return activeGoals.map((goal) => {
+      const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour);
+      return {
+        goal,
+        progress,
+      };
+    });
+  }, [activeGoals, milestones, tasks, habits, streakFreeze, dayResetHour]);
+
+  function renderHighPrioritySection() {
+    if (highPriorityTasks.length === 0 && highPriorityHabits.length === 0) return null;
+
+    return (
+      <div style={styles.prioritySection}>
+        <h2 style={styles.sectionTitle}>High Priority Focus</h2>
+        <div style={styles.taskList}>
+          {highPriorityHabits.map((habit) => {
+            const streak = calculateStreak(habit, streakFreeze, dayResetHour);
+            return (
+              <div key={`priority-habit-${habit.id}`} style={styles.habitCard}>
+                <button
+                  type="button"
+                  style={styles.checkbox}
+                  onClick={() => onToggleHabit(habit.id, todayKey)}
+                  aria-label={`Complete mandatory habit ${habit.name}`}
+                  aria-checked={false}
+                  role="checkbox"
+                />
+                <div style={styles.habitInfo}>
+                  <h3 style={styles.taskName}>{habit.name}</h3>
+                  <HabitMetadata habit={habit} streak={streak} />
+                </div>
+                <button
+                  style={styles.focusButton}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onStartFocus({ habitId: habit.id, title: habit.name });
+                  }}
+                  aria-label={`Start focus on ${habit.name}`}
+                >
+                  <Play size={14} />
+                </button>
+              </div>
+            );
+          })}
+          {highPriorityTasks.map((task) => {
+            const milestone = milestones.find((item) => item.id === task.milestoneId);
+            const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
+            return (
+              <div key={`priority-task-${task.id}`} style={styles.habitCard}>
+                <button
+                  type="button"
+                  style={styles.checkbox}
+                  onClick={() => onToggleTask(task.id)}
+                  aria-label={`Complete ${task.title}`}
+                  aria-checked={false}
+                  role="checkbox"
+                />
+                <div style={styles.habitInfo}>
+                  <h3 style={styles.taskName}>{task.title}</h3>
+                  <div style={styles.taskMeta}>
+                    <span style={styles.taskPriority}>{task.priority}</span>
+                    {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
+                    {goal && <span style={styles.goalTag}>{goal.title}</span>}
+                    {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
+                  </div>
+                </div>
+                <button
+                  style={styles.focusButton}
+                  onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+                  aria-label={`Start focus on ${task.title}`}
+                >
+                  <Play size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderGoalProgressSnapshot() {
+    if (goalProgressData.length === 0) return null;
+
+    return (
+      <div style={styles.goalProgressSection}>
+        <h2 style={styles.sectionTitle}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Target size={18} />
+            <span>Goal Progress Snapshot</span>
+          </span>
+        </h2>
+        <div style={styles.goalProgressList}>
+          {goalProgressData.map(({ goal, progress }) => (
+            <div key={goal.id} style={styles.goalProgressItem}>
+              <div style={styles.goalProgressHeader}>
+                <span style={styles.goalProgressTitle}>{goal.title}</span>
+                <span style={styles.goalProgressPercent}>{progress.percent}%</span>
+              </div>
+              <div style={styles.goalProgressBar}>
+                <div style={{ ...styles.goalProgressFill, width: `${progress.percent}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const openScheduleModal = (type: 'habit' | 'task', id: string | number) => {
     const item = type === 'habit' 
@@ -665,7 +831,7 @@ function Today({
     closeScheduleModal();
   };
 
-  if (todayHabits.length === 0 && todayTasks.length === 0) {
+  if (todayHabits.length === 0 && todayTasks.length === 0 && activeGoals.length === 0) {
     return (
       <div style={styles.page}>
         <div style={styles.header}>
@@ -712,6 +878,8 @@ function Today({
         </div>
       </div>
 
+      {renderHighPrioritySection()}
+
       <div style={styles.statsGrid}>
         <div style={styles.statCard}>
           <span style={styles.statLabel}>Items Completed</span>
@@ -756,6 +924,18 @@ function Today({
                     {formatDuration(item.duration)}
                   </div>
                 )}
+                <button
+                  style={styles.scheduleButton}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStartFocus(item.type === 'task'
+                      ? { taskId: item.id as string, title: item.title }
+                      : { habitId: item.id as number, title: item.title });
+                  }}
+                  aria-label={`Start focus on ${item.type}`}
+                >
+                  <Play size={14} />
+                </button>
                 <button
                   style={styles.scheduleButton}
                   onClick={() => openScheduleModal(item.type, item.id)}
@@ -809,6 +989,13 @@ function Today({
                   </h3>
                   <HabitMetadata habit={habit} streak={streak} />
                 </div>
+                <button
+                  style={styles.focusButton}
+                  onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
+                  aria-label={`Start focus on ${habit.name}`}
+                >
+                  <Play size={14} />
+                </button>
               </div>
             );
           })}
@@ -816,30 +1003,11 @@ function Today({
       </div>
 
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>Important Tasks &amp; Habits</h2>
+        <h2 style={styles.sectionTitle}>Up Next &amp; Tasks</h2>
         <div style={styles.taskList}>
-          {pendingTodayTasks.length === 0 && pendingMandatoryHabits.length === 0 && (
-            <p style={styles.emptyText}>No pending important tasks or mandatory habits for today.</p>
+          {pendingTodayTasks.length === 0 && (
+            <p style={styles.emptyText}>No pending tasks for today.</p>
           )}
-          {pendingMandatoryHabits.map((habit) => {
-            const streak = calculateStreak(habit, streakFreeze, dayResetHour);
-            return (
-              <div key={`habit-${habit.id}`} style={styles.habitCard}>
-                <button
-                  type="button"
-                  style={styles.checkbox}
-                  onClick={() => onToggleHabit(habit.id, todayKey)}
-                  aria-label={`Complete mandatory habit ${habit.name}`}
-                  aria-checked={false}
-                  role="checkbox"
-                />
-                <div style={styles.habitInfo}>
-                  <h3 style={styles.taskName}>{habit.name}</h3>
-                  <HabitMetadata habit={habit} streak={streak} />
-                </div>
-              </div>
-            );
-          })}
           {pendingTodayTasks.map((task) => {
             const milestone = milestones.find((item) => item.id === task.milestoneId);
             const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
@@ -862,6 +1030,13 @@ function Today({
                     {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
                   </div>
                 </div>
+                <button
+                  style={styles.focusButton}
+                  onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+                  aria-label={`Start focus on ${task.title}`}
+                >
+                  <Play size={14} />
+                </button>
               </div>
             );
           })}
@@ -875,12 +1050,14 @@ function Today({
             <ListChecks size={16} />
             Configure Habits
           </button>
-          <button style={styles.focusButton} onClick={onStartFocus}>
+          <button style={styles.focusButton} onClick={() => onStartFocus()}>
             <Play size={16} />
             Start Focus Session
           </button>
         </div>
       </div>
+
+      {renderGoalProgressSnapshot()}
 
       {scheduleModalOpen && (
         <div style={styles.scheduleModal} onClick={closeScheduleModal}>
