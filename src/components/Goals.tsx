@@ -800,7 +800,7 @@ export default function Goals({
                 style={styles.taskButton}
                 onClick={() => onToggleTask(task.id)}
                 aria-pressed={task.completed}
-                aria-label={`${task.completed ? "Mark incomplete" : "Complete"}: ${task.title}`}
+                aria-label={`${task.completed ? "Mark incomplete" : "Complete"} "${task.title}"`}
                 onMouseEnter={(e) => {
                   Object.assign(e.currentTarget.style, styles.taskButtonHover);
                 }}
@@ -835,7 +835,7 @@ export default function Goals({
                 type="button"
                 style={styles.iconButton}
                 onClick={() => beginTaskEdit(task)}
-                aria-label={`Edit ${task.title}`}
+                aria-label={`Edit "${task.title}"`}
                 title="Edit task"
               >
                 <Pencil size={14} />
@@ -844,7 +844,7 @@ export default function Goals({
                 type="button"
                 style={styles.iconButton}
                 onClick={() => setItemToDelete({ type: "task", id: task.id, goalId: task.goalId, title: task.title })}
-                aria-label={`Delete ${task.title}`}
+                aria-label={`Delete "${task.title}"`}
                 title="Delete task"
               >
                 <Trash2 size={14} />
@@ -945,7 +945,7 @@ export default function Goals({
                     type="button"
                     style={styles.iconButton}
                     onClick={() => beginGoalEdit(goal)}
-                    aria-label={`Edit ${goal.title}`}
+                    aria-label={`Edit "${goal.title}"`}
                     title="Edit goal"
                   >
                     <Pencil size={15} />
@@ -954,7 +954,7 @@ export default function Goals({
                     type="button"
                     style={styles.iconButton}
                     onClick={() => onToggleGoalArchive(goal.id)}
-                    aria-label={goal.status === "archived" ? `Restore ${goal.title}` : `Archive ${goal.title}`}
+                    aria-label={goal.status === "archived" ? `Restore "${goal.title}"` : `Archive "${goal.title}"`}
                     title={goal.status === "archived" ? "Restore goal" : "Archive goal"}
                   >
                     {goal.status === "archived" ? <ArchiveRestore size={15} /> : <Archive size={15} />}
@@ -963,7 +963,7 @@ export default function Goals({
                     type="button"
                     style={styles.iconButton}
                     onClick={() => setItemToDelete({ type: "goal", id: goal.id, title: goal.title })}
-                    aria-label={`Delete ${goal.title}`}
+                    aria-label={`Delete "${goal.title}"`}
                     title="Delete goal"
                   >
                     <Trash2 size={15} />
@@ -1012,7 +1012,7 @@ export default function Goals({
               <div
                 style={styles.progressTrack}
                 role="progressbar"
-                aria-label={`${goal.title} progress`}
+                aria-label={`"${goal.title}" progress`}
                 aria-valuemin={0}
                 aria-valuemax={progress.total || 1}
                 aria-valuenow={progress.completed}
@@ -1057,7 +1057,7 @@ export default function Goals({
               </p>
               <p style={{ ...styles.meta, marginTop: 6 }}>Total Focus: {focusTimeLabel}</p>
 
-              <section style={styles.linkedHabits} aria-label={`Habits linked to ${goal.title}`}>
+              <section style={styles.linkedHabits} aria-label={`Habits linked to "${goal.title}"`}>
                 <h3 style={styles.linkedHabitsTitle}>Linked Habits</h3>
                 {linkedHabits.length === 0 ? (
                   <p style={{ ...styles.meta, marginTop: 0 }}>No Linked Habits</p>
@@ -1069,7 +1069,7 @@ export default function Goals({
                 ))}
               </section>
 
-              <section style={styles.milestonesSection} aria-label={`Milestones for ${goal.title}`}>
+              <section style={styles.milestonesSection} aria-label={`Milestones for "${goal.title}"`}>
                 <h3 style={styles.milestonesTitle}>Milestones</h3>
                   {goalMilestones.length === 0 ? (
                   <p style={{ ...styles.meta, marginTop: 0, marginBottom: 12 }}>No milestones yet.</p>
@@ -1110,7 +1110,7 @@ export default function Goals({
                               style={styles.checkbox}
                               onClick={() => onToggleMilestone(goal.id, milestone.id)}
                               aria-pressed={milestone.completed}
-                              aria-label={`${milestone.completed ? "Mark incomplete" : "Complete"} milestone: ${milestone.title}`}
+                              aria-label={`${milestone.completed ? "Mark incomplete" : "Complete"} milestone: "${milestone.title}"`}
                             >
                               {milestone.completed && (
                                 <Check className="milestone-checkbox-icon" width={14} height={14} strokeWidth={2.5} />
@@ -1136,7 +1136,7 @@ export default function Goals({
                                 type="button"
                                 style={styles.iconButton}
                                 onClick={() => beginMilestoneEdit(milestone)}
-                                aria-label={`Edit ${milestone.title}`}
+                                aria-label={`Edit "${milestone.title}"`}
                                 title="Edit milestone"
                               >
                                 <Pencil size={14} />
@@ -1150,7 +1150,7 @@ export default function Goals({
                                   goalId: milestone.goalId,
                                   title: milestone.title,
                                 })}
-                                aria-label={`Delete ${milestone.title}`}
+                                aria-label={`Delete "${milestone.title}"`}
                                 title="Delete milestone"
                               >
                                 <Trash2 size={14} />
@@ -1173,7 +1173,7 @@ export default function Goals({
                       value={milestoneTitle}
                       onChange={(event) => setMilestoneTitle(event.target.value)}
                       placeholder="Milestone title"
-                      aria-label={`Milestone title for ${goal.title}`}
+                      aria-label={`Milestone title for "${goal.title}"`}
                     />
                     <input
                       type="date"
@@ -1201,7 +1201,7 @@ export default function Goals({
                 )}
               </section>
 
-              <section style={styles.tasksSection} aria-label={`Tasks for ${goal.title}`}>
+              <section style={styles.tasksSection} aria-label={`Tasks for "${goal.title}"`}>
                 <h3 style={styles.tasksTitle}>Tasks</h3>
                 
                 {/* Tasks not linked to any milestone */}
@@ -1253,7 +1253,7 @@ export default function Goals({
                     value={taskTitle}
                     onChange={(event) => setTaskTitle(event.target.value)}
                     placeholder="Task title"
-                    aria-label={`Task title for ${goal.title}`}
+                    aria-label={`Task title for "${goal.title}"`}
                   />
                   {goalMilestones.length > 0 && (
                     <select
@@ -1346,7 +1346,7 @@ export default function Goals({
                         type="button"
                         style={styles.iconButton}
                         onClick={() => onToggleGoalArchive(goal.id)}
-                        aria-label={`Restore ${goal.title}`}
+                        aria-label={`Restore "${goal.title}"`}
                         title="Restore goal"
                       >
                         <ArchiveRestore size={15} />
@@ -1381,7 +1381,7 @@ export default function Goals({
             aria-labelledby="goals-delete-modal-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="goals-delete-modal-title">Delete {itemToDelete.title}?</h2>
+            <h2 id="goals-delete-modal-title">Delete "{itemToDelete.title}"?</h2>
             <p>This action cannot be undone.</p>
             <div className="delete-modal-actions">
               <button

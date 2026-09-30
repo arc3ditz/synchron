@@ -17,6 +17,7 @@ export type { FocusSessionRecord };
 type HistoryProps = {
   habits: HistoryHabit[];
   focusSessions: FocusSessionRecord[];
+  viewMode: "grid" | "list";
   onRequestDeleteFocusSession: (id: number) => void;
   streakFreeze: boolean;
   dayResetHour: number;
@@ -25,7 +26,10 @@ type HistoryProps = {
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: 760,
+    maxWidth: "100%",
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   },
   title: {
     fontSize: 22,
@@ -38,6 +42,37 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     margin: "0 0 20px",
   },
+  summaryBar: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gap: 10,
+    margin: "20px 0 24px",
+  },
+  summaryCard: {
+    ...CARD_SURFACE,
+    minWidth: 0,
+    padding: 14,
+  },
+  summaryLabel: {
+    display: "block",
+    color: "var(--text-secondary)",
+    fontSize: 11,
+    fontWeight: 500,
+    marginBottom: 6,
+  },
+  summaryValue: {
+    display: "block",
+    color: "var(--text-primary)",
+    fontSize: 20,
+    fontWeight: 650,
+    overflowWrap: "anywhere",
+  },
+  selectWrapper: {
+    display: "flex",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 20,
+  },
   select: {
     width: "100%",
     maxWidth: 420,
@@ -45,34 +80,12 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "10px 12px",
+    paddingRight: 38,
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
     cursor: "pointer",
-  },
-  stats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 8,
-    margin: "24px 0",
-  },
-  stat: {
-    ...CARD_SURFACE,
-    minWidth: 0,
-  },
-  statLabel: {
-    display: "block",
-    fontSize: 10,
-    color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  statValue: {
-    display: "block",
-    fontSize: 24,
-    fontWeight: 700,
-    color: "var(--text-primary)",
+    textAlign: "center",
   },
   calendar: {
     ...CARD_SURFACE,
@@ -184,6 +197,11 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 8,
   },
+  focusSessionsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 12,
+  },
   focusSessionItem: {
     ...CARD_SURFACE,
     display: "flex",
@@ -245,6 +263,7 @@ const styles: Record<string, CSSProperties> = {
 function History({
   habits,
   focusSessions,
+  viewMode,
   onRequestDeleteFocusSession,
   streakFreeze,
   dayResetHour,
@@ -295,6 +314,14 @@ function History({
   const sortedFocusSessions = useMemo(() => {
     return [...focusSessions].sort((a, b) => b.timestamp - a.timestamp);
   }, [focusSessions]);
+  const completedHabitDays = habits.reduce((total, habit) => total + habit.completedDates.length, 0);
+  const activeStreakCount = habits.filter(
+    (habit) => calculateStreak(habit, streakFreeze, dayResetHour) > 0,
+  ).length;
+  const sortedCompletionDates = habits.flatMap((habit) => habit.completedDates).sort();
+  const logDateRange = sortedCompletionDates.length > 0
+    ? `${formatFullDate(new Date(`${sortedCompletionDates[0]}T12:00:00`))} - ${formatFullDate(new Date(`${sortedCompletionDates[sortedCompletionDates.length - 1]}T12:00:00`))}`
+    : "No logs yet";
 
   function formatTimestamp(timestamp: number): string {
     const date = new Date(timestamp);
@@ -322,40 +349,59 @@ function History({
       <h1 style={styles.title}>History</h1>
       <p style={styles.subtitle}>Review your completed habit days.</p>
 
-      <select
-        style={styles.select}
-        value={effectiveSelectedHabitId}
-        onChange={(event) =>
-          setSelectedHabitId(
-            event.target.value === "" ? "" : Number(event.target.value),
-          )
-        }
-        aria-label="Select a Habit to view history"
-      >
-        <option value="">Select a Habit</option>
-        {habits.map((habit) => (
-          <option key={habit.id} value={habit.id}>
-            {habit.name}
-          </option>
-        ))}
-      </select>
+      <div style={styles.summaryBar}>
+        {selectedHabit ? (
+          <>
+            <div style={styles.summaryCard}>
+              <span style={styles.summaryLabel}>Current Streak</span>
+              <strong style={styles.summaryValue}>{calculateStreak(selectedHabit, streakFreeze, dayResetHour)}</strong>
+            </div>
+            <div style={styles.summaryCard}>
+              <span style={styles.summaryLabel}>Total Completed Days</span>
+              <strong style={styles.summaryValue}>{selectedHabit.completedDates.length}</strong>
+            </div>
+            <div style={styles.summaryCard}>
+              <span style={styles.summaryLabel}>Completion Count</span>
+              <strong style={styles.summaryValue}>{monthCompletionCount}</strong>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={styles.summaryCard}>
+              <span style={styles.summaryLabel}>Habit Completions</span>
+              <strong style={styles.summaryValue}>{completedHabitDays}</strong>
+            </div>
+            <div style={styles.summaryCard}>
+              <span style={styles.summaryLabel}>Active Streaks</span>
+              <strong style={styles.summaryValue}>{activeStreakCount}</strong>
+            </div>
+            <div style={styles.summaryCard}>
+              <span style={styles.summaryLabel}>Log Date Range</span>
+              <strong style={{ ...styles.summaryValue, fontSize: 14 }}>{logDateRange}</strong>
+            </div>
+          </>
+        )}
+      </div>
 
-      {selectedHabit && (
-        <div style={styles.stats}>
-          <div style={styles.stat}>
-            <span style={styles.statLabel}>Current Streak</span>
-            <span style={styles.statValue}>{calculateStreak(selectedHabit, streakFreeze, dayResetHour)}</span>
-          </div>
-          <div style={styles.stat}>
-            <span style={styles.statLabel}>Total Completed Days</span>
-            <span style={styles.statValue}>{selectedHabit.completedDates.length}</span>
-          </div>
-          <div style={styles.stat}>
-            <span style={styles.statLabel}>Completion Count</span>
-            <span style={styles.statValue}>{monthCompletionCount}</span>
-          </div>
-        </div>
-      )}
+      <div style={styles.selectWrapper}>
+        <select
+          style={styles.select}
+          value={effectiveSelectedHabitId}
+          onChange={(event) =>
+            setSelectedHabitId(
+              event.target.value === "" ? "" : Number(event.target.value),
+            )
+          }
+          aria-label="Select a Habit to view history"
+        >
+          <option value="">Select a Habit</option>
+          {habits.map((habit) => (
+            <option key={habit.id} value={habit.id}>
+              {habit.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {!selectedHabit || !hasCompletions ? (
         <div style={styles.empty}>
@@ -433,7 +479,7 @@ function History({
             No focus sessions recorded yet. Complete a timer or pomodoro focus session to see it here.
           </p>
         ) : (
-          <div style={styles.focusSessionsList}>
+          <div style={{ ...styles.focusSessionsList, ...(viewMode === "grid" ? styles.focusSessionsGrid : {}) }}>
             {sortedFocusSessions.map((session) => (
               <div key={session.id} style={styles.focusSessionItem}>
                 <div style={styles.focusSessionInfo}>

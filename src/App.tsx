@@ -12,11 +12,14 @@ import {
   Archive,
   ArchiveRestore,
   Snowflake,
+  Flame,
   Settings,
   Target,
   Clock3,
   CalendarDays,
   Keyboard,
+  Filter,
+  Bell,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
@@ -25,6 +28,7 @@ import History from "./components/History";
 import Analytics from "./components/Analytics";
 import Today from "./components/Today";
 import Goals from "./components/Goals";
+import Programs from "./components/Programs";
 import StreakBadge from "./components/StreakBadge";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import { CARD_SURFACE } from "./theme";
@@ -35,6 +39,7 @@ import type {
   FrequencyType,
   WeekStart,
   Theme,
+  NotificationFrequency,
   View,
   AppSettings,
   Habit,
@@ -68,15 +73,25 @@ import {
   calculateStreak,
   WEEKDAYS,
 } from "./utils/dates";
+import {
+  getIntelligentNotification,
+  sendIntelligentNotification,
+} from "./domain/notificationLogic";
+import { groupHabitsIntoPrograms, type Program } from "./domain/programLogic";
 
 const DEFAULT_DURATION = 30;
 const DEFAULT_SETTINGS: AppSettings = {
+  viewMode: "grid",
   dayResetHour: 0,
   weekStart: "Sunday",
   defaultFocusDuration: 25,
   quickAdjustStepMinutes: 5,
   soundAlerts: true,
   showMandatoryHabitsInImportantItems: false,
+  enableIntelligentNotifications: true,
+  notificationFrequency: "balanced",
+  habitReminders: true,
+  incompleteHabitReminders: true,
   theme: "dark",
 };
 const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
@@ -207,6 +222,20 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
     cursor: "pointer",
   },
+  habitPropertySelect: {
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    color: "var(--text-body)",
+    fontSize: 14,
+    outline: "none",
+    cursor: "pointer",
+    flex: "1 1 140px",
+    minWidth: 140,
+    height: 40,
+    boxSizing: "border-box",
+  },
   durationField: {
     display: "flex",
     alignItems: "center",
@@ -284,6 +313,62 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-completed)",
     opacity: 0.8,
   },
+  habitGridList: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 12,
+  },
+  habitGridCard: {
+    ...CARD_SURFACE,
+    background: "var(--bg-surface)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    minWidth: 0,
+    padding: 16,
+    borderRadius: 12,
+    transition: "border-color 0.15s ease, transform 0.15s ease",
+  },
+  gridCardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  gridCardName: {
+    overflow: "hidden",
+    color: "var(--text-primary)",
+    fontSize: 15,
+    fontWeight: 600,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  gridCardMiddle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  gridProgressTrack: {
+    height: 5,
+    marginTop: 8,
+    overflow: "hidden",
+    background: "var(--bg-inset)",
+    borderRadius: 5,
+  },
+  gridProgressFill: {
+    height: "100%",
+    background: "var(--accent-teal)",
+    borderRadius: 5,
+    transition: "width 0.2s ease",
+  },
+  gridCardBottom: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    minHeight: 40,
+  },
   habitName: {
     fontSize: 14,
     color: "var(--text-body)",
@@ -340,7 +425,13 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-raised)",
     border: "1px solid var(--border-strong)",
     borderRadius: 20,
-    padding: "7px 14px",
+    padding: "0 14px",
+    minWidth: 128,
+    height: 40,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     fontSize: 12,
     fontWeight: 500,
     color: "var(--text-secondary)",
@@ -353,34 +444,52 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(var(--accent-rgb), 0.42)",
     color: "var(--accent-teal)",
   },
+  habitCompletionButton: {
+    background: "var(--bg-raised)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 6,
+    padding: "0 10px",
+    height: 28,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    transition: "background 0.15s ease",
+  },
   iconButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 20,
+    border: "1px solid transparent",
+    borderRadius: 8,
     width: 28,
     height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "var(--text-dim)",
+    color: "var(--text-muted)",
     cursor: "pointer",
-    padding: 0,
-    transition: "color 0.15s ease, border-color 0.15s ease",
+    padding: 6,
+    transition: "background 0.15s ease, color 0.15s ease",
     flexShrink: 0,
   },
   archiveButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 20,
+    border: "1px solid transparent",
+    borderRadius: 8,
     width: 28,
     height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "var(--text-dim)",
+    color: "var(--text-muted)",
     cursor: "pointer",
-    padding: 0,
-    transition: "color 0.15s ease, border-color 0.15s ease",
+    padding: 6,
+    transition: "background 0.15s ease, color 0.15s ease",
     flexShrink: 0,
   },
   streakFreezeToggle: {
@@ -734,7 +843,20 @@ function loadAppSettings(): AppSettings {
     showMandatoryHabitsInImportantItems: typeof parsed.showMandatoryHabitsInImportantItems === "boolean"
       ? parsed.showMandatoryHabitsInImportantItems
       : DEFAULT_SETTINGS.showMandatoryHabitsInImportantItems,
+    enableIntelligentNotifications: typeof parsed.enableIntelligentNotifications === "boolean"
+      ? parsed.enableIntelligentNotifications
+      : DEFAULT_SETTINGS.enableIntelligentNotifications,
+    notificationFrequency: ["conservative", "balanced", "frequent"].includes(parsed.notificationFrequency ?? "")
+      ? parsed.notificationFrequency as NotificationFrequency
+      : DEFAULT_SETTINGS.notificationFrequency,
+    habitReminders: typeof parsed.habitReminders === "boolean"
+      ? parsed.habitReminders
+      : DEFAULT_SETTINGS.habitReminders,
+    incompleteHabitReminders: typeof parsed.incompleteHabitReminders === "boolean"
+      ? parsed.incompleteHabitReminders
+      : DEFAULT_SETTINGS.incompleteHabitReminders,
     theme: parsed.theme === "light" ? "light" : "dark",
+    viewMode: parsed.viewMode === "list" ? "list" : "grid",
   };
 }
 
@@ -783,6 +905,10 @@ function computeSummary(habits: Habit[], dateKey: string): Summary {
   const percent = total === 0 ? 0 : Math.round((doneCount / total) * 100);
 
   return { total, doneCount, percent, mandatoryTotal, mandatoryDone };
+}
+
+function createHabitId(): number {
+  return Date.now();
 }
 
 function App() {
@@ -837,11 +963,15 @@ function App() {
           category: category || undefined,
           scheduledTime: typeof item.scheduledTime === "string" ? item.scheduledTime : undefined,
           durationMinutes: typeof item.durationMinutes === "number" && item.durationMinutes > 0 ? item.durationMinutes : undefined,
+          programId: typeof item.programId === "number" ? item.programId : undefined,
         };
       });
     };
     return localLoadHabits();
   });
+  const activePrograms = groupHabitsIntoPrograms(habits).filter(
+    (program) => program.state === "Active" && program.habits.some((habit) => !habit.isArchived),
+  );
   const [goals, setGoals] = useState<Goal[]>(loadGoals);
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [milestones, setMilestones] = useState<Milestone[]>(loadMilestones);
@@ -862,9 +992,9 @@ function App() {
   const [newGoalId, setNewGoalId] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("Optional");
   const [newType, setNewType] = useState<HabitType>("Daily");
+  const [newProgramId, setNewProgramId] = useState("");
   const [newFrequencyType, setNewFrequencyType] = useState<FrequencyType>("daily");
   const [newCustomDays, setNewCustomDays] = useState<string[]>([]);
-  const [newDuration, setNewDuration] = useState(String(DEFAULT_DURATION));
   const [newCategory, setNewCategory] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
 
@@ -873,11 +1003,9 @@ function App() {
   const [editingGoalId, setEditingGoalId] = useState("");
   const [editingPriority, setEditingPriority] = useState<Priority>("Optional");
   const [editingType, setEditingType] = useState<HabitType>("Daily");
+  const [editingProgramId, setEditingProgramId] = useState("");
   const [editingFrequencyType, setEditingFrequencyType] = useState<FrequencyType>("daily");
   const [editingCustomDays, setEditingCustomDays] = useState<string[]>([]);
-  const [editingDuration, setEditingDuration] = useState(
-    String(DEFAULT_DURATION),
-  );
   const [editingCategory, setEditingCategory] = useState("");
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
@@ -885,9 +1013,26 @@ function App() {
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [editingCustomCategory, setEditingCustomCategory] = useState<string | null>(null);
   const [customCategoryDraft, setCustomCategoryDraft] = useState("");
+  const [categoryPendingDeletion, setCategoryPendingDeletion] = useState<string | null>(null);
+  const [programPendingDeletion, setProgramPendingDeletion] = useState<Program | null>(null);
   const [habitPendingDeletion, setHabitPendingDeletion] = useState<Habit | null>(null);
   const [focusSessionPendingDeletion, setFocusSessionPendingDeletion] = useState<FocusSessionRecord | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+
+  // Filter state
+  const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [filterType, setFilterType] = useState<"All" | "Daily" | "Program Habits">("All");
+  const [filterPriority, setFilterPriority] = useState<"All" | "Mandatory" | "Optional">("All");
+  const [filterFrequency, setFilterFrequency] = useState<"All" | "daily" | "weekdays" | "weekends">("All");
+  const [filterStatus, setFilterStatus] = useState<"All" | "Active" | "Archived" | "Completed Today" | "Incomplete Today">("All");
+
+  // Program creation state
+  const [showProgramModal, setShowProgramModal] = useState(false);
+  const [programEditingId, setProgramEditingId] = useState<number | null>(null);
+  const [programName, setProgramName] = useState("");
+  const [programStartDate, setProgramStartDate] = useState(getTodayKey(0));
+  const [programDuration, setProgramDuration] = useState(String(DEFAULT_DURATION));
+  const [programHabits, setProgramHabits] = useState<Array<{ name: string; priority: Priority }>>([]);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [streakFreeze, setStreakFreeze] = useState(() => {
     const stored = loadStorageData<string>(STORAGE_KEYS.STREAK_FREEZE, "false");
@@ -899,6 +1044,11 @@ function App() {
     goalId?: string;
     title?: string;
   } | undefined>(undefined);
+  const [notificationTimerAction, setNotificationTimerAction] = useState<{
+    habitId?: number;
+    title?: string;
+    durationMinutes?: number;
+  } | null>(null);
 
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.SETTINGS, appSettings);
@@ -974,6 +1124,59 @@ function App() {
   }, [customCategories]);
 
   useEffect(() => {
+    // Check for intelligent notifications every 5 minutes
+    const checkNotifications = () => {
+      const currentHour = new Date().getHours();
+      const notification = getIntelligentNotification(
+        habits,
+        appSettings.dayResetHour,
+        currentHour,
+        appSettings.defaultFocusDuration,
+        appSettings,
+      );
+      
+      if (notification) {
+        void sendIntelligentNotification(notification, appSettings);
+      }
+    };
+
+    // Check immediately on mount
+    checkNotifications();
+
+    const intervalId = window.setInterval(checkNotifications, 5 * 60 * 1000);
+    
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [habits, appSettings]);
+
+  useEffect(() => {
+    const handleNotificationAction = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string; habitId?: number; habitName?: string; title?: string; durationMinutes?: number }>).detail;
+      if (!detail || detail.type !== "focus-habit") return;
+
+      const habitId = detail.habitId;
+      const title = detail.habitName ?? detail.title;
+      const durationMinutes = detail.durationMinutes ?? appSettings.defaultFocusDuration;
+
+      setNotificationTimerAction({ habitId, title, durationMinutes });
+      setInitialFocusEntityId(
+        habitId !== undefined
+          ? { habitId, title }
+          : title
+            ? { title }
+            : undefined,
+      );
+      setView("Timer");
+    };
+
+    window.addEventListener("habit-tracker:notification-action", handleNotificationAction as EventListener);
+    return () => {
+      window.removeEventListener("habit-tracker:notification-action", handleNotificationAction as EventListener);
+    };
+  }, [appSettings.defaultFocusDuration]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const modifier = isMac ? event.metaKey : event.ctrlKey;
@@ -994,18 +1197,23 @@ function App() {
         case "3":
           event.preventDefault();
           setInitialFocusEntityId(undefined);
-          setView("goals");
+          setView("Programs");
           break;
         case "4":
           event.preventDefault();
-          setView("Timer");
+          setInitialFocusEntityId(undefined);
+          setView("goals");
           break;
         case "5":
+          event.preventDefault();
+          setView("Timer");
+          break;
+        case "6":
           event.preventDefault();
           setInitialFocusEntityId(undefined);
           setView("History");
           break;
-        case "6":
+        case "7":
           event.preventDefault();
           setInitialFocusEntityId(undefined);
           setView("Analytics");
@@ -1052,6 +1260,52 @@ function App() {
     return habit.category === currentCategory;
   };
 
+  // Apply all property filters
+  const applyPropertyFilters = (habit: Habit) => {
+    // Type filter
+    if (filterType !== "All") {
+      if (filterType === "Daily" && habit.type !== "Daily") return false;
+      if (filterType === "Program Habits" && habit.type !== "Challenge") return false;
+    }
+
+    // Priority filter
+    if (filterPriority !== "All") {
+      if (habit.priority !== filterPriority) return false;
+    }
+
+    // Frequency filter
+    if (filterFrequency !== "All") {
+      const freqType = getFrequencyType(habit);
+      if (freqType !== filterFrequency) return false;
+    }
+
+    // Status filter
+    if (filterStatus !== "All") {
+      if (filterStatus === "Active" && habit.isArchived) return false;
+      if (filterStatus === "Archived" && !habit.isArchived) return false;
+      if (filterStatus === "Completed Today" && !habit.completedDates.includes(selectedDateKey)) return false;
+      if (filterStatus === "Incomplete Today" && habit.completedDates.includes(selectedDateKey)) return false;
+    }
+
+    return true;
+  };
+
+  // Count active filters
+  const activeFilterCount = [
+    filterType !== "All",
+    filterPriority !== "All",
+    filterFrequency !== "All",
+    filterStatus !== "All",
+  ].filter(Boolean).length;
+
+  // Clear all property filters
+  const clearPropertyFilters = () => {
+    setFilterType("All");
+    setFilterPriority("All");
+    setFilterFrequency("All");
+    setFilterStatus("All");
+  };
+
   function rememberCategory(category: string) {
     if (!category) return;
     setCustomCategories((previous) =>
@@ -1092,10 +1346,12 @@ function App() {
   }
 
   function deleteCategory(category: string) {
-    const confirmed = window.confirm(
-      `Delete "${category}"? Habits in this category will become No Category.`,
-    );
-    if (!confirmed) return;
+    setCategoryPendingDeletion(category);
+  }
+
+  function confirmCategoryDeletion() {
+    const category = categoryPendingDeletion;
+    if (!category) return;
 
     setCustomCategories((previous) => previous.filter((existing) => existing !== category));
     const updatedHabits = habits.map((habit) =>
@@ -1104,12 +1360,14 @@ function App() {
     setHabits(updatedHabits);
     setActiveCategory((current) => (current === category ? ALL_CATEGORIES : current));
     if (editingCustomCategory === category) cancelCategoryRename();
+    setCategoryPendingDeletion(null);
   }
 
   function addHabit() {
     const name = newHabit.trim();
+    const linkedProgram = activePrograms.find((program) => program.id === Number(newProgramId));
 
-    if (name === "") {
+    if (name === "" || (newType === "Challenge" && !linkedProgram)) {
       return;
     }
 
@@ -1119,7 +1377,7 @@ function App() {
     rememberCategory(category);
 
     const habit: Habit = {
-      id: Date.now(),
+      id: createHabitId(),
       name,
       createdAt: getTodayKey(appSettings.dayResetHour),
       goalId: newGoalId || undefined,
@@ -1128,10 +1386,11 @@ function App() {
       type: newType,
       frequencyType: newFrequencyType,
       customDays: newFrequencyType === "custom" ? newCustomDays : [],
-      ...(newType === "Challenge"
+      ...(linkedProgram
         ? {
-            durationDays: Math.max(1, Math.round(Number(newDuration)) || DEFAULT_DURATION),
-            startDate: getTodayKey(appSettings.dayResetHour),
+            programId: linkedProgram.id,
+            durationDays: linkedProgram.durationDays,
+            startDate: linkedProgram.startDate,
           }
         : {}),
       completedDates: [],
@@ -1142,9 +1401,9 @@ function App() {
     setNewGoalId("");
     setNewPriority("Optional");
     setNewType("Daily");
+    setNewProgramId("");
     setNewFrequencyType("daily");
     setNewCustomDays([]);
-    setNewDuration(String(DEFAULT_DURATION));
     setNewCategory("");
     setNewCategoryName("");
   }
@@ -1183,9 +1442,9 @@ function App() {
     setEditingGoalId(habit.goalId ?? "");
     setEditingPriority(habit.priority);
     setEditingType(habit.type);
+    setEditingProgramId(habit.programId ? String(habit.programId) : "");
     setEditingFrequencyType(getFrequencyType(habit));
     setEditingCustomDays(habit.customDays ?? []);
-    setEditingDuration(String(habit.durationDays ?? DEFAULT_DURATION));
     setEditingCategory(habit.category ?? "");
     setEditingCategoryName("");
   }
@@ -1196,17 +1455,18 @@ function App() {
     setEditingGoalId("");
     setEditingPriority("Optional");
     setEditingType("Daily");
+    setEditingProgramId("");
     setEditingFrequencyType("daily");
     setEditingCustomDays([]);
-    setEditingDuration(String(DEFAULT_DURATION));
     setEditingCategory("");
     setEditingCategoryName("");
   }
 
   function saveEdit(id: number) {
     const name = editingName.trim();
+    const linkedProgram = activePrograms.find((program) => program.id === Number(editingProgramId));
 
-    if (name === "") {
+    if (name === "" || (editingType === "Challenge" && !linkedProgram)) {
       return;
     }
 
@@ -1231,17 +1491,10 @@ function App() {
             customDays: editingFrequencyType === "custom" ? editingCustomDays : [],
             durationDays: undefined,
             startDate: undefined,
+            programId: undefined,
             category,
           };
         }
-
-        // Switching into (or staying in) Challenge mode: keep the
-        // original startDate if it already had one, otherwise the
-        // challenge starts today.
-        const startDate =
-          habit.type === "Challenge" && habit.startDate
-            ? habit.startDate
-            : getTodayKey();
 
         return {
           ...habit,
@@ -1251,11 +1504,9 @@ function App() {
           type: "Challenge",
           frequencyType: editingFrequencyType,
           customDays: editingFrequencyType === "custom" ? editingCustomDays : [],
-          durationDays: Math.max(
-            1,
-            Math.round(Number(editingDuration)) || DEFAULT_DURATION,
-          ),
-          startDate,
+          durationDays: linkedProgram!.durationDays,
+          startDate: linkedProgram!.startDate,
+          programId: linkedProgram!.id,
           category,
         };
       });
@@ -1317,14 +1568,112 @@ function App() {
     setHabits(habits.map((habit) => (habit.id === id ? activeHabit : habit)));
   }
 
+  function closeProgramModal() {
+    setShowProgramModal(false);
+    setProgramEditingId(null);
+    setProgramName("");
+    setProgramStartDate(getTodayKey(appSettings.dayResetHour));
+    setProgramDuration(String(DEFAULT_DURATION));
+    setProgramHabits([]);
+  }
+
+  function startProgramEdit(program: Program) {
+    setProgramEditingId(program.id);
+    setProgramName(program.name);
+    setProgramStartDate(program.startDate);
+    setProgramDuration(String(program.durationDays));
+    setProgramHabits([]);
+    setShowProgramModal(true);
+  }
+
+  function createProgram() {
+    const name = programName.trim();
+    if (name === "") return;
+
+    const duration = Math.max(1, Math.round(Number(programDuration)) || DEFAULT_DURATION);
+
+    if (programEditingId !== null) {
+      setHabits((current) => {
+        const metadataHabitId = current.find((habit) => habit.programId === programEditingId)?.id;
+        return current.map((habit) => habit.programId === programEditingId
+          ? {
+              ...habit,
+              name: habit.id === metadataHabitId ? name : habit.name,
+              durationDays: duration,
+              startDate: programStartDate,
+            }
+          : habit);
+      });
+      closeProgramModal();
+      return;
+    }
+
+    if (programHabits.length === 0) return;
+    const programId = Date.now();
+
+    const newHabits: Habit[] = programHabits.map((habitData, index) => ({
+      id: Date.now() + index,
+      name: index === 0 ? name : habitData.name,
+      createdAt: getTodayKey(appSettings.dayResetHour),
+      priority: habitData.priority,
+      type: "Challenge" as HabitType,
+      frequencyType: "daily" as FrequencyType,
+      customDays: [],
+      durationDays: duration,
+      startDate: programStartDate,
+      completedDates: [],
+      programId,
+    }));
+
+    setHabits([...habits, ...newHabits]);
+    closeProgramModal();
+    setView("Programs");
+  }
+
+  function toggleProgramArchive(programId: number) {
+    setHabits((current) => {
+      const members = current.filter((habit) => habit.programId === programId);
+      if (members.length === 0) return current;
+      const shouldArchive = !members.every((habit) => habit.isArchived);
+      return current.map((habit) => habit.programId === programId
+        ? { ...habit, isArchived: shouldArchive }
+        : habit);
+    });
+  }
+
+  function requestProgramDeletion(program: Program) {
+    setProgramPendingDeletion(program);
+  }
+
+  function confirmProgramDeletion() {
+    if (!programPendingDeletion) return;
+    const programId = programPendingDeletion.id;
+    setHabits((current) => current.filter((habit) => habit.programId !== programId));
+    setProgramPendingDeletion(null);
+  }
+
+  function addProgramHabit() {
+    const habitName = newHabit.trim();
+    if (habitName === "") return;
+
+    setProgramHabits([...programHabits, { name: habitName, priority: newPriority }]);
+    setNewHabit("");
+    setNewPriority("Optional");
+  }
+
+  function removeProgramHabit(index: number) {
+    setProgramHabits(programHabits.filter((_, i) => i !== index));
+  }
+
   const availableHabits = habits.filter(
     (habit) =>
       !habit.isArchived &&
       matchesCategory(habit) &&
+      applyPropertyFilters(habit) &&
       (habit.type === "Daily" || isChallengeActiveOnDate(habit, selectedDateKey)),
   );
   const archivedHabits = habits.filter(
-    (habit) => habit.isArchived && matchesCategory(habit),
+    (habit) => habit.isArchived && matchesCategory(habit) && applyPropertyFilters(habit),
   );
   const activeHabits = availableHabits.filter((habit) =>
     isHabitScheduledOnDate(habit, selectedDateKey),
@@ -1339,11 +1688,12 @@ function App() {
     setFrequencyType: (value: FrequencyType) => void,
     customDays: string[],
     setCustomDays: (value: string[]) => void,
+    selectStyle: CSSProperties = styles.select,
   ) {
     return (
       <>
         <select
-          style={styles.select}
+          style={selectStyle}
           value={frequencyType}
           onChange={(event) => setFrequencyType(event.target.value as FrequencyType)}
           aria-label="Frequency"
@@ -1466,32 +1816,35 @@ function App() {
               <select
                 style={styles.editSelect}
                 value={editingType}
-                onChange={(event) =>
-                  setEditingType(event.target.value as HabitType)
-                }
+                onChange={(event) => {
+                  const type = event.target.value as HabitType;
+                  setEditingType(type);
+                  if (type === "Daily") setEditingProgramId("");
+                }}
                 aria-label="Type"
               >
                 <option value="Daily">Daily Habit</option>
-                <option value="Challenge">Challenge</option>
+                <option value="Challenge">Program</option>
               </select>
               {editingType === "Challenge" && (
-                <div style={styles.durationField}>
-                  <input
-                    style={styles.editDurationInput}
-                    type="number"
-                    min={1}
-                    value={editingDuration}
-                    onChange={(event) => setEditingDuration(event.target.value)}
-                    aria-label="Duration in Days"
-                  />
-                  <span style={styles.durationLabel}>Days</span>
-                </div>
+                <select
+                  style={styles.editSelect}
+                  value={editingProgramId}
+                  onChange={(event) => setEditingProgramId(event.target.value)}
+                  aria-label="Select Program"
+                >
+                  <option value="">[ Select Active Program ]</option>
+                  {activePrograms.map((program) => (
+                    <option key={program.id} value={program.id}>{program.name}</option>
+                  ))}
+                </select>
               )}
               {renderFrequencyControls(
                 editingFrequencyType,
                 setEditingFrequencyType,
                 editingCustomDays,
                 setEditingCustomDays,
+                styles.editSelect,
               )}
               {renderCategorySelect(
                 editingCategory,
@@ -1514,7 +1867,11 @@ function App() {
               </select>
             </div>
             <div className="habit-cell-actions">
-              <button style={styles.saveButton} onClick={() => saveEdit(habit.id)}>
+              <button
+                style={styles.saveButton}
+                onClick={() => saveEdit(habit.id)}
+                disabled={editingType === "Challenge" && !activePrograms.some((program) => String(program.id) === editingProgramId)}
+              >
                 Save
               </button>
               <button style={styles.cancelButton} onClick={cancelEdit}>
@@ -1567,10 +1924,10 @@ function App() {
                 }}
               >
                 {completed
-                  ? `Completed · ${completedInWindow} of ${habit.durationDays} ${
+                  ? `Program Completed · ${completedInWindow} of ${habit.durationDays} ${
                       completedInWindow === 1 ? "Day" : "Days"
                     } Completed`
-                  : `Day ${Math.min(
+                  : `Program Day ${Math.min(
                       getChallengeDayNumber(habit, selectedDateKey),
                       habit.durationDays,
                     )} of ${habit.durationDays} · ${formatCompletedDays(
@@ -1594,11 +1951,7 @@ function App() {
           {!completed && !isArchived && isScheduled && (
             <button
               style={{
-                ...styles.toggleButton,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
+                ...styles.habitCompletionButton,
                 ...(doneOnSelectedDate ? styles.toggleButtonDone : {}),
               }}
               onClick={() => toggleHabit(habit.id)}
@@ -1617,7 +1970,7 @@ function App() {
             <button
               style={styles.iconButton}
               onClick={() => startEdit(habit)}
-              aria-label={`Edit ${habit.name}`}
+              aria-label={`Edit "${habit.name}"`}
             >
               <Pencil size={14} />
             </button>
@@ -1625,7 +1978,7 @@ function App() {
               <button
                 style={styles.archiveButton}
                 onClick={() => archiveHabit(habit.id)}
-                aria-label={`Archive ${habit.name}`}
+                aria-label={`Archive "${habit.name}"`}
               >
                 <Archive size={14} />
               </button>
@@ -1633,7 +1986,7 @@ function App() {
               <button
                 style={styles.archiveButton}
                 onClick={() => unarchiveHabit(habit.id)}
-                aria-label={`Unarchive ${habit.name}`}
+                aria-label={`Unarchive "${habit.name}"`}
               >
                 <ArchiveRestore size={14} />
               </button>
@@ -1641,8 +1994,91 @@ function App() {
             <button
               style={styles.iconButton}
               onClick={() => requestHabitDeletion(habit)}
-              aria-label={`Delete ${habit.name}`}
+              aria-label={`Delete "${habit.name}"`}
             >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  }
+
+  function renderHabitGridCard(
+    habit: Habit,
+    isArchived = false,
+    isScheduled = true,
+  ) {
+    const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
+    const completedInWindow = countCompletedInWindow(habit);
+    const isProgram = habit.type === "Challenge" && !!habit.durationDays;
+    const progress = isProgram
+      ? Math.min(100, (completedInWindow / habit.durationDays!) * 100)
+      : doneOnSelectedDate ? 100 : 0;
+    const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
+
+    return (
+      <li
+        key={habit.id}
+        className="habit-grid-card"
+        style={{ ...styles.habitGridCard, ...(isArchived ? { opacity: 0.65 } : {}) }}
+      >
+        <div style={styles.gridCardTop}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={styles.gridCardName} title={habit.name}>{habit.name}</div>
+            {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
+          </div>
+          <span
+            style={{
+              ...styles.priorityBadge,
+              ...(habit.priority === "Mandatory" ? styles.priorityMandatory : styles.priorityOptional),
+            }}
+          >
+            {habit.priority}
+          </span>
+        </div>
+
+        <div style={styles.gridCardMiddle}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+              {isProgram
+                ? `Program · ${completedInWindow} of ${habit.durationDays} days`
+                : formatFrequencyLabel(habit)}
+            </div>
+            <div style={styles.gridProgressTrack}>
+              <div style={{ ...styles.gridProgressFill, width: `${progress}%` }} />
+            </div>
+          </div>
+          <StreakBadge className="my-habits-streak" streak={streak} />
+        </div>
+
+        <div style={styles.gridCardBottom}>
+          <button
+            type="button"
+            style={{
+              ...styles.habitCompletionButton,
+              ...(doneOnSelectedDate ? styles.toggleButtonDone : {}),
+            }}
+            onClick={() => toggleHabit(habit.id)}
+            disabled={isArchived || !isScheduled}
+            aria-pressed={doneOnSelectedDate}
+          >
+            {isArchived ? "Archived" : !isScheduled ? "Off Day" : doneOnSelectedDate ? "✓ Done" : "Mark Complete"}
+          </button>
+          <div className="habit-icon-group">
+            <button style={styles.iconButton} onClick={() => startEdit(habit)} aria-label={`Edit "${habit.name}"`}>
+              <Pencil size={14} />
+            </button>
+            {isArchived ? (
+              <button style={styles.archiveButton} onClick={() => unarchiveHabit(habit.id)} aria-label={`Unarchive "${habit.name}"`}>
+                <ArchiveRestore size={14} />
+              </button>
+            ) : (
+              <button style={styles.archiveButton} onClick={() => archiveHabit(habit.id)} aria-label={`Archive "${habit.name}"`}>
+                <Archive size={14} />
+              </button>
+            )}
+            <button style={styles.iconButton} onClick={() => requestHabitDeletion(habit)} aria-label={`Delete "${habit.name}"`}>
               <Trash2 size={14} />
             </button>
           </div>
@@ -1672,12 +2108,20 @@ function App() {
             <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
           <button
+            className={`sidebar-item ${view === "Programs" ? "active" : ""}`}
+            onClick={() => navigateToView("Programs")}
+          >
+            <Flame size={20} />
+            <span>Programs</span>
+            <span className="sidebar-shortcut">{shortcutKey}3</span>
+          </button>
+          <button
             className={`sidebar-item ${view === "goals" ? "active" : ""}`}
             onClick={() => navigateToView("goals")}
           >
             <Target size={20} />
             <span>Goals</span>
-            <span className="sidebar-shortcut">{shortcutKey}3</span>
+            <span className="sidebar-shortcut">{shortcutKey}4</span>
           </button>
           <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
@@ -1685,7 +2129,7 @@ function App() {
           >
             <TimerIcon size={20} />
             <span>Timer</span>
-            <span className="sidebar-shortcut">{shortcutKey}4</span>
+            <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
@@ -1693,7 +2137,7 @@ function App() {
           >
             <HistoryIcon size={20} />
             <span>History</span>
-            <span className="sidebar-shortcut">{shortcutKey}5</span>
+            <span className="sidebar-shortcut">{shortcutKey}6</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -1701,7 +2145,7 @@ function App() {
           >
             <BarChart3 size={20} />
             <span>Analytics</span>
-            <span className="sidebar-shortcut">{shortcutKey}6</span>
+            <span className="sidebar-shortcut">{shortcutKey}7</span>
           </button>
           <div className="sidebar-spacer" />
           <button
@@ -1727,6 +2171,7 @@ function App() {
             }}
           >
             <Today
+              viewMode={appSettings.viewMode}
               habits={habits}
               tasks={tasks}
               goals={goals}
@@ -1743,6 +2188,10 @@ function App() {
                 navigateToView("Timer");
               }}
               onNavigateToHabits={() => navigateToView("Habits")}
+              onNavigateToPrograms={() => navigateToView("Programs")}
+              onNavigateToGoals={() => navigateToView("goals")}
+              onNavigateToHistory={() => navigateToView("History")}
+              onNavigateToAnalytics={() => navigateToView("Analytics")}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
               showMandatoryHabitsInImportantItems={appSettings.showMandatoryHabitsInImportantItems ?? false}
@@ -1844,7 +2293,123 @@ function App() {
                     {tab}
                   </button>
                 ))}
-                <div className="category-settings">
+                <div
+                  className="category-settings"
+                  style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}
+                >
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.categoryManageButton,
+                      width: "auto",
+                      gap: 7,
+                      padding: "0 10px",
+                    }}
+                    onClick={() => setShowFilterPopover((visible) => !visible)}
+                    aria-label={activeFilterCount > 0 ? `Filter habits (${activeFilterCount})` : "Filter habits"}
+                    aria-expanded={showFilterPopover}
+                    title={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter habits"}
+                  >
+                    <Filter size={16} />
+                    <span style={{ fontSize: 12 }}>Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
+                  </button>
+                  {showFilterPopover && (
+                    <div style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      zIndex: 50,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 16,
+                      width: "min(90vw, 440px)",
+                      maxWidth: 440,
+                      maxHeight: "min(72vh, 640px)",
+                      padding: 16,
+                      overflowY: "auto",
+                      boxSizing: "border-box",
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border-strong)",
+                      borderRadius: 10,
+                      boxShadow: "0 12px 28px var(--shadow-medium)",
+                    }}>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 8 }}>
+                          Type
+                        </label>
+                        <select
+                          style={{ ...styles.select, width: "100%", minWidth: 0 }}
+                          value={filterType}
+                          onChange={(event) => setFilterType(event.target.value as "All" | "Daily" | "Program Habits")}
+                        >
+                          <option value="All">All</option>
+                          <option value="Daily">Daily</option>
+                          <option value="Program Habits">Program Habits</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 8 }}>
+                          Priority
+                        </label>
+                        <select
+                          style={{ ...styles.select, width: "100%", minWidth: 0 }}
+                          value={filterPriority}
+                          onChange={(event) => setFilterPriority(event.target.value as "All" | "Mandatory" | "Optional")}
+                        >
+                          <option value="All">All</option>
+                          <option value="Mandatory">Mandatory</option>
+                          <option value="Optional">Optional</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 8 }}>
+                          Frequency
+                        </label>
+                        <select
+                          style={{ ...styles.select, width: "100%", minWidth: 0 }}
+                          value={filterFrequency}
+                          onChange={(event) => setFilterFrequency(event.target.value as "All" | "daily" | "weekdays" | "weekends")}
+                        >
+                          <option value="All">All</option>
+                          <option value="daily">Every Day</option>
+                          <option value="weekdays">Weekdays</option>
+                          <option value="weekends">Weekends</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 8 }}>
+                          Status
+                        </label>
+                        <select
+                          style={{ ...styles.select, width: "100%", minWidth: 0 }}
+                          value={filterStatus}
+                          onChange={(event) => setFilterStatus(event.target.value as "All" | "Active" | "Archived" | "Completed Today" | "Incomplete Today")}
+                        >
+                          <option value="All">All</option>
+                          <option value="Active">Active</option>
+                          <option value="Archived">Archived</option>
+                          <option value="Completed Today">Completed Today</option>
+                          <option value="Incomplete Today">Incomplete Today</option>
+                        </select>
+                      </div>
+                      {activeFilterCount > 0 && (
+                        <button
+                          style={{
+                            ...styles.addButton,
+                            background: "transparent",
+                            border: "1px solid var(--border-strong)",
+                            color: "var(--text-secondary)",
+                            fontSize: 12,
+                            padding: "8px 12px",
+                          }}
+                          onClick={clearPropertyFilters}
+                        >
+                          Reset Filters
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     style={styles.categoryManageButton}
@@ -1894,17 +2459,19 @@ function App() {
                           </>
                         ) : (
                           <button
-                            style={styles.cancelButton}
+                            style={styles.iconButton}
                             onClick={() => startCategoryRename(category)}
+                            aria-label={`Rename ${category}`}
+                            title={`Rename ${category}`}
                           >
-                            Rename
+                            <Pencil size={14} />
                           </button>
                         )}
                         <button
                           style={styles.iconButton}
                           onClick={() => deleteCategory(category)}
-                          aria-label={`Delete ${category}`}
-                          title={`Delete ${category}`}
+                          aria-label={`Delete "${category}"`}
+                          title={`Delete "${category}"`}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1915,21 +2482,25 @@ function App() {
               )}
             </div>
 
-          <div style={{ ...styles.inputRow, justifyContent: "center", margin: "0 auto", maxWidth: 500 }}>
+            <div style={{ ...styles.inputRow, justifyContent: "center", margin: "12px auto", maxWidth: 500 }}>
               <input
                 style={styles.input}
                 value={newHabit}
                 onChange={(event) => setNewHabit(event.target.value)}
                 placeholder="Add a Habit"
               />
-              <button style={styles.addButton} onClick={addHabit}>
+              <button
+                style={styles.addButton}
+                onClick={addHabit}
+                disabled={newType === "Challenge" && !activePrograms.some((program) => String(program.id) === newProgramId)}
+              >
                 Add
               </button>
             </div>
 
-                        <div style={{ ...styles.optionsRow, justifyContent: "center", marginTop: 12, marginBottom: 32 }}>
+            <div style={{ ...styles.optionsRow, justifyContent: "center", margin: "12px 0 32px" }}>
               <select
-                style={styles.select}
+                style={styles.habitPropertySelect}
                 value={newPriority}
                 onChange={(event) =>
                   setNewPriority(event.target.value as Priority)
@@ -1940,43 +2511,48 @@ function App() {
                 <option value="Mandatory">Mandatory</option>
               </select>
               <select
-                style={styles.select}
+                style={styles.habitPropertySelect}
                 value={newType}
-                onChange={(event) => setNewType(event.target.value as HabitType)}
+                onChange={(event) => {
+                  const type = event.target.value as HabitType;
+                  setNewType(type);
+                  if (type === "Daily") setNewProgramId("");
+                }}
                 aria-label="Type"
               >
                 <option value="Daily">Daily Habit</option>
-                <option value="Challenge">Challenge</option>
+                <option value="Challenge">Program</option>
               </select>
               {newType === "Challenge" && (
-                <div style={styles.durationField}>
-                  <input
-                    style={styles.durationInput}
-                    type="number"
-                    min={1}
-                    value={newDuration}
-                    onChange={(event) => setNewDuration(event.target.value)}
-                    aria-label="Duration in Days"
-                  />
-                  <span style={styles.durationLabel}>Days</span>
-                </div>
+                <select
+                  style={styles.habitPropertySelect}
+                  value={newProgramId}
+                  onChange={(event) => setNewProgramId(event.target.value)}
+                  aria-label="Select Program"
+                >
+                  <option value="">Select a Program</option>
+                  {activePrograms.map((program) => (
+                    <option key={program.id} value={program.id}>{program.name}</option>
+                  ))}
+                </select>
               )}
               {renderFrequencyControls(
                 newFrequencyType,
                 setNewFrequencyType,
                 newCustomDays,
                 setNewCustomDays,
+                styles.habitPropertySelect,
               )}
               {renderCategorySelect(
                 newCategory,
                 setNewCategory,
                 newCategoryName,
                 setNewCategoryName,
-                styles.select,
+                styles.habitPropertySelect,
                 styles.categoryInput,
               )}
               <select
-                style={styles.select}
+                style={styles.habitPropertySelect}
                 value={newGoalId}
                 onChange={(event) => setNewGoalId(event.target.value)}
                 aria-label="Linked Goal"
@@ -1990,30 +2566,50 @@ function App() {
 
             {activeHabits.length === 0 && offDayHabits.length === 0 ? (
               <p style={styles.empty}>
-                {habits.length === 0
+                {activeFilterCount > 0
+                  ? "No habits match these filters."
+                  : habits.length === 0
                   ? "No habits yet — add your first one above."
                   : currentCategory !== ALL_CATEGORIES && !habits.some(matchesCategory)
                   ? `No habits in ${currentCategory} yet.`
                   : archivedHabits.length > 0
                   ? "No active habits. Show archived habits below to restore them."
                   : "No habits active on this date."}
+                {activeFilterCount > 0 && (
+                  <button
+                    style={{
+                      ...styles.addButton,
+                      background: "transparent",
+                      border: "1px solid var(--border-strong)",
+                      color: "var(--text-secondary)",
+                      fontSize: 12,
+                      padding: "8px 12px",
+                      marginTop: 8,
+                    }}
+                    onClick={clearPropertyFilters}
+                  >
+                    Clear filters
+                  </button>
+                )}
               </p>
             ) : (
               <div>
                 {activeHabits.length > 0 && (
                   <>
-                    <div className="habit-table-header" style={styles.tableHeaderColors}>
-                      <span>Habit Name</span>
-                      <span>Priority</span>
-                      <span className="habit-type-cell">Type / Progress</span>
-                      <span>Streak</span>
-                      <span style={styles.headerActionsCell}>Actions</span>
-                    </div>
+                    {appSettings.viewMode === "list" && (
+                      <div className="habit-table-header" style={styles.tableHeaderColors}>
+                        <span>Habit Name</span>
+                        <span>Priority</span>
+                        <span className="habit-type-cell">Type / Progress</span>
+                        <span>Streak</span>
+                        <span style={styles.headerActionsCell}>Actions</span>
+                      </div>
+                    )}
 
-                    <ul style={styles.list}>
-                      {activeHabits.map((habit) =>
-                        renderHabitRow(habit, false, false),
-                      )}
+                    <ul style={{ ...styles.list, ...(appSettings.viewMode === "grid" ? styles.habitGridList : {}) }}>
+                      {activeHabits.map((habit) => appSettings.viewMode === "grid" && editingId !== habit.id
+                        ? renderHabitGridCard(habit)
+                        : renderHabitRow(habit, false, false))}
                     </ul>
                   </>
                 )}
@@ -2021,17 +2617,19 @@ function App() {
                 {offDayHabits.length > 0 && (
                   <div style={{ marginTop: activeHabits.length > 0 ? 32 : 0 }}>
                     <h2 style={styles.sectionHeader}>Not Scheduled Today</h2>
-                    <div className="habit-table-header" style={styles.tableHeaderColors}>
-                      <span>Habit Name</span>
-                      <span>Priority</span>
-                      <span className="habit-type-cell">Type / Progress</span>
-                      <span>Streak</span>
-                      <span style={styles.headerActionsCell}>Actions</span>
-                    </div>
-                    <ul style={styles.list}>
-                      {offDayHabits.map((habit) =>
-                        renderHabitRow(habit, false, false, false),
-                      )}
+                    {appSettings.viewMode === "list" && (
+                      <div className="habit-table-header" style={styles.tableHeaderColors}>
+                        <span>Habit Name</span>
+                        <span>Priority</span>
+                        <span className="habit-type-cell">Type / Progress</span>
+                        <span>Streak</span>
+                        <span style={styles.headerActionsCell}>Actions</span>
+                      </div>
+                    )}
+                    <ul style={{ ...styles.list, ...(appSettings.viewMode === "grid" ? styles.habitGridList : {}) }}>
+                      {offDayHabits.map((habit) => appSettings.viewMode === "grid" && editingId !== habit.id
+                        ? renderHabitGridCard(habit, false, false)
+                        : renderHabitRow(habit, false, false, false))}
                     </ul>
                   </div>
                 )}
@@ -2058,18 +2656,20 @@ function App() {
 
                 {showArchived && (
                   <div>
-                    <div className="habit-table-header" style={styles.tableHeaderColors}>
-                      <span>Habit Name</span>
-                      <span>Priority</span>
-                      <span className="habit-type-cell">Type / Progress</span>
-                      <span>Streak</span>
-                      <span style={styles.headerActionsCell}>Actions</span>
-                    </div>
+                    {appSettings.viewMode === "list" && (
+                      <div className="habit-table-header" style={styles.tableHeaderColors}>
+                        <span>Habit Name</span>
+                        <span>Priority</span>
+                        <span className="habit-type-cell">Type / Progress</span>
+                        <span>Streak</span>
+                        <span style={styles.headerActionsCell}>Actions</span>
+                      </div>
+                    )}
 
-                    <ul style={styles.list}>
-                      {archivedHabits.map((habit) =>
-                        renderHabitRow(habit, false, true),
-                      )}
+                    <ul style={{ ...styles.list, ...(appSettings.viewMode === "grid" ? styles.habitGridList : {}) }}>
+                      {archivedHabits.map((habit) => appSettings.viewMode === "grid" && editingId !== habit.id
+                        ? renderHabitGridCard(habit, true)
+                        : renderHabitRow(habit, false, true))}
                     </ul>
                   </div>
                 )}
@@ -2099,6 +2699,8 @@ function App() {
               tasks={tasks}
               allHabits={habits}
               initialEntityId={initialFocusEntityId}
+              autoStartAction={notificationTimerAction}
+              onAutoStartHandled={() => setNotificationTimerAction(null)}
             />
           </div>
 
@@ -2113,6 +2715,7 @@ function App() {
             <History
               habits={habits}
               focusSessions={focusSessions}
+              viewMode={appSettings.viewMode}
               onRequestDeleteFocusSession={requestFocusSessionDeletion}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
@@ -2137,6 +2740,29 @@ function App() {
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
               weekStart={appSettings.weekStart}
+            />
+          </div>
+
+          <div
+            style={{
+              display: view === "Programs" ? "flex" : "none",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <Programs
+              habits={habits}
+              onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
+              onCreateProgram={() => setShowProgramModal(true)}
+              onEditProgram={startProgramEdit}
+              onToggleProgramArchive={toggleProgramArchive}
+              onDeleteProgram={requestProgramDeletion}
+              dayResetHour={appSettings.dayResetHour}
+              onEditHabit={startEdit}
+              onArchiveHabit={archiveHabit}
+              onUnarchiveHabit={unarchiveHabit}
+              onDeleteHabit={requestHabitDeletion}
             />
           </div>
 
@@ -2251,6 +2877,28 @@ function App() {
                 </div>
                 <div style={styles.settingsRow}>
                   <div>
+                    <span style={styles.settingsLabel}>Default View Mode</span>
+                    <span style={styles.settingsDescription}>Choose how habits are displayed by default.</span>
+                  </div>
+                  <div style={styles.settingsSegment} role="group" aria-label="Default view mode">
+                    {(["grid", "list"] as const).map((viewMode) => (
+                      <button
+                        key={viewMode}
+                        type="button"
+                        style={{
+                          ...styles.settingsSegmentButton,
+                          ...(appSettings.viewMode === viewMode ? styles.settingsSegmentButtonActive : {}),
+                        }}
+                        onClick={() => setAppSettings((current) => ({ ...current, viewMode }))}
+                        aria-pressed={appSettings.viewMode === viewMode}
+                      >
+                        {viewMode === "grid" ? "Grid" : "List"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
                     <label htmlFor="day-reset-time" style={styles.settingsLabel}>Day Reset Time</label>
                     <span style={styles.settingsDescription}>Choose when a new habit day begins.</span>
                   </div>
@@ -2350,7 +2998,7 @@ function App() {
                         onClick={() => setAppSettings((current) => ({ ...current, defaultFocusDuration: minutes }))}
                         aria-pressed={appSettings.defaultFocusDuration === minutes}
                       >
-                        {minutes}M
+                        {minutes}m
                       </button>
                     ))}
                   </div>
@@ -2428,6 +3076,93 @@ function App() {
                 </div>
               </section>
 
+              <section style={styles.settingsCard} aria-labelledby="intelligent-notifications-title">
+                <h2 id="intelligent-notifications-title" style={styles.settingsCardTitle}>
+                  <Bell size={17} />
+                  Intelligent Notifications
+                </h2>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Enable Intelligent Notifications</span>
+                    <span style={styles.settingsDescription}>Allow Synchron to send useful reminders based on your activity.</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Enable Intelligent Notifications"
+                    aria-checked={appSettings.enableIntelligentNotifications}
+                    style={{
+                      ...styles.settingsToggle,
+                      ...(appSettings.enableIntelligentNotifications ? styles.settingsToggleActive : {}),
+                    }}
+                    onClick={() => setAppSettings((current) => ({
+                      ...current,
+                      enableIntelligentNotifications: !current.enableIntelligentNotifications,
+                    }))}
+                  >
+                    <span
+                      style={{
+                        ...styles.settingsToggleThumb,
+                        ...(appSettings.enableIntelligentNotifications ? styles.settingsToggleThumbActive : {}),
+                      }}
+                    />
+                  </button>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <label htmlFor="notification-frequency" style={styles.settingsLabel}>Notification Frequency</label>
+                    <span style={styles.settingsDescription}>Minimum time between proactive notifications.</span>
+                  </div>
+                  <select
+                    id="notification-frequency"
+                    style={styles.settingsSelect}
+                    value={appSettings.notificationFrequency}
+                    onChange={(event) => setAppSettings((current) => ({
+                      ...current,
+                      notificationFrequency: event.target.value as NotificationFrequency,
+                    }))}
+                  >
+                    <option value="conservative">Conservative</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="frequent">Frequent</option>
+                  </select>
+                </div>
+                <div>
+                  <span style={styles.settingsLabel}>Allow Intelligent Notifications For</span>
+                </div>
+                {([
+                  ["habitReminders", "Habit timing reminders"],
+                  ["incompleteHabitReminders", "Incomplete habit focus suggestions"],
+                ] as const).map(([setting, label]) => {
+                  const enabled = appSettings[setting];
+                  return (
+                    <div key={setting} style={styles.settingsRow}>
+                      <span style={{ ...styles.settingsLabel, opacity: appSettings.enableIntelligentNotifications ? 1 : 0.5 }}>{label}</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-label={label}
+                        aria-checked={enabled}
+                        disabled={!appSettings.enableIntelligentNotifications}
+                        style={{
+                          ...styles.settingsToggle,
+                          ...(enabled ? styles.settingsToggleActive : {}),
+                          ...(!appSettings.enableIntelligentNotifications ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+                        }}
+                        onClick={() => setAppSettings((current) => ({ ...current, [setting]: !current[setting] }))}
+                      >
+                        <span
+                          style={{
+                            ...styles.settingsToggleThumb,
+                            ...(enabled ? styles.settingsToggleThumbActive : {}),
+                          }}
+                        />
+                      </button>
+                    </div>
+                  );
+                })}
+              </section>
+
               <section style={styles.settingsCard} aria-labelledby="about-system-title">
                 <h2 id="about-system-title" style={styles.settingsCardTitle}>About &amp; System Info</h2>
                 <div style={styles.settingsAboutRow}>
@@ -2453,6 +3188,76 @@ function App() {
 
         </main>
       </div>
+      {programPendingDeletion && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setProgramPendingDeletion(null)}
+        >
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-program-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-program-modal-title">Delete "{programPendingDeletion.name}"?</h2>
+            <p>This will remove the Program and all of its habits.</p>
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-cancel"
+                onClick={() => setProgramPendingDeletion(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-confirm"
+                onClick={confirmProgramDeletion}
+              >
+                Delete Program
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categoryPendingDeletion && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setCategoryPendingDeletion(null)}
+        >
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-category-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-category-modal-title">Delete "{categoryPendingDeletion}"?</h2>
+            <p>Habits in this category will become No Category.</p>
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-cancel"
+                onClick={() => setCategoryPendingDeletion(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-confirm"
+                onClick={confirmCategoryDeletion}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {habitPendingDeletion && (
         <div
           className="modal-overlay"
@@ -2466,7 +3271,7 @@ function App() {
             aria-labelledby="delete-modal-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="delete-modal-title">Delete {habitPendingDeletion.name}?</h2>
+            <h2 id="delete-modal-title">Delete "{habitPendingDeletion.name}"?</h2>
             <p>This action cannot be undone.</p>
             <div className="delete-modal-actions">
               <button
@@ -2502,7 +3307,7 @@ function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="delete-focus-session-modal-title">
-              Delete this {focusSessionPendingDeletion.sessionType} session?
+              Delete this "{focusSessionPendingDeletion.sessionType}" session?
             </h2>
             <p>This action cannot be undone.</p>
             <div className="delete-modal-actions">
@@ -2520,6 +3325,137 @@ function App() {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProgramModal && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={closeProgramModal}
+        >
+          <div
+            className="program-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="program-modal-title"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              ...CARD_SURFACE,
+              background: "var(--bg-surface)",
+              maxWidth: 500,
+              width: "90%",
+              padding: 24,
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+          >
+            <h2 id="program-modal-title" style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 16px" }}>
+              {programEditingId === null ? "Create Program" : "Edit Program"}
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                  Program Name
+                </label>
+                <input
+                  style={styles.input}
+                  value={programName}
+                  onChange={(event) => setProgramName(event.target.value)}
+                  placeholder="e.g., 21-Day Exam Sprint"
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                  Start Date
+                </label>
+                <input
+                  style={styles.input}
+                  type="date"
+                  value={programStartDate}
+                  onChange={(event) => setProgramStartDate(event.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                  Duration (Days)
+                </label>
+                <input
+                  style={styles.input}
+                  type="number"
+                  min={1}
+                  value={programDuration}
+                  onChange={(event) => setProgramDuration(event.target.value)}
+                />
+              </div>
+              {programEditingId === null && <div>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                  Program Habits
+                </label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    style={styles.input}
+                    value={newHabit}
+                    onChange={(event) => setNewHabit(event.target.value)}
+                    placeholder="Add a habit"
+                  />
+                  <select
+                    style={styles.select}
+                    value={newPriority}
+                    onChange={(event) => setNewPriority(event.target.value as Priority)}
+                  >
+                    <option value="Optional">Optional</option>
+                    <option value="Mandatory">Mandatory</option>
+                  </select>
+                  <button
+                    style={styles.addButton}
+                    onClick={addProgramHabit}
+                  >
+                    Add
+                  </button>
+                </div>
+                {programHabits.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {programHabits.map((habit, index) => (
+                      <div key={index} style={{
+                        ...CARD_SURFACE,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: 12,
+                      }}>
+                        <div>
+                          <div style={{ fontSize: 14, color: "var(--text-body)" }}>{habit.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{habit.priority}</div>
+                        </div>
+                        <button
+                          style={styles.iconButton}
+                          onClick={() => removeProgramHabit(index)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+                <button
+                  style={styles.cancelButton}
+                  onClick={closeProgramModal}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={styles.saveButton}
+                  onClick={createProgram}
+                  disabled={programName.trim() === "" || (programEditingId === null && programHabits.length === 0)}
+                >
+                  {programEditingId === null ? "Create Program" : "Save Changes"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

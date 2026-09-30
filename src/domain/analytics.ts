@@ -55,8 +55,10 @@ export interface ActionableInsight {
  */
 export function getHabitPerformanceDiagnostics(
   habits: Habit[],
-  _logs?: string[][],
+  logs?: string[][],
 ): HabitPerformanceDiagnostics {
+  void logs;
+
   if (!habits || habits.length === 0) {
     return {
       strongestHabits: [],
@@ -81,7 +83,7 @@ export function getHabitPerformanceDiagnostics(
     const startDate = parseLocalDateKey(startDateKey);
 
     let expectedDays = 0;
-    let checkDate = new Date(today);
+    const checkDate = new Date(today);
     while (checkDate >= startDate) {
       const dayName = checkDate.toLocaleDateString("en-US", { weekday: "long" });
       if (isHabitScheduledForDay(habit, dayName)) expectedDays++;

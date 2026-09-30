@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Minus, Plus } from "lucide-react";
 import {
   isPermissionGranted,
@@ -8,6 +8,7 @@ import {
 
 import { CARD_SURFACE } from "../theme";
 import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task, Habit } from "../types";
+import { registerFocusTimerRunningState } from "../domain/notificationLogic";
 
 type FocusTimerProps = {
   habits: FocusTimerHabit[];
@@ -22,6 +23,8 @@ type FocusTimerProps = {
   tasks: Task[];
   allHabits?: Habit[];
   initialEntityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string };
+  autoStartAction?: { habitId?: number; title?: string; durationMinutes?: number } | null;
+  onAutoStartHandled?: () => void;
 };
 
 const DEFAULT_BREAK_MINUTES = 5;
@@ -216,14 +219,16 @@ const styles: Record<string, CSSProperties> = {
   },
   primaryButton: {
     flex: 1,
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
-    borderRadius: 20,
-    padding: "12px 0",
+    background: "linear-gradient(135deg, var(--accent-teal-soft), var(--accent-teal))",
+    border: "1px solid rgba(var(--accent-rgb), 0.65)",
+    borderRadius: 12,
+    padding: "13px 16px",
     fontSize: 15,
-    fontWeight: 500,
-    color: "var(--accent-teal)",
+    fontWeight: 600,
+    color: "var(--bg-primary)",
     cursor: "pointer",
+    boxShadow: "0 6px 20px rgba(var(--accent-rgb), 0.16)",
+    transition: "transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease",
   },
   primaryButtonDisabled: {
     opacity: 0.5,
@@ -231,14 +236,15 @@ const styles: Record<string, CSSProperties> = {
   },
   secondaryButton: {
     flex: 1,
-    background: "transparent",
+    background: "var(--bg-surface)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 20,
-    padding: "12px 0",
+    borderRadius: 12,
+    padding: "13px 16px",
     fontSize: 15,
     fontWeight: 500,
     color: "var(--text-secondary)",
     cursor: "pointer",
+    transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
   },
   habitSelectRow: {
     display: "flex",
@@ -264,6 +270,9 @@ const styles: Record<string, CSSProperties> = {
   },
   controlPanel: {
     ...CARD_SURFACE,
+    background: "color-mix(in srgb, var(--bg-surface) 88%, transparent)",
+    borderRadius: 16,
+    backdropFilter: "blur(16px)",
     display: "flex",
     flexDirection: "column",
     gap: 24,
@@ -274,6 +283,12 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 10,
+  },
+  panelCard: {
+    padding: 14,
+    background: "color-mix(in srgb, var(--bg-surface) 72%, transparent)",
+    border: "1px solid var(--card-surface-border)",
+    borderRadius: 12,
   },
   panelSectionTitle: {
     margin: 0,
@@ -373,6 +388,8 @@ function FocusTimer({
   tasks,
   allHabits,
   initialEntityId,
+  autoStartAction,
+  onAutoStartHandled,
 }: FocusTimerProps) {
   const [mode, setMode] = useState<Mode>("Timer");
   const [timerMinutes, setTimerMinutes] = useState(defaultFocusDuration);
@@ -437,6 +454,11 @@ function FocusTimer({
   const updateTimerRef = useRef<(now: number) => void>(() => {});
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
   const quickAdjustStepInputFocusedRef = useRef(false);
+
+  useEffect(() => {
+    const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
+    return registerFocusTimerRunningState(getIsRunning);
+  }, []);
 
   useEffect(() => {
     if (!quickAdjustStepInputFocusedRef.current) {
@@ -572,14 +594,14 @@ function FocusTimer({
   // Called from Start (a real user gesture) so the context is already
   // running by the time a session actually ends, possibly while the
   // tab is backgrounded and no new gesture is available.
-  function primeAudioContext() {
+  const primeAudioContext = useCallback(() => {
     const ctx = getAudioContext();
     if (ctx && ctx.state === "suspended") {
       ctx.resume().catch(() => {
         // Autoplay was blocked; the chime simply won't play this run.
       });
     }
-  }
+  }, []);
 
   function playTone(ctx: AudioContext, frequency: number, startTime: number, duration: number) {
     const oscillator = ctx.createOscillator();
@@ -616,12 +638,12 @@ function FocusTimer({
     }
   }
 
-  function requestNotificationPermissionIfNeeded() {
+  const requestNotificationPermissionIfNeeded = useCallback(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
-  }
+  }, []);
 
   // Only surfaces a desktop notification when the tab is actually
   // hidden/minimized — otherwise the on-screen ring and chime already
@@ -745,7 +767,7 @@ function FocusTimer({
     updatePomodoroRef.current = updatePomodoro;
   }, [updatePomodoro, updateTimer]);
 
-  function handleStart() {
+  const handleStart = useCallback(() => {
     requestNotificationPermissionIfNeeded();
     primeAudioContext();
 
@@ -763,7 +785,7 @@ function FocusTimer({
         pomodoroSessionRef.current,
       );
     }
-  }
+  }, [mode, primeAudioContext, requestNotificationPermissionIfNeeded]);
 
   function handlePause() {
     const now = Date.now();
@@ -813,7 +835,7 @@ function FocusTimer({
     setMode(nextMode);
   }
 
-  function handleTimerDurationChange(value: string) {
+  const handleTimerDurationChange = useCallback((value: string) => {
     const parsed = clampMinutes(value, defaultFocusDuration);
     timerMinutesRef.current = parsed;
     setTimerMinutes(parsed);
@@ -821,7 +843,23 @@ function FocusTimer({
       updateTimerTotalMs(parsed * 60000);
       setTimerState(parsed * 60000, false);
     }
-  }
+  }, [defaultFocusDuration]);
+
+  useEffect(() => {
+    if (!autoStartAction) return;
+
+    const durationMinutes = Math.max(1, Math.min(MAX_DURATION_MINUTES, autoStartAction.durationMinutes ?? defaultFocusDuration));
+    const frameId = window.requestAnimationFrame(() => {
+      setMode("Timer");
+      handleTimerDurationChange(String(durationMinutes));
+      handleStart();
+      onAutoStartHandled?.();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [autoStartAction, defaultFocusDuration, handleStart, handleTimerDurationChange, onAutoStartHandled]);
 
   function handleFocusDurationChange(value: string) {
     const parsed = clampMinutes(value, defaultFocusDuration);
@@ -984,14 +1022,6 @@ function FocusTimer({
               cy={100}
               r={RADIUS}
               fill="none"
-              stroke="var(--border-color)"
-              strokeWidth={10}
-            />
-            <circle
-              cx={100}
-              cy={100}
-              r={RADIUS}
-              fill="none"
               stroke={ringColor}
               strokeWidth={10}
               strokeLinecap="round"
@@ -1031,6 +1061,7 @@ function FocusTimer({
         <div style={styles.controlsRow}>
           {!isRunning ? (
             <button
+              className="focus-primary-control"
               style={{
                 ...styles.primaryButton,
                 ...(remainingMs <= 0 ? styles.primaryButtonDisabled : {}),
@@ -1041,11 +1072,11 @@ function FocusTimer({
               {primaryButtonText}
             </button>
           ) : (
-            <button style={styles.primaryButton} onClick={handlePause}>
+            <button className="focus-primary-control" style={styles.primaryButton} onClick={handlePause}>
               Pause
             </button>
           )}
-          <button style={styles.secondaryButton} onClick={handleReset}>
+          <button className="focus-secondary-control" style={styles.secondaryButton} onClick={handleReset}>
             Reset
           </button>
         </div>
@@ -1144,7 +1175,7 @@ function FocusTimer({
           </select>
         </div>
 
-        <div style={styles.panelSection}>
+        <div style={{ ...styles.panelSection, ...styles.panelCard }}>
           <h3 style={styles.panelSectionTitle}>Quick Duration</h3>
           <div style={styles.presetGrid}>
             {DURATION_PRESETS.map((minutes) => (
@@ -1161,7 +1192,7 @@ function FocusTimer({
           </div>
         </div>
 
-        <div style={styles.panelSection}>
+        <div style={{ ...styles.panelSection, ...styles.panelCard }}>
           <h3 style={styles.panelSectionTitle}>Duration Settings</h3>
           {mode === "Timer" ? (
             <div style={styles.durationRow}>
@@ -1257,7 +1288,7 @@ function FocusTimer({
           )}
         </div>
 
-        <div style={styles.panelSection}>
+        <div style={{ ...styles.panelSection, ...styles.panelCard }}>
           <h3 style={styles.panelSectionTitle}>Quick Adjustment</h3>
           <div style={styles.durationFieldRow}>
             <label style={styles.durationCaption} htmlFor="quick-adjust-step">

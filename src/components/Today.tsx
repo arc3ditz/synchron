@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target } from "lucide-react";
+import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, Layers, History as HistoryIcon, BarChart3 } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
 import StreakBadge from "./StreakBadge";
 import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
@@ -13,6 +13,7 @@ import {
 import { calculateGoalProgress } from "../domain/goals";
 
 type TodayProps = {
+  viewMode: "grid" | "list";
   habits: Habit[];
   tasks: Task[];
   goals: Goal[];
@@ -22,6 +23,10 @@ type TodayProps = {
   onToggleTask: (id: string) => void;
   onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
   onNavigateToHabits: () => void;
+  onNavigateToPrograms: () => void;
+  onNavigateToGoals: () => void;
+  onNavigateToHistory: () => void;
+  onNavigateToAnalytics: () => void;
   streakFreeze: boolean;
   dayResetHour: number;
   showMandatoryHabitsInImportantItems: boolean;
@@ -31,8 +36,10 @@ type TodayProps = {
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: 860,
+    maxWidth: "100%",
     width: "100%",
+    padding: "16px 24px",
+    boxSizing: "border-box",
   },
   header: {
     marginBottom: 32,
@@ -85,6 +92,11 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 8,
   },
+  habitGridList: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 16,
+  },
   taskList: {
     display: "flex",
     flexDirection: "column",
@@ -96,6 +108,10 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 16,
     padding: 16,
+    width: "100%",
+    height: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   },
   habitInfo: {
     flex: 1,
@@ -285,18 +301,19 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 8,
   },
   focusButton: {
-    display: "inline-flex",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
-    borderRadius: 8,
-    padding: "10px 16px",
-    fontSize: 14,
-    fontWeight: 500,
-    color: "var(--accent-teal)",
+    width: 28,
+    height: 28,
+    padding: 0,
+    background: "transparent",
+    border: "1px solid transparent",
+    borderRadius: 6,
+    color: "var(--text-muted)",
     cursor: "pointer",
+    flexShrink: 0,
+    transition: "background 0.15s ease, color 0.15s ease",
   },
   secondaryButton: {
     padding: "8px 12px",
@@ -318,11 +335,28 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   quickActionList: {
-    display: "flex",
-    flexDirection: "column",
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
-    width: "fit-content",
-    maxWidth: "100%",
+    width: "100%",
+  },
+  quickActionButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    height: 40,
+    minWidth: 0,
+    padding: "8px 12px",
+    background: "#171719",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    borderRadius: 8,
+    color: "var(--text-body)",
+    fontSize: 13,
+    textAlign: "center",
+    cursor: "pointer",
+    transition: "border-color 0.15s ease, background 0.15s ease",
   },
   scheduleSection: {
     marginBottom: 32,
@@ -539,6 +573,7 @@ function isChallengeActiveOnDate(habit: Habit, dateKey: string): boolean {
 }
 
 function Today({
+  viewMode,
   habits,
   tasks,
   goals,
@@ -548,6 +583,10 @@ function Today({
   onToggleTask,
   onStartFocus,
   onNavigateToHabits,
+  onNavigateToPrograms,
+  onNavigateToGoals,
+  onNavigateToHistory,
+  onNavigateToAnalytics,
   streakFreeze,
   dayResetHour,
   showMandatoryHabitsInImportantItems,
@@ -706,6 +745,7 @@ function Today({
                   <HabitMetadata habit={habit} streak={streak} />
                 </div>
                 <button
+                  className="today-focus-button"
                   style={styles.focusButton}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -741,6 +781,7 @@ function Today({
                   </div>
                 </div>
                 <button
+                  className="today-focus-button"
                   style={styles.focusButton}
                   onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
                   aria-label={`Start focus on ${task.title}`}
@@ -951,7 +992,7 @@ function Today({
 
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Today's Habits</h2>
-        <div style={styles.habitList}>
+        <div style={viewMode === "grid" ? styles.habitGridList : styles.habitList}>
           {todayHabits.length === 0 ? (
             <p style={styles.emptyText}>No habits scheduled for today.</p>
           ) : todayHabits.map((habit) => {
@@ -963,6 +1004,7 @@ function Today({
                 key={habit.id}
                 style={{
                   ...styles.habitCard,
+                  ...(viewMode === "grid" ? { background: "var(--bg-surface)" } : {}),
                   ...(isCompleted ? styles.habitCardCompleted : {}),
                 }}
               >
@@ -990,6 +1032,7 @@ function Today({
                   <HabitMetadata habit={habit} streak={streak} />
                 </div>
                 <button
+                  className="today-focus-button"
                   style={styles.focusButton}
                   onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
                   aria-label={`Start focus on ${habit.name}`}
@@ -1031,6 +1074,7 @@ function Today({
                   </div>
                 </div>
                 <button
+                  className="today-focus-button"
                   style={styles.focusButton}
                   onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
                   aria-label={`Start focus on ${task.title}`}
@@ -1046,13 +1090,29 @@ function Today({
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Quick Actions</h2>
         <div style={styles.quickActionList}>
-          <button style={styles.focusButton} onClick={onNavigateToHabits}>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHabits}>
             <ListChecks size={16} />
             Configure Habits
           </button>
-          <button style={styles.focusButton} onClick={() => onStartFocus()}>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={() => onStartFocus()}>
             <Play size={16} />
             Start Focus Session
+          </button>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToPrograms}>
+            <Layers size={16} />
+            Check Programs
+          </button>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToGoals}>
+            <Target size={16} />
+            Create Goals
+          </button>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHistory}>
+            <HistoryIcon size={16} />
+            View History
+          </button>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToAnalytics}>
+            <BarChart3 size={16} />
+            Receive Analytics
           </button>
         </div>
       </div>

@@ -4,15 +4,21 @@ export type HabitType = "Daily" | "Challenge";
 export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
 export type Theme = "dark" | "light";
-export type View = "Today" | "Habits" | "Timer" | "History" | "Analytics" | "goals" | "Settings";
+export type NotificationFrequency = "conservative" | "balanced" | "frequent";
+export type View = "Today" | "Habits" | "Programs" | "Timer" | "History" | "Analytics" | "goals" | "Settings";
 
 export interface AppSettings {
+  viewMode: "grid" | "list";
   dayResetHour: number;
   weekStart: WeekStart;
   defaultFocusDuration: number;
   quickAdjustStepMinutes: number;
   soundAlerts: boolean;
   showMandatoryHabitsInImportantItems?: boolean;
+  enableIntelligentNotifications: boolean;
+  notificationFrequency: NotificationFrequency;
+  habitReminders: boolean;
+  incompleteHabitReminders: boolean;
   theme: Theme;
 }
 
@@ -32,6 +38,7 @@ export interface Habit {
   category?: string; // optional Title Case label, e.g. "School"
   scheduledTime?: string; // "HH:MM" format for time blocking
   durationMinutes?: number; // estimated duration in minutes for time blocking
+  programId?: number; // groups habits into a Program (reuses Challenge fields for program metadata)
 }
 
 export interface Summary {
