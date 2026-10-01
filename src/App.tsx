@@ -80,7 +80,6 @@ import {
   getTodayKey,
   formatDateDisplay,
   shiftDateKey,
-  diffInDays,
   getFrequencyType,
   isHabitScheduledOnDate,
   calculateStreak,
@@ -91,6 +90,12 @@ import {
   sendIntelligentNotification,
 } from "./domain/notificationLogic";
 import { groupHabitsIntoPrograms, type ProgramView } from "./domain/programLogic";
+import {
+  countCompletedInWindow,
+  getChallengeDayNumber,
+  getChallengeMetadata,
+  isChallengeActiveOnDate,
+} from "./domain/programHabits";
 
 const DEFAULT_DURATION = 30;
 const DEFAULT_SETTINGS: AppSettings = {
@@ -879,35 +884,6 @@ function loadAppSettings(): AppSettings {
   };
 }
 
-// Day number is (days since start) + 1, so starting today is Day 1.
-function isChallengeActiveOnDate(habit: Habit, dateKey: string): boolean {
-  if (habit.type !== "Challenge" || !habit.startDate || !habit.durationDays) {
-    return false;
-  }
-  const daysElapsed = diffInDays(dateKey, habit.startDate);
-  return daysElapsed >= 0 && daysElapsed < habit.durationDays;
-}
-
-function getChallengeDayNumber(habit: Habit, dateKey: string): number {
-  if (!habit.startDate) return 1;
-  const daysElapsed = diffInDays(dateKey, habit.startDate);
-  return Math.max(1, daysElapsed + 1);
-}
-
-// Only counts completedDates that fall within this challenge's own
-// window: from startDate through startDate + durationDays - 1.
-function countCompletedInWindow(habit: Habit): number {
-  if (habit.type !== "Challenge" || !habit.startDate || !habit.durationDays) {
-    return 0;
-  }
-  const { startDate, durationDays } = habit;
-
-  return habit.completedDates.filter((date) => {
-    const offset = diffInDays(date, startDate);
-    return offset >= 0 && offset < durationDays;
-  }).length;
-}
-
 function formatCompletedDays(count: number): string {
   return `${count} ${count === 1 ? "Day" : "Days"} Completed`;
 }
@@ -1481,6 +1457,18 @@ function App() {
     setEditingCategoryName("");
   }
 
+  function startProgramHabitEdit(habit: Habit) {
+    setSelectedDateKey(getTodayKey(appSettings.dayResetHour));
+    setActiveCategory(ALL_CATEGORIES);
+    setFilterType("All");
+    setFilterPriority("All");
+    setFilterFrequency("All");
+    setFilterStatus("All");
+    setShowArchived(habit.isArchived === true);
+    setView("Habits");
+    startEdit(habit);
+  }
+
   function cancelEdit() {
     setEditingId(null);
     setEditingName("");
@@ -1714,7 +1702,7 @@ function App() {
       !habit.isArchived &&
       matchesCategory(habit) &&
       applyPropertyFilters(habit) &&
-      (habit.type === "Daily" || isChallengeActiveOnDate(habit, selectedDateKey)),
+      (habit.type === "Daily" || isChallengeActiveOnDate(habit, selectedDateKey, programs)),
   );
   const archivedHabits = habits.filter(
     (habit) => habit.isArchived && matchesCategory(habit) && applyPropertyFilters(habit),
@@ -1935,7 +1923,8 @@ function App() {
       );
     }
 
-    const completedInWindow = countCompletedInWindow(habit);
+    const completedInWindow = countCompletedInWindow(habit, programs);
+    const challengeMetadata = getChallengeMetadata(habit, programs);
 
     return (
       <li key={habit.id} className="habit-row" style={{ ...rowColorStyle, ...archivedStyle }}>
@@ -1967,7 +1956,7 @@ function App() {
           </span>
 
           <div className="habit-type-cell">
-            {habit.type === "Challenge" && habit.durationDays ? (
+            {habit.type === "Challenge" && challengeMetadata ? (
               <span
                 className="habit-type-badge"
                 style={{
@@ -1976,13 +1965,13 @@ function App() {
                 }}
               >
                 {completed
-                  ? `Program Completed · ${completedInWindow} of ${habit.durationDays} ${
+                  ? `Program Completed · ${completedInWindow} of ${challengeMetadata.durationDays} ${
                       completedInWindow === 1 ? "Day" : "Days"
                     } Completed`
                   : `Program Day ${Math.min(
-                      getChallengeDayNumber(habit, selectedDateKey),
-                      habit.durationDays,
-                    )} of ${habit.durationDays} · ${formatCompletedDays(
+                      getChallengeDayNumber(habit, selectedDateKey, programs),
+                      challengeMetadata.durationDays,
+                    )} of ${challengeMetadata.durationDays} · ${formatCompletedDays(
                       completedInWindow,
                     )}`}
               </span>
@@ -2062,10 +2051,11 @@ function App() {
     isScheduled = true,
   ) {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
-    const completedInWindow = countCompletedInWindow(habit);
-    const isProgram = habit.type === "Challenge" && !!habit.durationDays;
+    const completedInWindow = countCompletedInWindow(habit, programs);
+    const challengeMetadata = getChallengeMetadata(habit, programs);
+    const isProgram = habit.type === "Challenge" && !!challengeMetadata;
     const progress = isProgram
-      ? Math.min(100, (completedInWindow / habit.durationDays!) * 100)
+      ? Math.min(100, (completedInWindow / challengeMetadata!.durationDays) * 100)
       : doneOnSelectedDate ? 100 : 0;
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
 
@@ -2094,7 +2084,7 @@ function App() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
               {isProgram
-                ? `Program · ${completedInWindow} of ${habit.durationDays} days`
+                ? `Program · ${completedInWindow} of ${challengeMetadata!.durationDays} days`
                 : formatFrequencyLabel(habit)}
             </div>
             <div style={styles.gridProgressTrack}>
@@ -2812,7 +2802,7 @@ function App() {
               onToggleProgramArchive={toggleProgramArchive}
               onDeleteProgram={requestProgramDeletion}
               dayResetHour={appSettings.dayResetHour}
-              onEditHabit={startEdit}
+              onEditHabit={startProgramHabitEdit}
               onArchiveHabit={archiveHabit}
               onUnarchiveHabit={unarchiveHabit}
               onDeleteHabit={requestHabitDeletion}
