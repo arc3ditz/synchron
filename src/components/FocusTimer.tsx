@@ -10,12 +10,14 @@ import { CARD_SURFACE } from "../theme";
 import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task, Habit } from "../types";
 import { registerFocusTimerRunningState } from "../domain/notificationLogic";
 import { filterTasksForFocusSelection } from "../domain/tasks";
+import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
 
 type FocusTimerProps = {
   habits: FocusTimerHabit[];
   focusSessions: { timestamp: number; durationMinutes: number }[];
   onSessionComplete: (sessionType: "Timer" | "Pomodoro Focus", durationMinutes: number, habitName: string, goalId?: string, milestoneId?: string, taskId?: string, habitId?: number) => void;
   defaultFocusDuration: number;
+  dayResetHour: number;
   quickAdjustStepMinutes: number;
   onQuickAdjustStepChange: (minutes: number) => void;
   soundAlerts: boolean;
@@ -385,6 +387,7 @@ function FocusTimer({
   focusSessions,
   onSessionComplete,
   defaultFocusDuration,
+  dayResetHour,
   quickAdjustStepMinutes,
   onQuickAdjustStepChange,
   soundAlerts,
@@ -960,10 +963,7 @@ function FocusTimer({
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
   const primaryButtonText = isRunning ? "Pause" : isPaused ? "Resume" : "Start";
-  const todayKey = new Date().toDateString();
-  const todaySessions = focusSessions.filter(
-    (focusSession) => new Date(focusSession.timestamp).toDateString() === todayKey,
-  );
+  const todaySessions = getFocusSessionsForLogicalToday(focusSessions, dayResetHour);
   const focusedTodayMinutes = todaySessions.reduce(
     (total, focusSession) => total + focusSession.durationMinutes,
     0,

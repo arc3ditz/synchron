@@ -113,13 +113,18 @@ export function calculateGoalProgress(
   const taskWeight = goalTasks.length > 0 ? (completedTasks / goalTasks.length) * 100 : 0;
   const milestoneWeight = goalMilestones.length > 0 ? (completedMilestones / goalMilestones.length) * 100 : 0;
   const habitWeight = habitHealth;
+
+  const taskShare = goalTasks.length > 0 ? 0.5 : 0;
+  const milestoneShare = goalMilestones.length > 0 ? 0.3 : 0;
+  const habitShare = linkedHabitCount(habits, goal) > 0 ? 0.2 : 0;
+  const availableShare = taskShare + milestoneShare + habitShare;
   
   const totalItems = goalMilestones.length + goalTasks.length;
   const completedItems = completedMilestones + completedTasks;
   const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-  const taskSegmentWidth = Math.round(Math.min(100, Math.max(0, taskWeight)));
-  const milestoneSegmentWidth = Math.round(Math.min(100, Math.max(0, milestoneWeight)));
-  const habitSegmentWidth = Math.round(Math.min(100, Math.max(0, habitWeight)));
+  const taskSegmentWidth = getSegmentWidth(taskWeight, taskShare, availableShare);
+  const milestoneSegmentWidth = getSegmentWidth(milestoneWeight, milestoneShare, availableShare);
+  const habitSegmentWidth = getSegmentWidth(habitWeight, habitShare, availableShare);
   
   return {
     completed: completedItems,
@@ -132,4 +137,13 @@ export function calculateGoalProgress(
     milestoneSegmentWidth,
     habitSegmentWidth,
   };
+}
+
+function linkedHabitCount(habits: Habit[] | undefined, goal: Goal): number {
+  return habits?.filter((habit) => habit.goalId === goal.id).length ?? 0;
+}
+
+function getSegmentWidth(progress: number, share: number, availableShare: number): number {
+  if (share === 0 || availableShare === 0) return 0;
+  return Math.min(100, Math.max(0, Math.floor(progress * share / availableShare)));
 }

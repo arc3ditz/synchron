@@ -58,6 +58,38 @@ test("Goal progress uses item completion and segment widths stay within 0-100", 
     .every((width) => width >= 0 && width <= 100));
 });
 
+test("completed task, milestone, and habit categories share one progress bar", () => {
+  const goal = { id: "goal-segments", title: "Segments", status: "active", createdAt: "2025-01-01" };
+  const today = getTodayKey(0);
+  const completedDates = Array.from({ length: 10 }, (_, index) => shiftDateKey(today, -index));
+  const tasks = [
+    { id: "task-1", goalId: goal.id, title: "Done", completed: true, priority: "medium", createdAt: today },
+    { id: "task-2", goalId: goal.id, title: "Open", completed: false, priority: "medium", createdAt: today },
+  ];
+  const milestones = [
+    { id: "milestone-1", goalId: goal.id, title: "Done", completed: true },
+    { id: "milestone-2", goalId: goal.id, title: "Open", completed: false },
+  ];
+  const habits = [{
+    id: 9,
+    name: "Streak",
+    goalId: goal.id,
+    priority: "Optional",
+    type: "Daily",
+    completedDates,
+  }];
+  const progress = calculateGoalProgress(goal, milestones, tasks, habits, false, 0);
+
+  assert.equal(progress.percent, 50);
+  assert.equal(progress.taskSegmentWidth, 25);
+  assert.equal(progress.milestoneSegmentWidth, 15);
+  assert.equal(progress.habitSegmentWidth, 20);
+  assert.equal(
+    progress.taskSegmentWidth + progress.milestoneSegmentWidth + progress.habitSegmentWidth,
+    60,
+  );
+});
+
 test("habit-only progress does not report completed Goal items", () => {
   const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
   const today = getTodayKey(0);

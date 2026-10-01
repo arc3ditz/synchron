@@ -2731,6 +2731,7 @@ function App() {
               focusSessions={focusSessions}
               onSessionComplete={addFocusSessionRecord}
               defaultFocusDuration={appSettings.defaultFocusDuration}
+              dayResetHour={appSettings.dayResetHour}
               quickAdjustStepMinutes={appSettings.quickAdjustStepMinutes}
               onQuickAdjustStepChange={(minutes) =>
                 setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: minutes }))
