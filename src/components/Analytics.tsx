@@ -13,15 +13,14 @@ import {
 import { CARD_SURFACE } from "../theme";
 import type { Habit, Task, Goal, TimeHorizon, FocusSessionRecord } from "../types";
 import {
-  getDateKey,
-  getWeekStart,
-  getMonthStart,
-  getDaysAgo,
   WEEKDAYS,
-  calculateStreak,
 } from "../utils/dates";
 import {
+  queryAnalyticsData,
   getHabitPerformanceDiagnostics,
+  getHabitPeriodStreak,
+  getFocusHeatmapData,
+  getHabitFocusMinutes,
   getTimeOfDayInsights,
   getWeekdayFrictionMetrics,
   getGoalFocusAllocation,
@@ -456,126 +455,82 @@ function formatHours(minutes: number): string {
   return `${hours.toFixed(1)}h`;
 }
 
+function formatSessionCount(count: number): string {
+  return `${count} ${count === 1 ? "session" : "sessions"}`;
+}
+
 function Analytics({
   habits,
   tasks,
   goals,
   focusSessions,
-  streakFreeze,
   dayResetHour,
   weekStart,
 }: AnalyticsProps) {
   const [timeHorizon, setTimeHorizon] = useState<TimeHorizon>("This Week");
 
-  // Decision Support Analytics
-  const actionableInsights = useMemo(() => {
-    return generateActionableInsights({
+  const dataset = useMemo(() => queryAnalyticsData({
       habits,
       tasks,
       focusSessions,
-      goals,
-    });
-  }, [habits, tasks, focusSessions, goals]);
+      horizon: timeHorizon,
+      weekStart,
+      dayResetHour,
+    }), [habits, tasks, focusSessions, timeHorizon, weekStart, dayResetHour]);
+
+  const actionableInsights = useMemo(
+    () => generateActionableInsights(dataset, goals),
+    [dataset, goals],
+  );
 
   const habitPerformance = useMemo(() => {
-    return getHabitPerformanceDiagnostics(habits);
-  }, [habits]);
+    return getHabitPerformanceDiagnostics(dataset);
+  }, [dataset]);
 
   const timeOfDayInsights = useMemo(() => {
-    return getTimeOfDayInsights(focusSessions);
-  }, [focusSessions]);
+    return getTimeOfDayInsights(dataset.focusSessions);
+  }, [dataset]);
 
   const timeBucketFlexTotal =
-    (timeOfDayInsights.morningMinutes || 1) +
-    (timeOfDayInsights.afternoonMinutes || 1) +
-    (timeOfDayInsights.eveningMinutes || 1) +
-    (timeOfDayInsights.nightMinutes || 1);
+    timeOfDayInsights.morningMinutes +
+    timeOfDayInsights.afternoonMinutes +
+    timeOfDayInsights.eveningMinutes +
+    timeOfDayInsights.nightMinutes;
 
   const weekdayFriction = useMemo(() => {
-    return getWeekdayFrictionMetrics(habits, undefined, tasks);
-  }, [habits, tasks]);
+    return getWeekdayFrictionMetrics(dataset);
+  }, [dataset]);
 
   const goalFocusAllocation = useMemo(() => {
-    return getGoalFocusAllocation(focusSessions, goals);
-  }, [focusSessions, goals]);
-
-  const filteredSessions = useMemo(() => {
-    const now = new Date();
-    let startDate: Date;
-
-    switch (timeHorizon) {
-      case "This Week":
-        startDate = getWeekStart(now, weekStart);
-        break;
-      case "This Month":
-        startDate = getMonthStart(now);
-        break;
-      case "Last 30 Days":
-        startDate = getDaysAgo(30);
-        break;
-      case "All Time":
-        return focusSessions;
-    }
-
-    return focusSessions.filter((session) => {
-      const sessionDate = new Date(session.timestamp);
-      return sessionDate >= startDate && sessionDate <= now;
-    });
-  }, [focusSessions, timeHorizon, weekStart]);
-
-
+    return getGoalFocusAllocation(dataset.focusSessions, goals);
+  }, [dataset, goals]);
 
   const habitStats = useMemo(() => {
-    const habitMinutes: Record<number, number> = {};
-    
-    filteredSessions.forEach((session) => {
-      const habit = habits.find((h) => h.name === session.habitName);
-      if (habit) {
-        habitMinutes[habit.id] = (habitMinutes[habit.id] || 0) + session.durationMinutes;
-      }
-    });
+    const habitMinutes = getHabitFocusMinutes(dataset);
+    const habitCompletions = new Map<number, number>();
 
-    return habits
+    for (const occurrence of dataset.habitOccurrences) {
+      if (occurrence.completed) {
+        habitCompletions.set(occurrence.habit.id, (habitCompletions.get(occurrence.habit.id) ?? 0) + 1);
+      }
+    }
+
+    return dataset.habits
       .map((habit) => ({
         ...habit,
-        totalMinutes: habitMinutes[habit.id] || 0,
-        streak: calculateStreak(habit, streakFreeze, dayResetHour),
+        totalMinutes: habitMinutes.get(habit.id) ?? 0,
+        completionCount: habitCompletions.get(habit.id) ?? 0,
+        streak: getHabitPeriodStreak(dataset, habit),
       }))
       .filter((habit) => habit.totalMinutes > 0)
       .sort((a, b) => b.totalMinutes - a.totalMinutes)
       .slice(0, 5);
-  }, [filteredSessions, habits, streakFreeze, dayResetHour]);
+  }, [dataset]);
 
-  const heatmapData = useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDay = (new Date(year, month, 1).getDay() - (weekStart === "Monday" ? 1 : 0) + 7) % 7;
-
-    const dailyMinutes: Record<string, number> = {};
-    
-    focusSessions.forEach((session) => {
-      const dateKey = getDateKey(new Date(session.timestamp));
-      dailyMinutes[dateKey] = (dailyMinutes[dateKey] || 0) + session.durationMinutes;
-    });
-
-    const maxMinutes = Math.max(...Object.values(dailyMinutes), 1);
-
-    const cells = [];
-    for (let i = 0; i < firstDay; i++) {
-      cells.push({ type: "empty" as const });
-    }
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateKey = getDateKey(new Date(year, month, day));
-      const minutes = dailyMinutes[dateKey] || 0;
-      const intensity = minutes > 0 ? Math.min(4, Math.ceil((minutes / maxMinutes) * 4)) : 0;
-      cells.push({ type: "day" as const, day, minutes, intensity });
-    }
-
-    return { cells, year, month };
-  }, [focusSessions, weekStart]);
+  const heatmapData = useMemo(
+    () => getFocusHeatmapData(dataset, weekStart, dayResetHour),
+    [dataset, weekStart, dayResetHour],
+  );
 
   const weekdayLabels = Array.from({ length: 7 }, (_, index) =>
     WEEKDAYS[((weekStart === "Monday" ? 1 : 0) + index) % 7],
@@ -678,7 +633,7 @@ function Analytics({
               </span>
               {habitPerformance.strongestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  No habits at 80% completion or above yet.
+                  {habitPerformance.hasData ? "No habits at 80% completion or above in this period." : "No reliable data for this period"}
                 </p>
               ) : (
                 habitPerformance.strongestHabits.slice(0, 3).map((habit, index) => (
@@ -701,7 +656,7 @@ function Analytics({
               </span>
               {habitPerformance.weakestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  All habits performing well
+                  {habitPerformance.hasData ? "No habits under 50% in this period." : "No reliable data for this period"}
                 </p>
               ) : (
                 habitPerformance.weakestHabits.slice(0, 3).map((habit, index) => (
@@ -723,14 +678,18 @@ function Analytics({
           </div>
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-color)" }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Overall Completion Rate</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <span style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)" }}>
-                {habitPerformance.overallCompletionRate}%
-              </span>
-              <div style={{ flex: 1, ...styles.progressBar }}>
-                <div style={{ ...styles.progressFill, width: `${habitPerformance.overallCompletionRate}%` }} />
+            {habitPerformance.overallCompletionRate === null ? (
+              <p style={styles.empty}>No reliable data for this period</p>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                <span style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)" }}>
+                  {habitPerformance.overallCompletionRate}%
+                </span>
+                <div style={{ flex: 1, ...styles.progressBar }}>
+                  <div style={{ ...styles.progressFill, width: `${habitPerformance.overallCompletionRate}%` }} />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -738,16 +697,20 @@ function Analytics({
         <div style={styles.panel}>
           <h3 style={styles.panelTitle}>
             <Clock size={18} />
-            Peak Focus Window
+            Most Focused Time
           </h3>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-            Your most productive time is <strong style={{ color: "var(--text-primary)" }}>{timeOfDayInsights.peakFocusWindow}</strong>
-          </p>
-          <div style={styles.timeBucketBar}>
+          {!timeOfDayInsights.peakFocusWindow ? (
+            <p style={styles.empty}>No reliable data for this period</p>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                You logged the most focus minutes during <strong style={{ color: "var(--text-primary)" }}>{timeOfDayInsights.peakFocusWindow}</strong> hours.
+              </p>
+              <div style={styles.timeBucketBar}>
             <div
               style={{
                 ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.morningMinutes || 1,
+                flex: timeOfDayInsights.morningMinutes || 0.001,
                 background: timeOfDayInsights.peakFocusWindow === "Morning" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
               }}
             >
@@ -758,7 +721,7 @@ function Analytics({
             <div
               style={{
                 ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.afternoonMinutes || 1,
+                flex: timeOfDayInsights.afternoonMinutes || 0.001,
                 background: timeOfDayInsights.peakFocusWindow === "Afternoon" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
               }}
             >
@@ -769,7 +732,7 @@ function Analytics({
             <div
               style={{
                 ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.eveningMinutes || 1,
+                flex: timeOfDayInsights.eveningMinutes || 0.001,
                 background: timeOfDayInsights.peakFocusWindow === "Evening" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
               }}
             >
@@ -780,7 +743,7 @@ function Analytics({
             <div
               style={{
                 ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.nightMinutes || 1,
+                flex: timeOfDayInsights.nightMinutes || 0.001,
                 background: timeOfDayInsights.peakFocusWindow === "Night" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
               }}
             >
@@ -792,21 +755,23 @@ function Analytics({
           <div style={styles.timeBucketLegend}>
             <div style={styles.timeBucketLegendItem}>
               <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Morning" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Morning
+              Morning ({formatSessionCount(timeOfDayInsights.morningSessions)})
             </div>
             <div style={styles.timeBucketLegendItem}>
               <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Afternoon" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Afternoon
+              Afternoon ({formatSessionCount(timeOfDayInsights.afternoonSessions)})
             </div>
             <div style={styles.timeBucketLegendItem}>
               <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Evening" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Evening
+              Evening ({formatSessionCount(timeOfDayInsights.eveningSessions)})
             </div>
             <div style={styles.timeBucketLegendItem}>
               <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Night" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Night
+              Night ({formatSessionCount(timeOfDayInsights.nightSessions)})
             </div>
           </div>
+            </>
+          )}
         </div>
 
         {/* Goal Focus Allocation Widget */}
@@ -816,7 +781,7 @@ function Analytics({
             Goal Focus Allocation
           </h3>
           {goalFocusAllocation.allocations.length === 0 && goalFocusAllocation.unlinkedMinutes === 0 ? (
-            <p style={styles.empty}>Complete focus sessions to see goal allocation</p>
+            <p style={styles.empty}>No reliable data for this period</p>
           ) : (
             <div style={styles.performanceSection}>
               {goalFocusAllocation.allocations.map((allocation, index) => (
@@ -862,7 +827,7 @@ function Analytics({
           {weekdayFriction.highestFrictionDay ? (
             <div>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-                Highest concentration of incomplete items
+                Highest concentration of incomplete items.
               </p>
               <div style={styles.frictionDayBadge}>
                 <AlertTriangle size={14} />
@@ -879,12 +844,12 @@ function Analytics({
                     saturday: weekdayFriction.saturday,
                     sunday: weekdayFriction.sunday,
                   };
-                  return `${dayMap[weekdayFriction.highestFrictionDay.toLowerCase()].frictionRate.toFixed(0)}% friction rate`;
+                  return `${dayMap[weekdayFriction.highestFrictionDay.toLowerCase()].frictionRate.toFixed(0)}% Friction Rate`;
                 })()}
               </div>
             </div>
           ) : (
-            <p style={styles.empty}>Complete more habits and tasks to identify friction patterns</p>
+            <p style={styles.empty}>No reliable data for this period.</p>
           )}
         </div>
       </div>
@@ -896,7 +861,7 @@ function Analytics({
             Top Habits
           </h3>
           {habitStats.length === 0 ? (
-            <p style={styles.empty}>No habit data yet</p>
+            <p style={styles.empty}>No reliable data for this period</p>
           ) : (
             <div>
               {habitStats.map((habit, index) => (
@@ -914,7 +879,7 @@ function Analytics({
                       {habit.isArchived && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>(Archived)</span>}
                     </span>
                     <span style={styles.habitMeta}>
-                      {habit.completedDates.length} Completions
+                      {habit.completionCount} Period Completions
                     </span>
                   </div>
                   <div style={styles.habitStats}>
@@ -938,32 +903,36 @@ function Analytics({
           <Calendar size={18} />
           Focus Intensity Heatmap
         </h3>
-        <div style={styles.heatmapGrid}>
-          {weekdayLabels.map((day) => (
-            <div key={day} style={styles.heatmapDay}>
-              {day}
-            </div>
-          ))}
-          {heatmapData.cells.map((cell, index) => {
-            if (cell.type === "empty") {
-              return <div key={index} style={styles.heatmapCell} />;
-            }
-            return (
-              <div
-                key={index}
-                style={{
-                  ...styles.heatmapCell,
-                  background: getHeatmapColor(cell.intensity),
-                  color:
-                    cell.intensity > 3 ? "var(--bg-primary)" : cell.intensity > 0 ? "var(--text-primary)" : "var(--text-dim)",
-                }}
-                title={`${cell.day}: ${formatHours(cell.minutes)}`}
-              >
-                {cell.day}
+        {!heatmapData.hasData ? (
+          <p style={styles.empty}>No reliable data for this period</p>
+        ) : (
+          <div style={styles.heatmapGrid}>
+            {weekdayLabels.map((day) => (
+              <div key={day} style={styles.heatmapDay}>
+                {day}
               </div>
-            );
-          })}
-        </div>
+            ))}
+            {heatmapData.cells.map((cell, index) => {
+              if (cell.type === "empty") {
+                return <div key={index} style={styles.heatmapCell} />;
+              }
+              return (
+                <div
+                  key={index}
+                  style={{
+                    ...styles.heatmapCell,
+                    background: getHeatmapColor(cell.intensity),
+                    color:
+                      cell.intensity > 3 ? "var(--bg-primary)" : cell.intensity > 0 ? "var(--text-primary)" : "var(--text-dim)",
+                  }}
+                  title={`${cell.dateKey}: ${formatHours(cell.minutes)}`}
+                >
+                  {cell.day}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

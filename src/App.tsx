@@ -689,6 +689,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 500,
   },
+  settingsSubheading: {
+    margin: "8px 0 0",
+    color: "var(--text-primary)",
+    fontSize: 13,
+    fontWeight: 600,
+  },
   settingsDescription: {
     display: "block",
     marginTop: 4,
@@ -917,7 +923,7 @@ function App() {
 
   const [appSettings, setAppSettings] = useState<AppSettings>(loadAppSettings);
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [view, setView] = useState<View>("Habits");
+  const [view, setView] = useState<View>("Today");
   const [selectedDateKey, setSelectedDateKey] = useState(() =>
     getTodayKey(appSettings.dayResetHour),
   );
@@ -2859,7 +2865,7 @@ function App() {
                     <span style={styles.settingsDescription}>Choose your preferred color theme.</span>
                   </div>
                   <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance theme">
-                    {(["dark", "light"] as Theme[]).map((theme) => (
+                    {(["light", "dark"] as Theme[]).map((theme) => (
                       <button
                         key={theme}
                         type="button"
@@ -3021,9 +3027,9 @@ function App() {
                       }}
                       aria-label="Quick adjust step size"
                     >
-                      <option value={1}>1 minute</option>
-                      <option value={5}>5 minutes</option>
-                      <option value={10}>10 minutes</option>
+                      <option value={1}>1 Minute</option>
+                      <option value={5}>5 Minutes</option>
+                      <option value={10}>10 Minutes</option>
                       <option value="custom">Custom</option>
                     </select>
                     {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
@@ -3046,7 +3052,7 @@ function App() {
                       />
                     )}
                     {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
-                      <span style={styles.durationLabel}>min</span>
+                      <span style={styles.durationLabel}>Minutes</span>
                     )}
                   </div>
                 </div>
@@ -3128,11 +3134,11 @@ function App() {
                   </select>
                 </div>
                 <div>
-                  <span style={styles.settingsLabel}>Allow Intelligent Notifications For</span>
+                  <h3 style={styles.settingsSubheading}>Allow Intelligent Notifications For:</h3>
                 </div>
                 {([
-                  ["habitReminders", "Habit timing reminders"],
-                  ["incompleteHabitReminders", "Incomplete habit focus suggestions"],
+                  ["habitReminders", "Habit Timing Reminders"],
+                  ["incompleteHabitReminders", "Incomplete Habit Focus Suggestions"],
                 ] as const).map(([setting, label]) => {
                   const enabled = appSettings[setting];
                   return (

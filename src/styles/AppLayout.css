@@ -477,8 +477,8 @@
 .habit-icon-group button:hover,
 .today-focus-button:hover,
 .program-action-button:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: #ffffff !important;
+  background: var(--button-hover-bg) !important;
+  color: var(--text-primary) !important;
   border-radius: 8px;
 }
 
@@ -703,7 +703,7 @@
 
 .today-quick-action:hover {
   background: var(--bg-raised) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: var(--button-hover-border) !important;
   color: var(--text-primary) !important;
 }
 

@@ -81,7 +81,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
   archivedProgramCard: {
-    background: "rgba(23, 23, 23, 0.4)",
+    background: "var(--bg-completed)",
     opacity: 0.7,
   },
   programHeader: {

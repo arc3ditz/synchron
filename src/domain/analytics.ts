@@ -1,13 +1,181 @@
-import type { Habit, Task, Goal, FocusSessionRecord } from "../types";
+import type { Habit, Task, Goal, FocusSessionRecord, TimeHorizon, WeekStart } from "../types";
+import {
+  getDateKey,
+  getHabitDateKey,
+  getMonthStart,
+  getWeekStart,
+  isHabitScheduledOnDate,
+  shiftDateKey,
+} from "../utils/dates.ts";
 
 // Time bucket types
 type TimeBucket = "Morning" | "Afternoon" | "Evening" | "Night";
 type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
 
+export interface AnalyticsDateRange {
+  horizon: TimeHorizon;
+  startDateKey: string;
+  endDateKey: string;
+}
+
+export interface HabitOccurrence {
+  habit: Habit;
+  dateKey: string;
+  completed: boolean;
+}
+
+export interface TaskOccurrence {
+  task: Task;
+  dateKey: string;
+}
+
+export interface AnalyticsDataset {
+  range: AnalyticsDateRange;
+  habits: Habit[];
+  focusSessions: FocusSessionRecord[];
+  taskOccurrences: TaskOccurrence[];
+  habitOccurrences: HabitOccurrence[];
+}
+
+export interface AnalyticsQueryParams {
+  habits: Habit[];
+  tasks: Task[];
+  focusSessions: FocusSessionRecord[];
+  horizon: TimeHorizon;
+  weekStart: WeekStart;
+  dayResetHour: number;
+  now?: Date;
+}
+
+export function queryAnalyticsData({
+  habits,
+  tasks,
+  focusSessions,
+  horizon,
+  weekStart,
+  dayResetHour,
+  now = new Date(),
+}: AnalyticsQueryParams): AnalyticsDataset {
+  const endDateKey = getHabitDateKey(now, dayResetHour);
+  const today = parseAnalyticsDateKey(endDateKey);
+  let startDateKey: string;
+
+  switch (horizon) {
+    case "This Week":
+      startDateKey = getDateKey(getWeekStart(today, weekStart));
+      break;
+    case "This Month":
+      startDateKey = getDateKey(getMonthStart(today));
+      break;
+    case "Last 30 Days":
+      startDateKey = shiftDateKey(endDateKey, -29);
+      break;
+    case "All Time": {
+      const historicalDates = [
+        ...habits.filter((habit) => !habit.isArchived).flatMap((habit) => {
+          const start = getHabitStartDate(habit);
+          const completions = (habit.completedDates ?? [])
+            .map(readLocalDateKey)
+            .filter(isDateKey)
+            .filter((dateKey) => dateKey <= endDateKey && (!start || dateKey >= start));
+          return [start, ...completions]
+            .filter(isDateKey);
+        }),
+        ...tasks.map((task) => readLocalDateKey(task.dueDate)).filter(isDateKey),
+        ...focusSessions
+          .filter(isValidFocusSession)
+          .map((session) => getHabitDateKey(new Date(session.timestamp), dayResetHour)),
+      ].filter(isDateKey).filter((dateKey) => dateKey <= endDateKey);
+      startDateKey = historicalDates.sort()[0] ?? endDateKey;
+      break;
+    }
+  }
+
+  const range = { horizon, startDateKey, endDateKey };
+  const inRange = (dateKey: string) => dateKey >= startDateKey && dateKey <= endDateKey;
+  const activeHabits = habits.filter((habit) => !habit.isArchived);
+
+  const habitOccurrences: HabitOccurrence[] = [];
+  for (const habit of activeHabits) {
+    const habitStart = getHabitStartDate(habit);
+    if (!habitStart || habitStart > endDateKey) continue;
+
+    let firstDate = habitStart > startDateKey ? habitStart : startDateKey;
+    let lastDate = endDateKey;
+    if (habit.type === "Challenge") {
+      const challengeStart = readLocalDateKey(habit.startDate);
+      if (!isDateKey(challengeStart) || !Number.isInteger(habit.durationDays) || (habit.durationDays ?? 0) <= 0) continue;
+      const challengeEnd = shiftDateKey(challengeStart, habit.durationDays! - 1);
+      if (firstDate < challengeStart) firstDate = challengeStart;
+      if (lastDate > challengeEnd) lastDate = challengeEnd;
+    }
+    if (firstDate > lastDate) continue;
+
+    const completedDates = new Set((habit.completedDates ?? []).map(readLocalDateKey).filter(isDateKey));
+    for (let dateKey = firstDate; dateKey <= lastDate; dateKey = shiftDateKey(dateKey, 1)) {
+      if (isHabitScheduledOnDate(habit, dateKey)) {
+        habitOccurrences.push({ habit, dateKey, completed: completedDates.has(dateKey) });
+      }
+    }
+  }
+
+  const taskOccurrences = tasks.flatMap((task) => {
+    const dateKey = readLocalDateKey(task.dueDate);
+    return isDateKey(dateKey) && inRange(dateKey) ? [{ task, dateKey }] : [];
+  });
+
+  const filteredSessions = focusSessions.filter((session) => {
+    if (!isValidFocusSession(session)) return false;
+    const dateKey = getHabitDateKey(new Date(session.timestamp), dayResetHour);
+    return inRange(dateKey);
+  });
+
+  return { range, habits: activeHabits, focusSessions: filteredSessions, taskOccurrences, habitOccurrences };
+}
+
+function getHabitStartDate(habit: Habit): string | undefined {
+  const createdDate = readLocalDateKey(habit.createdAt);
+  const challengeStart = habit.type === "Challenge" ? readLocalDateKey(habit.startDate) : undefined;
+  if (habit.type === "Challenge" && isDateKey(challengeStart)) {
+    return isDateKey(createdDate) && createdDate > challengeStart ? createdDate : challengeStart;
+  }
+  return isDateKey(createdDate) ? createdDate : undefined;
+}
+
+function isValidFocusSession(session: FocusSessionRecord): boolean {
+  return Number.isFinite(session.timestamp) &&
+    Number.isFinite(new Date(session.timestamp).getTime()) &&
+    Number.isFinite(session.durationMinutes) &&
+    session.durationMinutes > 0;
+}
+
+function readLocalDateKey(value?: string): string | undefined {
+  const match = typeof value === "string" ? /^(\d{4}-\d{2}-\d{2})/.exec(value) : null;
+  return match?.[1];
+}
+
+function isDateKey(value: string | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  return getDateKey(new Date(year, month - 1, day)) === value;
+}
+
+function parseAnalyticsDateKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export interface HabitPerformanceDiagnostics {
+  habitRates: Array<{
+    habit: Habit;
+    expectedOccurrences: number;
+    completedOccurrences: number;
+    completionRate: number;
+  }>;
   strongestHabits: Habit[];
   weakestHabits: Habit[];
-  overallCompletionRate: number;
+  overallCompletionRate: number | null;
+  hasData: boolean;
 }
 
 export interface TimeOfDayInsights {
@@ -15,18 +183,30 @@ export interface TimeOfDayInsights {
   afternoonMinutes: number;
   eveningMinutes: number;
   nightMinutes: number;
-  peakFocusWindow: TimeBucket;
+  morningSessions: number;
+  afternoonSessions: number;
+  eveningSessions: number;
+  nightSessions: number;
+  peakFocusWindow: TimeBucket | null;
+}
+
+interface WeekdayMetric {
+  completed: number;
+  missed: number;
+  frictionRate: number;
+  total: number;
 }
 
 export interface WeekdayFrictionMetrics {
-  monday: { completed: number; missed: number; frictionRate: number };
-  tuesday: { completed: number; missed: number; frictionRate: number };
-  wednesday: { completed: number; missed: number; frictionRate: number };
-  thursday: { completed: number; missed: number; frictionRate: number };
-  friday: { completed: number; missed: number; frictionRate: number };
-  saturday: { completed: number; missed: number; frictionRate: number };
-  sunday: { completed: number; missed: number; frictionRate: number };
+  monday: WeekdayMetric;
+  tuesday: WeekdayMetric;
+  wednesday: WeekdayMetric;
+  thursday: WeekdayMetric;
+  friday: WeekdayMetric;
+  saturday: WeekdayMetric;
+  sunday: WeekdayMetric;
   highestFrictionDay: Weekday | null;
+  hasData: boolean;
 }
 
 export interface GoalFocusAllocation {
@@ -40,6 +220,15 @@ export interface GoalFocusAllocation {
   unlinkedPercentage: number;
 }
 
+export type FocusHeatmapCell =
+  | { type: "empty" }
+  | { type: "day"; day: number; dateKey: string; minutes: number; intensity: number };
+
+export interface FocusHeatmapData {
+  cells: FocusHeatmapCell[];
+  hasData: boolean;
+}
+
 export interface ActionableInsight {
   id: string;
   type: "positive" | "warning" | "actionable";
@@ -47,230 +236,93 @@ export interface ActionableInsight {
   description: string;
 }
 
-/**
- * Calculates habit completion rates over each habit's active lifetime.
- * @param habits - Array of habits to analyze
- * @param logs - Array of habit completion logs (can be derived from habit.completedDates)
- * @returns Performance diagnostics with strongest/weakest habits and overall rate
- */
-export function getHabitPerformanceDiagnostics(
-  habits: Habit[],
-  logs?: string[][],
-): HabitPerformanceDiagnostics {
-  void logs;
-
-  if (!habits || habits.length === 0) {
-    return {
-      strongestHabits: [],
-      weakestHabits: [],
-      overallCompletionRate: 0,
-    };
+export function getHabitPerformanceDiagnostics(dataset: AnalyticsDataset): HabitPerformanceDiagnostics {
+  const counts = new Map<number, { habit: Habit; expected: number; completed: number }>();
+  for (const occurrence of dataset.habitOccurrences) {
+    const current = counts.get(occurrence.habit.id) ?? { habit: occurrence.habit, expected: 0, completed: 0 };
+    current.expected++;
+    if (occurrence.completed) current.completed++;
+    counts.set(occurrence.habit.id, current);
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayKey = toLocalDateKey(today);
-
-  let totalExpectedCompletions = 0;
-  let totalActualCompletions = 0;
-  const habitRates: Array<{ habit: Habit; rate: number }> = [];
-
-  for (const habit of habits) {
-    if (habit.isArchived) continue;
-
-    const completedDates = new Set(habit.completedDates || []);
-    const startDateKey = getHabitActiveStartDate(habit, todayKey);
-    const startDate = parseLocalDateKey(startDateKey);
-
-    let expectedDays = 0;
-    const checkDate = new Date(today);
-    while (checkDate >= startDate) {
-      const dayName = checkDate.toLocaleDateString("en-US", { weekday: "long" });
-      if (isHabitScheduledForDay(habit, dayName)) expectedDays++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    if (expectedDays === 0) continue;
-
-    const completionsInWindow = Array.from(completedDates).filter(
-      (dateKey) => dateKey >= startDateKey && dateKey <= todayKey,
-    ).length;
-
-    const rate = expectedDays > 0 ? (completionsInWindow / expectedDays) * 100 : 0;
-    
-    totalExpectedCompletions += expectedDays;
-    totalActualCompletions += completionsInWindow;
-    habitRates.push({ habit, rate });
-  }
-
-  const overallCompletionRate = totalExpectedCompletions > 0 
-    ? (totalActualCompletions / totalExpectedCompletions) * 100 
-    : 0;
-
-  const strongestHabits = habitRates
-    .filter((h) => h.rate >= 80)
-    .map((h) => h.habit);
-
-  const weakestHabits = habitRates
-    .filter((h) => h.rate < 50)
-    .map((h) => h.habit);
+  const habitRates = [...counts.values()].map(({ habit, expected, completed }) => ({
+    habit,
+    expectedOccurrences: expected,
+    completedOccurrences: completed,
+    completionRate: (completed / expected) * 100,
+  }));
+  const totalExpected = habitRates.reduce((sum, item) => sum + item.expectedOccurrences, 0);
+  const totalCompleted = habitRates.reduce((sum, item) => sum + item.completedOccurrences, 0);
 
   return {
-    strongestHabits,
-    weakestHabits,
-    overallCompletionRate: Math.round(overallCompletionRate),
+    habitRates,
+    strongestHabits: habitRates.filter((item) => item.completionRate >= 80).map((item) => item.habit),
+    weakestHabits: habitRates.filter((item) => item.completionRate < 50).map((item) => item.habit),
+    overallCompletionRate: totalExpected > 0 ? Math.round((totalCompleted / totalExpected) * 100) : null,
+    hasData: totalExpected > 0,
   };
 }
 
-/**
- * Groups focus sessions into time buckets and identifies peak focus window.
- * @param focusSessions - Array of focus session records
- * @returns Time distribution and peak window
- */
-export function getTimeOfDayInsights(
-  focusSessions: FocusSessionRecord[],
-): TimeOfDayInsights {
-  if (!focusSessions || focusSessions.length === 0) {
-    return {
-      morningMinutes: 0,
-      afternoonMinutes: 0,
-      eveningMinutes: 0,
-      nightMinutes: 0,
-      peakFocusWindow: "Morning",
-    };
-  }
-
-  let morningMinutes = 0;
-  let afternoonMinutes = 0;
-  let eveningMinutes = 0;
-  let nightMinutes = 0;
+export function getTimeOfDayInsights(focusSessions: FocusSessionRecord[]): TimeOfDayInsights {
+  const totals: Record<TimeBucket, { minutes: number; sessions: number }> = {
+    Morning: { minutes: 0, sessions: 0 },
+    Afternoon: { minutes: 0, sessions: 0 },
+    Evening: { minutes: 0, sessions: 0 },
+    Night: { minutes: 0, sessions: 0 },
+  };
 
   for (const session of focusSessions) {
-    const hour = new Date(session.timestamp).getHours();
-    const bucket = getTimeBucket(hour);
-    
-    switch (bucket) {
-      case "Morning":
-        morningMinutes += session.durationMinutes;
-        break;
-      case "Afternoon":
-        afternoonMinutes += session.durationMinutes;
-        break;
-      case "Evening":
-        eveningMinutes += session.durationMinutes;
-        break;
-      case "Night":
-        nightMinutes += session.durationMinutes;
-        break;
-    }
+    const bucket = getTimeBucket(new Date(session.timestamp).getHours());
+    totals[bucket].minutes += session.durationMinutes;
+    totals[bucket].sessions++;
   }
 
-  const buckets = [
-    { name: "Morning" as TimeBucket, minutes: morningMinutes },
-    { name: "Afternoon" as TimeBucket, minutes: afternoonMinutes },
-    { name: "Evening" as TimeBucket, minutes: eveningMinutes },
-    { name: "Night" as TimeBucket, minutes: nightMinutes },
-  ];
-
-  const peakFocusWindow = buckets.reduce((max, current) => 
-    current.minutes > max.minutes ? current : max
-  ).name;
+  const peak = (Object.entries(totals) as Array<[TimeBucket, { minutes: number; sessions: number }]>)
+    .filter(([, total]) => total.sessions > 0)
+    .reduce<[TimeBucket, { minutes: number; sessions: number }] | null>(
+      (current, item) => !current || item[1].minutes > current[1].minutes ? item : current,
+      null,
+    );
 
   return {
-    morningMinutes,
-    afternoonMinutes,
-    eveningMinutes,
-    nightMinutes,
-    peakFocusWindow,
+    morningMinutes: totals.Morning.minutes,
+    afternoonMinutes: totals.Afternoon.minutes,
+    eveningMinutes: totals.Evening.minutes,
+    nightMinutes: totals.Night.minutes,
+    morningSessions: totals.Morning.sessions,
+    afternoonSessions: totals.Afternoon.sessions,
+    eveningSessions: totals.Evening.sessions,
+    nightSessions: totals.Night.sessions,
+    peakFocusWindow: peak?.[0] ?? null,
   };
 }
 
-/**
- * Calculates friction/failure rates per weekday based on habit completions and task completions.
- * @param habits - Array of habits
- * @param logs - Optional habit completion logs (can use habit.completedDates)
- * @param tasks - Array of tasks
- * @returns Friction metrics per weekday and highest friction day
- */
-export function getWeekdayFrictionMetrics(
-  habits: Habit[],
-  _logs?: string[][],
-  tasks?: Task[],
-): WeekdayFrictionMetrics {
+export function getWeekdayFrictionMetrics(dataset: AnalyticsDataset): WeekdayFrictionMetrics {
   const weekdays: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  
-  const metrics: Record<Weekday, { completed: number; missed: number; frictionRate: number }> = {
-    Monday: { completed: 0, missed: 0, frictionRate: 0 },
-    Tuesday: { completed: 0, missed: 0, frictionRate: 0 },
-    Wednesday: { completed: 0, missed: 0, frictionRate: 0 },
-    Thursday: { completed: 0, missed: 0, frictionRate: 0 },
-    Friday: { completed: 0, missed: 0, frictionRate: 0 },
-    Saturday: { completed: 0, missed: 0, frictionRate: 0 },
-    Sunday: { completed: 0, missed: 0, frictionRate: 0 },
-  };
+  const metrics = Object.fromEntries(weekdays.map((day) => [day, {
+    completed: 0,
+    missed: 0,
+    frictionRate: 0,
+    total: 0,
+  }])) as Record<Weekday, WeekdayMetric>;
 
-  // Analyze habit completions by weekday
-  if (habits && habits.length > 0) {
-    for (const habit of habits) {
-      if (habit.isArchived) continue;
-
-      const completedDates = habit.completedDates || [];
-      const completedSet = new Set(completedDates);
-
-      // For each completion date, check if it was scheduled
-      for (const dateStr of completedDates) {
-        const date = new Date(dateStr);
-        const dayName = date.toLocaleDateString("en-US", { weekday: "long" }) as Weekday;
-        
-        if (isHabitScheduledForDay(habit, dayName)) {
-          metrics[dayName].completed++;
-        }
-      }
-
-      // Estimate missed completions (simplified: look at last 30 days)
-      const today = new Date();
-      for (let i = 0; i < 30; i++) {
-        const checkDate = new Date(today);
-        checkDate.setDate(today.getDate() - i);
-        const dateStr = checkDate.toISOString().split("T")[0];
-        const dayName = checkDate.toLocaleDateString("en-US", { weekday: "long" }) as Weekday;
-
-        if (isHabitScheduledForDay(habit, dayName) && !completedSet.has(dateStr)) {
-          metrics[dayName].missed++;
-        }
-      }
-    }
+  for (const occurrence of dataset.habitOccurrences) {
+    const metric = metrics[getWeekday(occurrence.dateKey)];
+    if (occurrence.completed) metric.completed++;
+    else metric.missed++;
+  }
+  for (const { task, dateKey } of dataset.taskOccurrences) {
+    const metric = metrics[getWeekday(dateKey)];
+    if (task.completed) metric.completed++;
+    else metric.missed++;
   }
 
-  // Analyze task completions by weekday
-  if (tasks && tasks.length > 0) {
-    for (const task of tasks) {
-      if (task.dueDate) {
-        const dueDate = new Date(task.dueDate);
-        const dayName = dueDate.toLocaleDateString("en-US", { weekday: "long" }) as Weekday;
-
-        if (task.completed) {
-          metrics[dayName].completed++;
-        } else {
-          // Only count as missed if due date has passed
-          if (dueDate < new Date()) {
-            metrics[dayName].missed++;
-          }
-        }
-      }
-    }
-  }
-
-  // Calculate friction rates
   let highestFrictionDay: Weekday | null = null;
-  let highestFrictionRate = -1;
-
   for (const day of weekdays) {
-    const total = metrics[day].completed + metrics[day].missed;
-    metrics[day].frictionRate = total > 0 ? (metrics[day].missed / total) * 100 : 0;
-
-    if (metrics[day].frictionRate > highestFrictionRate && total > 0) {
-      highestFrictionRate = metrics[day].frictionRate;
+    const metric = metrics[day];
+    metric.total = metric.completed + metric.missed;
+    metric.frictionRate = metric.total > 0 ? (metric.missed / metric.total) * 100 : 0;
+    if (metric.total > 0 && (!highestFrictionDay || metric.frictionRate > metrics[highestFrictionDay].frictionRate)) {
       highestFrictionDay = day;
     }
   }
@@ -284,7 +336,74 @@ export function getWeekdayFrictionMetrics(
     saturday: metrics.Saturday,
     sunday: metrics.Sunday,
     highestFrictionDay,
+    hasData: weekdays.some((day) => metrics[day].total > 0),
   };
+}
+
+export function getHabitPeriodStreak(
+  dataset: AnalyticsDataset,
+  habit: Habit,
+): number {
+  const occurrences = dataset.habitOccurrences.filter((item) => item.habit.id === habit.id);
+  const byDate = new Map(occurrences.map((item) => [item.dateKey, item.completed]));
+  let cursor = dataset.range.endDateKey;
+  if (byDate.has(cursor) && !byDate.get(cursor)) cursor = shiftDateKey(cursor, -1);
+
+  let streak = 0;
+  while (cursor >= dataset.range.startDateKey) {
+    if (byDate.has(cursor)) {
+      if (!byDate.get(cursor)) break;
+      streak++;
+    }
+    cursor = shiftDateKey(cursor, -1);
+  }
+  return streak;
+}
+
+export function getFocusHeatmapData(
+  dataset: AnalyticsDataset,
+  weekStart: WeekStart,
+  dayResetHour: number,
+): FocusHeatmapData {
+  const dailyMinutes: Record<string, number> = {};
+  for (const session of dataset.focusSessions) {
+    const dateKey = getHabitDateKey(new Date(session.timestamp), dayResetHour);
+    dailyMinutes[dateKey] = (dailyMinutes[dateKey] ?? 0) + session.durationMinutes;
+  }
+
+  const maxMinutes = Object.values(dailyMinutes).reduce((max, minutes) => Math.max(max, minutes), 0);
+  const [year, month, day] = dataset.range.startDateKey.split("-").map(Number);
+  const firstDay = (new Date(year, month - 1, day).getDay() - (weekStart === "Monday" ? 1 : 0) + 7) % 7;
+  const cells: FocusHeatmapCell[] = Array.from({ length: firstDay }, () => ({ type: "empty" }));
+
+  for (
+    let dateKey = dataset.range.startDateKey;
+    dateKey <= dataset.range.endDateKey;
+    dateKey = shiftDateKey(dateKey, 1)
+  ) {
+    const minutes = dailyMinutes[dateKey] ?? 0;
+    const intensity = minutes > 0 && maxMinutes > 0 ? Math.min(4, Math.ceil((minutes / maxMinutes) * 4)) : 0;
+    cells.push({ type: "day", day: Number(dateKey.slice(-2)), dateKey, minutes, intensity });
+  }
+
+  return { cells, hasData: dataset.focusSessions.length > 0 };
+}
+
+export function getHabitFocusMinutes(dataset: AnalyticsDataset): Map<number, number> {
+  const totals = new Map<number, number>();
+  for (const session of dataset.focusSessions) {
+    let habit: Habit | undefined;
+    if (session.habitId !== undefined) {
+      habit = dataset.habits.find((item) => item.id === session.habitId);
+    } else {
+      const matches = dataset.habits.filter((item) => item.name === session.habitName);
+      if (matches.length === 1) habit = matches[0];
+    }
+    if (habit) {
+      totals.set(habit.id, (totals.get(habit.id) ?? 0) + session.durationMinutes);
+    }
+  }
+  return totals;
 }
 
 /**
@@ -301,7 +420,7 @@ export function getGoalFocusAllocation(
     return {
       allocations: [],
       unlinkedMinutes: 0,
-      unlinkedPercentage: 100,
+      unlinkedPercentage: 0,
     };
   }
 
@@ -349,23 +468,11 @@ export function getGoalFocusAllocation(
 }
 
 /**
- * Master function that combines all analytics to generate actionable insights.
- * @param params - Object containing all input data
- * @returns Array of actionable insights for the UI
+ * Builds insights from the same period-scoped dataset displayed by the widgets.
  */
-export function generateActionableInsights(params: {
-  habits: Habit[];
-  habitLogs?: string[][];
-  tasks?: Task[];
-  focusSessions: FocusSessionRecord[];
-  goals: Goal[];
-}): ActionableInsight[] {
+export function generateActionableInsights(dataset: AnalyticsDataset, goals: Goal[]): ActionableInsight[] {
   const insights: ActionableInsight[] = [];
-  const { habits, habitLogs, tasks, focusSessions, goals } = params;
-
-  // Habit performance insights
-  const habitDiagnostics = getHabitPerformanceDiagnostics(habits, habitLogs);
-  
+  const habitDiagnostics = getHabitPerformanceDiagnostics(dataset);
   if (habitDiagnostics.strongestHabits.length > 0) {
     const habitNames = habitDiagnostics.strongestHabits
       .slice(0, 3)
@@ -381,27 +488,26 @@ export function generateActionableInsights(params: {
 
   if (habitDiagnostics.weakestHabits.length > 0) {
     const habit = habitDiagnostics.weakestHabits[0];
+    const rate = habitDiagnostics.habitRates.find((item) => item.habit.id === habit.id)?.completionRate ?? 0;
     insights.push({
       id: "struggling_habit",
       type: "actionable",
       title: "Habit Needs Adjustment",
-      description: `${habit.name} completion is at ${Math.round(habitDiagnostics.overallCompletionRate)}%. Try moving it to your peak focus window or reducing the frequency.`,
+      description: `${habit.name} completion is at ${Math.round(rate)}% for ${dataset.range.horizon.toLowerCase()}. Try reducing its frequency or adjusting the schedule.`,
     });
   }
 
-  // Time of day insights
-  const timeInsights = getTimeOfDayInsights(focusSessions);
-  if (focusSessions.length > 0) {
+  const timeInsights = getTimeOfDayInsights(dataset.focusSessions);
+  if (timeInsights.peakFocusWindow) {
     insights.push({
       id: "peak_time",
       type: "positive",
-      title: "Peak Performance Window",
-      description: `Your focus sessions are most frequent during ${timeInsights.peakFocusWindow} hours. Schedule important tasks during this time.`,
+      title: "Most Focused Time",
+      description: `You logged the most focus minutes during ${timeInsights.peakFocusWindow} hours. Schedule important tasks during this time.`,
     });
   }
 
-  // Weekday friction insights
-  const frictionMetrics = getWeekdayFrictionMetrics(habits, habitLogs, tasks);
+  const frictionMetrics = getWeekdayFrictionMetrics(dataset);
   if (frictionMetrics.highestFrictionDay) {
     const dayMap: Record<Weekday, { completed: number; missed: number; frictionRate: number }> = {
       Monday: frictionMetrics.monday,
@@ -424,7 +530,7 @@ export function generateActionableInsights(params: {
   }
 
   // Goal focus allocation insights
-  const goalAllocation = getGoalFocusAllocation(focusSessions, goals);
+  const goalAllocation = getGoalFocusAllocation(dataset.focusSessions, goals);
   if (goalAllocation.allocations.length > 0) {
     const topGoal = goalAllocation.allocations[0];
     if (topGoal.percentage > 50) {
@@ -447,58 +553,11 @@ export function generateActionableInsights(params: {
   return insights;
 }
 
-// Helper functions
-
-function getHabitActiveStartDate(habit: Habit, todayKey: string): string {
-  const creationDate = habit.createdAt
-    ? toDateKey(habit.createdAt)
-    : undefined;
-  if (creationDate) return creationDate > todayKey ? todayKey : creationDate;
-
-  const firstCompletion = (habit.completedDates || [])
-    .map(toDateKey)
-    .filter((dateKey): dateKey is string => typeof dateKey === "string" && dateKey <= todayKey)
-    .sort()[0];
-  if (firstCompletion) return firstCompletion;
-
-  const challengeStart = habit.startDate ? toDateKey(habit.startDate) : undefined;
-  return challengeStart && challengeStart <= todayKey ? challengeStart : todayKey;
-}
-
-function toDateKey(value: string): string | undefined {
-  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
-  if (!match) return undefined;
-  const parsed = parseLocalDateKey(match[1]);
-  return toLocalDateKey(parsed) === match[1] ? match[1] : undefined;
-}
-
-function parseLocalDateKey(dateKey: string): Date {
+function getWeekday(dateKey: string): Weekday {
   const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function toLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isHabitScheduledForDay(habit: Habit, dayName: string): boolean {
-  const frequency = habit.frequencyType || "daily";
-  
-  switch (frequency) {
-    case "daily":
-      return true;
-    case "weekdays":
-      return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(dayName);
-    case "weekends":
-      return ["Saturday", "Sunday"].includes(dayName);
-    case "custom":
-      return habit.customDays?.includes(dayName) || false;
-    default:
-      return true;
-  }
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][
+    new Date(year, month - 1, day).getDay()
+  ] as Weekday;
 }
 
 function getTimeBucket(hour: number): TimeBucket {
