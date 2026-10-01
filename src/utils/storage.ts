@@ -2,10 +2,11 @@
  * Storage utility functions for localStorage operations
  */
 
-import type { Goal, Milestone, Task, Habit } from "../types";
+import type { Goal, Milestone, Task, Habit, Program } from "../types";
 
 export const STORAGE_KEYS = {
   HABITS: "habits",
+  PROGRAMS: "programs",
   SETTINGS: "appSettings",
   GOALS: "goals",
   TASKS: "tasks",
@@ -92,4 +93,70 @@ export function loadHabits(): Habit[] {
 
 export function saveHabits(habits: Habit[]): void {
   saveStorageData(STORAGE_KEYS.HABITS, habits);
+}
+
+export function loadPrograms(): Program[] {
+  const raw = localStorage.getItem(STORAGE_KEYS.PROGRAMS);
+  if (raw !== null) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isProgram);
+      }
+    } catch {
+      // Recover legacy Programs from habits when the new key is malformed.
+    }
+  }
+
+  const legacyHabits = loadStorageData<Array<Partial<Habit> & { id: number; name: string }>>(
+    STORAGE_KEYS.HABITS,
+    [],
+  );
+  const groupedHabits = new Map<number, Array<Partial<Habit> & { id: number; name: string }>>();
+  if (Array.isArray(legacyHabits)) {
+    legacyHabits.forEach((habit) => {
+      if (typeof habit.programId !== "number") return;
+      const members = groupedHabits.get(habit.programId) ?? [];
+      members.push(habit);
+      groupedHabits.set(habit.programId, members);
+    });
+  }
+
+  const programs: Program[] = [];
+  groupedHabits.forEach((members, id) => {
+    const metadataHabit = members[0];
+    if (
+      typeof metadataHabit.startDate !== "string" ||
+      typeof metadataHabit.durationDays !== "number" ||
+      metadataHabit.durationDays <= 0
+    ) return;
+
+    programs.push({
+      id,
+      name: metadataHabit.name,
+      startDate: metadataHabit.startDate,
+      durationDays: metadataHabit.durationDays,
+      habitIds: members.map((habit) => habit.id),
+    });
+  });
+
+  savePrograms(programs);
+  return programs;
+}
+
+export function savePrograms(programs: Program[]): void {
+  saveStorageData(STORAGE_KEYS.PROGRAMS, programs);
+}
+
+function isProgram(value: unknown): value is Program {
+  if (typeof value !== "object" || value === null) return false;
+  const program = value as Partial<Program>;
+  return (
+    typeof program.id === "number" &&
+    typeof program.name === "string" &&
+    typeof program.startDate === "string" &&
+    typeof program.durationDays === "number" &&
+    Array.isArray(program.habitIds) &&
+    program.habitIds.every((id) => typeof id === "number")
+  );
 }

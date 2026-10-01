@@ -38,7 +38,15 @@ export interface Habit {
   category?: string; // optional Title Case label, e.g. "School"
   scheduledTime?: string; // "HH:MM" format for time blocking
   durationMinutes?: number; // estimated duration in minutes for time blocking
-  programId?: number; // groups habits into a Program (reuses Challenge fields for program metadata)
+  programId?: number;
+}
+
+export interface Program {
+  id: number;
+  name: string;
+  startDate: string;
+  durationDays: number;
+  habitIds: number[];
 }
 
 export interface Summary {

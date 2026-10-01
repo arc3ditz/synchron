@@ -48,6 +48,7 @@ import type {
   Task,
   Summary,
   FocusSessionRecord,
+  Program as ProgramEntity,
 } from "./types";
 import {
   STORAGE_KEYS,
@@ -60,8 +61,20 @@ import {
   loadMilestones,
   saveMilestones,
   saveHabits,
+  loadPrograms,
+  savePrograms,
 } from "./utils/storage";
-import { createGoal, updateGoal, updateGoalStatus, createMilestone, updateMilestone, toggleMilestone, deleteMilestone } from "./domain/goals";
+import {
+  createGoal,
+  updateGoal,
+  updateGoalStatus,
+  createMilestone,
+  updateMilestone,
+  toggleMilestone,
+  deleteMilestone,
+  detachTasksFromDeletedMilestone,
+  disassociateGoalFocusSessions,
+} from "./domain/goals";
 import { createTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
 import {
   getTodayKey,
@@ -77,7 +90,7 @@ import {
   getIntelligentNotification,
   sendIntelligentNotification,
 } from "./domain/notificationLogic";
-import { groupHabitsIntoPrograms, type Program } from "./domain/programLogic";
+import { groupHabitsIntoPrograms, type ProgramView } from "./domain/programLogic";
 
 const DEFAULT_DURATION = 30;
 const DEFAULT_SETTINGS: AppSettings = {
@@ -950,7 +963,7 @@ function App() {
           createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
           goalId: typeof item.goalId === "string" ? item.goalId : undefined,
           priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
-          type: hasValidChallengeFields ? "Challenge" : "Daily",
+          type: item.type === "Challenge" ? "Challenge" : "Daily",
           frequencyType:
             item.frequencyType === "weekdays" ||
             item.frequencyType === "weekends" ||
@@ -975,7 +988,9 @@ function App() {
     };
     return localLoadHabits();
   });
-  const activePrograms = groupHabitsIntoPrograms(habits).filter(
+  const [programs, setPrograms] = useState<ProgramEntity[]>(loadPrograms);
+  const programViews = groupHabitsIntoPrograms(programs, habits, appSettings.dayResetHour);
+  const activePrograms = programViews.filter(
     (program) => program.state === "Active" && program.habits.some((habit) => !habit.isArchived),
   );
   const [goals, setGoals] = useState<Goal[]>(loadGoals);
@@ -1020,7 +1035,7 @@ function App() {
   const [editingCustomCategory, setEditingCustomCategory] = useState<string | null>(null);
   const [customCategoryDraft, setCustomCategoryDraft] = useState("");
   const [categoryPendingDeletion, setCategoryPendingDeletion] = useState<string | null>(null);
-  const [programPendingDeletion, setProgramPendingDeletion] = useState<Program | null>(null);
+  const [programPendingDeletion, setProgramPendingDeletion] = useState<ProgramView | null>(null);
   const [habitPendingDeletion, setHabitPendingDeletion] = useState<Habit | null>(null);
   const [focusSessionPendingDeletion, setFocusSessionPendingDeletion] = useState<FocusSessionRecord | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -1067,6 +1082,10 @@ function App() {
   useEffect(() => {
     saveHabits(habits);
   }, [habits]);
+
+  useEffect(() => {
+    savePrograms(programs);
+  }, [programs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1395,14 +1414,17 @@ function App() {
       ...(linkedProgram
         ? {
             programId: linkedProgram.id,
-            durationDays: linkedProgram.durationDays,
-            startDate: linkedProgram.startDate,
           }
         : {}),
       completedDates: [],
     };
 
     setHabits([...habits, habit]);
+    if (linkedProgram) {
+      setPrograms((current) => current.map((program) => program.id === linkedProgram.id
+        ? { ...program, habitIds: [...program.habitIds, habit.id] }
+        : program));
+    }
     setNewHabit("");
     setNewGoalId("");
     setNewPriority("Optional");
@@ -1436,6 +1458,10 @@ function App() {
   function confirmHabitDeletion() {
     if (!habitPendingDeletion) return;
 
+    setPrograms((current) => current.map((program) => ({
+      ...program,
+      habitIds: program.habitIds.filter((habitId) => habitId !== habitPendingDeletion.id),
+    })));
     setHabits((previous) =>
       previous.filter((habit) => habit.id !== habitPendingDeletion.id),
     );
@@ -1470,11 +1496,16 @@ function App() {
 
   function saveEdit(id: number) {
     const name = editingName.trim();
+    const existingHabit = habits.find((habit) => habit.id === id);
+    const retainsProgram = editingType === "Challenge" && existingHabit?.programId === Number(editingProgramId);
     const linkedProgram = activePrograms.find((program) => program.id === Number(editingProgramId));
 
-    if (name === "" || (editingType === "Challenge" && !linkedProgram)) {
+    if (name === "" || (editingType === "Challenge" && !retainsProgram && !linkedProgram)) {
       return;
     }
+    const nextProgramId = editingType === "Challenge"
+      ? (retainsProgram ? existingHabit?.programId : linkedProgram?.id)
+      : undefined;
 
     const category = normalizeCategory(
       editingCategory === ADD_CATEGORY_VALUE
@@ -1510,12 +1541,20 @@ function App() {
           type: "Challenge",
           frequencyType: editingFrequencyType,
           customDays: editingFrequencyType === "custom" ? editingCustomDays : [],
-          durationDays: linkedProgram!.durationDays,
-          startDate: linkedProgram!.startDate,
-          programId: linkedProgram!.id,
+          programId: nextProgramId,
           category,
         };
       });
+    const previousProgramId = existingHabit?.programId;
+    if (previousProgramId !== nextProgramId) {
+      setPrograms((current) => current.map((program) => {
+        const withoutHabit = program.habitIds.filter((habitId) => habitId !== id);
+        return {
+          ...program,
+          habitIds: program.id === nextProgramId ? [...withoutHabit, id] : withoutHabit,
+        };
+      }));
+    }
     setHabits(updatedHabits);
     cancelEdit();
   }
@@ -1583,7 +1622,7 @@ function App() {
     setProgramHabits([]);
   }
 
-  function startProgramEdit(program: Program) {
+  function startProgramEdit(program: ProgramView) {
     setProgramEditingId(program.id);
     setProgramName(program.name);
     setProgramStartDate(program.startDate);
@@ -1599,17 +1638,9 @@ function App() {
     const duration = Math.max(1, Math.round(Number(programDuration)) || DEFAULT_DURATION);
 
     if (programEditingId !== null) {
-      setHabits((current) => {
-        const metadataHabitId = current.find((habit) => habit.programId === programEditingId)?.id;
-        return current.map((habit) => habit.programId === programEditingId
-          ? {
-              ...habit,
-              name: habit.id === metadataHabitId ? name : habit.name,
-              durationDays: duration,
-              startDate: programStartDate,
-            }
-          : habit);
-      });
+      setPrograms((current) => current.map((program) => program.id === programEditingId
+        ? { ...program, name, durationDays: duration, startDate: programStartDate }
+        : program));
       closeProgramModal();
       return;
     }
@@ -1619,18 +1650,24 @@ function App() {
 
     const newHabits: Habit[] = programHabits.map((habitData, index) => ({
       id: Date.now() + index,
-      name: index === 0 ? name : habitData.name,
+      name: habitData.name,
       createdAt: getTodayKey(appSettings.dayResetHour),
       priority: habitData.priority,
       type: "Challenge" as HabitType,
       frequencyType: "daily" as FrequencyType,
       customDays: [],
-      durationDays: duration,
-      startDate: programStartDate,
       completedDates: [],
       programId,
     }));
 
+    const newProgram: ProgramEntity = {
+      id: programId,
+      name,
+      startDate: programStartDate,
+      durationDays: duration,
+      habitIds: newHabits.map((habit) => habit.id),
+    };
+    setPrograms((current) => [...current, newProgram]);
     setHabits([...habits, ...newHabits]);
     closeProgramModal();
     setView("Programs");
@@ -1647,13 +1684,14 @@ function App() {
     });
   }
 
-  function requestProgramDeletion(program: Program) {
+  function requestProgramDeletion(program: ProgramView) {
     setProgramPendingDeletion(program);
   }
 
   function confirmProgramDeletion() {
     if (!programPendingDeletion) return;
     const programId = programPendingDeletion.id;
+    setPrograms((current) => current.filter((program) => program.id !== programId));
     setHabits((current) => current.filter((habit) => habit.programId !== programId));
     setProgramPendingDeletion(null);
   }
@@ -1839,10 +1877,18 @@ function App() {
                   onChange={(event) => setEditingProgramId(event.target.value)}
                   aria-label="Select Program"
                 >
-                  <option value="">[ Select Active Program ]</option>
+                  <option value="">(Select Active Program)</option>
                   {activePrograms.map((program) => (
                     <option key={program.id} value={program.id}>{program.name}</option>
                   ))}
+                  {programs
+                    .filter((program) =>
+                      String(program.id) === editingProgramId &&
+                      !activePrograms.some((activeProgram) => activeProgram.id === program.id),
+                    )
+                    .map((program) => (
+                      <option key={program.id} value={program.id}>{program.name}</option>
+                    ))}
                 </select>
               )}
               {renderFrequencyControls(
@@ -1876,7 +1922,7 @@ function App() {
               <button
                 style={styles.saveButton}
                 onClick={() => saveEdit(habit.id)}
-                disabled={editingType === "Challenge" && !activePrograms.some((program) => String(program.id) === editingProgramId)}
+                disabled={editingType === "Challenge" && !activePrograms.some((program) => String(program.id) === editingProgramId) && String(habit.programId) !== editingProgramId}
               >
                 Save
               </button>
@@ -2759,6 +2805,7 @@ function App() {
           >
             <Programs
               habits={habits}
+              programs={programViews}
               onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
               onCreateProgram={() => setShowProgramModal(true)}
               onEditProgram={startProgramEdit}
@@ -2808,8 +2855,24 @@ function App() {
                 ))
               }
               onDeleteGoal={(goalId) => {
+                const deletedMilestoneIds = new Set(
+                  milestones.filter((milestone) => milestone.goalId === goalId).map((milestone) => milestone.id),
+                );
+                const deletedTaskIds = new Set(
+                  tasks
+                    .filter((task) => task.goalId === goalId || (task.milestoneId && deletedMilestoneIds.has(task.milestoneId)))
+                    .map((task) => task.id),
+                );
+                setFocusSessions((current) => disassociateGoalFocusSessions(
+                  current,
+                  goalId,
+                  deletedMilestoneIds,
+                  deletedTaskIds,
+                ));
                 setGoals((current) => current.filter((goal) => goal.id !== goalId));
-                setTasks((current) => current.filter((task) => task.goalId !== goalId));
+                setTasks((current) => current.filter((task) =>
+                  task.goalId !== goalId && !(task.milestoneId && deletedMilestoneIds.has(task.milestoneId)),
+                ));
                 setMilestones((current) => current.filter((milestone) => milestone.goalId !== goalId));
                 setHabits((current) => current.map((habit) =>
                   habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
@@ -2829,9 +2892,13 @@ function App() {
                   milestone.id === milestoneId ? updateMilestone(milestone, data) : milestone,
                 ))
               }
-              onDeleteMilestone={(milestoneId) =>
-                setMilestones((current) => deleteMilestone(current, milestoneId))
-              }
+              onDeleteMilestone={(milestoneId) => {
+                const milestone = milestones.find((item) => item.id === milestoneId);
+                if (milestone) {
+                  setTasks((current) => detachTasksFromDeletedMilestone(current, milestone));
+                }
+                setMilestones((current) => deleteMilestone(current, milestoneId));
+              }}
               onToggleMilestone={(goalId, milestoneId) =>
                 setMilestones((current) => current.map((milestone) =>
                   milestone.goalId === goalId && milestone.id === milestoneId
@@ -3405,7 +3472,7 @@ function App() {
                     style={styles.input}
                     value={newHabit}
                     onChange={(event) => setNewHabit(event.target.value)}
-                    placeholder="Add a habit"
+                    placeholder="Add a Habit"
                   />
                   <select
                     style={styles.select}

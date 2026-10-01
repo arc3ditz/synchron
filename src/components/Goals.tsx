@@ -881,8 +881,8 @@ export default function Goals({
             style={styles.input}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Goal title"
-            aria-label="Goal title"
+            placeholder="Goal Title"
+            aria-label="Goal Title"
           />
           <textarea
             maxLength={500}
@@ -978,15 +978,15 @@ export default function Goals({
                     style={styles.compactInput}
                     value={goalEditTitle}
                     onChange={(event) => setGoalEditTitle(event.target.value)}
-                    aria-label="Goal title"
+                    aria-label="Goal Title"
                   />
                   <textarea
                     maxLength={500}
                     style={{ ...styles.compactInput, minHeight: 64, resize: "vertical" }}
                     value={goalEditDescription}
                     onChange={(event) => setGoalEditDescription(event.target.value)}
-                    placeholder="Description (optional)"
-                    aria-label="Goal description"
+                    placeholder="Description (Optional)"
+                    aria-label="Goal Description"
                   />
                   <input
                     type="date"

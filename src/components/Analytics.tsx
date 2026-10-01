@@ -633,7 +633,7 @@ function Analytics({
               </span>
               {habitPerformance.strongestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  {habitPerformance.hasData ? "No habits at 80% completion or above in this period." : "No reliable data for this period"}
+                  {habitPerformance.hasData ? "No habits at 80% completion or above in this period." : "No reliable data for this period."}
                 </p>
               ) : (
                 habitPerformance.strongestHabits.slice(0, 3).map((habit, index) => (
@@ -656,7 +656,7 @@ function Analytics({
               </span>
               {habitPerformance.weakestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  {habitPerformance.hasData ? "No habits under 50% in this period." : "No reliable data for this period"}
+                  {habitPerformance.hasData ? "No habits under 50% in this period." : "No reliable data for this period."}
                 </p>
               ) : (
                 habitPerformance.weakestHabits.slice(0, 3).map((habit, index) => (
@@ -679,7 +679,7 @@ function Analytics({
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-color)" }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Overall Completion Rate</span>
             {habitPerformance.overallCompletionRate === null ? (
-              <p style={styles.empty}>No reliable data for this period</p>
+              <p style={styles.empty}>No reliable data for this period.</p>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                 <span style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)" }}>
@@ -700,7 +700,7 @@ function Analytics({
             Most Focused Time
           </h3>
           {!timeOfDayInsights.peakFocusWindow ? (
-            <p style={styles.empty}>No reliable data for this period</p>
+            <p style={styles.empty}>No reliable data for this period.</p>
           ) : (
             <>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
@@ -781,7 +781,7 @@ function Analytics({
             Goal Focus Allocation
           </h3>
           {goalFocusAllocation.allocations.length === 0 && goalFocusAllocation.unlinkedMinutes === 0 ? (
-            <p style={styles.empty}>No reliable data for this period</p>
+            <p style={styles.empty}>No reliable data for this period.</p>
           ) : (
             <div style={styles.performanceSection}>
               {goalFocusAllocation.allocations.map((allocation, index) => (
@@ -861,7 +861,7 @@ function Analytics({
             Top Habits
           </h3>
           {habitStats.length === 0 ? (
-            <p style={styles.empty}>No reliable data for this period</p>
+            <p style={styles.empty}>No reliable data for this period.</p>
           ) : (
             <div>
               {habitStats.map((habit, index) => (
@@ -904,7 +904,7 @@ function Analytics({
           Focus Intensity Heatmap
         </h3>
         {!heatmapData.hasData ? (
-          <p style={styles.empty}>No reliable data for this period</p>
+          <p style={styles.empty}>No reliable data for this period.</p>
         ) : (
           <div style={styles.heatmapGrid}>
             {weekdayLabels.map((day) => (

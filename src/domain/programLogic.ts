@@ -1,19 +1,14 @@
 /**
  * Program logic utilities
- * A Program is a collection of habits grouped by programId that share
- * the same startDate and durationDays (stored on the first habit).
+ * Program view calculations derived from explicit Program records and their habits.
  */
 
-import type { Habit } from "../types";
-import { diffInDays, getTodayKey, isHabitScheduledOnDate } from "../utils/dates";
+import type { Habit, Program as ProgramEntity } from "../types";
+import { diffInDays, getTodayKey, isHabitScheduledOnDate } from "../utils/dates.ts";
 
-export type ProgramState = "Upcoming" | "Active" | "Completed";
+export type ProgramState = "Upcoming" | "Active" | "Completed" | "Incomplete";
 
-export interface Program {
-  id: number;
-  name: string;
-  startDate: string;
-  durationDays: number;
+export interface ProgramView extends ProgramEntity {
   habits: Habit[];
   state: ProgramState;
   currentDay: number;
@@ -23,47 +18,37 @@ export interface Program {
 }
 
 /**
- * Group habits by programId to form Programs
- * A Program is identified by a shared programId across habits.
- * The program metadata (name, startDate, durationDays) comes from the first habit.
- * The first habit's name is the program name, subsequent habits are the program's habits.
+ * Resolve each Program's ordered habit IDs into its view data.
  */
-export function groupHabitsIntoPrograms(habits: Habit[]): Program[] {
-  const programMap = new Map<number, Habit[]>();
+export function groupHabitsIntoPrograms(
+  programs: ProgramEntity[],
+  habits: Habit[],
+  dayResetHour: number,
+): ProgramView[] {
+  const habitMap = new Map(habits.map((habit) => [habit.id, habit]));
+  const programViews: ProgramView[] = [];
 
-  // Group habits by programId
-  habits.forEach((habit) => {
-    if (habit.programId) {
-      const existing = programMap.get(habit.programId) || [];
-      programMap.set(habit.programId, [...existing, habit]);
-    }
-  });
-
-  const programs: Program[] = [];
-
-  programMap.forEach((programHabits, programId) => {
+  programs.forEach((program) => {
+    const orderedHabits = program.habitIds
+      .map((habitId) => habitMap.get(habitId))
+      .filter((habit): habit is Habit => habit?.programId === program.id);
+    const orderedHabitIds = new Set(orderedHabits.map((habit) => habit.id));
+    const unlistedHabits = habits.filter(
+      (habit) => habit.programId === program.id && !orderedHabitIds.has(habit.id),
+    );
+    const programHabits = [...orderedHabits, ...unlistedHabits];
     if (programHabits.length === 0) return;
 
-    // Use the first habit's data for program metadata
-    const firstHabit = programHabits[0];
-    if (!firstHabit.startDate || !firstHabit.durationDays) return;
-
-    const todayKey = getTodayKey();
-    const currentDay = getProgramDayNumber(firstHabit, todayKey);
-    const totalDays = firstHabit.durationDays;
-    const completedDays = calculateProgramCompletedDays(programHabits, firstHabit);
+    const todayKey = getTodayKey(dayResetHour);
+    const currentDay = getProgramDayNumber(program, todayKey);
+    const totalDays = program.durationDays;
+    const completedDays = calculateProgramCompletedDays(programHabits, program);
     const overallProgress = totalDays > 0 ? (completedDays / totalDays) * 100 : 0;
-    const state = determineProgramState(firstHabit, todayKey, completedDays, totalDays);
+    const state = determineProgramState(program, todayKey, completedDays, totalDays);
 
-    // Exclude the first habit from the habits list (it's the program metadata)
-    const actualHabits = programHabits.slice(1);
-
-    programs.push({
-      id: programId,
-      name: firstHabit.name, // Program name comes from first habit
-      startDate: firstHabit.startDate,
-      durationDays: totalDays,
-      habits: actualHabits.length > 0 ? actualHabits : programHabits, // Fallback to all if only one habit
+    programViews.push({
+      ...program,
+      habits: programHabits,
       state,
       currentDay,
       totalDays,
@@ -72,61 +57,48 @@ export function groupHabitsIntoPrograms(habits: Habit[]): Program[] {
     });
   });
 
-  // Sort by startDate (newest first)
-  return programs.sort((a, b) => b.startDate.localeCompare(a.startDate));
+  return programViews.sort((a, b) => b.startDate.localeCompare(a.startDate));
 }
 
 /**
  * Get the current day number for a program (1-indexed)
  */
-function getProgramDayNumber(habit: Habit, dateKey: string): number {
-  if (!habit.startDate) return 1;
-  const daysElapsed = diffInDays(dateKey, habit.startDate);
-  return Math.max(1, daysElapsed + 1);
+function getProgramDayNumber(program: ProgramEntity, dateKey: string): number {
+  const daysElapsed = diffInDays(dateKey, program.startDate);
+  return Math.min(program.durationDays, Math.max(1, daysElapsed + 1));
 }
 
 /**
  * Calculate the number of completed days in a program
  * A day is considered complete if at least one habit was completed on that day
  */
-function calculateProgramCompletedDays(habits: Habit[], metadataHabit: Habit): number {
-  if (!metadataHabit.startDate || !metadataHabit.durationDays) return 0;
-
-  const completedDateSet = new Set<string>();
-
-  // Only consider non-archived habits for completion tracking
-  habits.forEach((habit) => {
-    if (!habit.isArchived) {
-      habit.completedDates.forEach((date) => {
-        const offset = diffInDays(date, metadataHabit.startDate!);
-        if (offset >= 0 && offset < metadataHabit.durationDays!) {
-          completedDateSet.add(date);
-        }
-      });
-    }
-  });
-
-  return completedDateSet.size;
+function calculateProgramCompletedDays(habits: Habit[], program: ProgramEntity): number {
+  let completedDays = 0;
+  for (let offset = 0; offset < program.durationDays; offset++) {
+    const dateKey = diffInDaysToKey(program.startDate, offset);
+    if (calculateProgramDayCompletion(habits, dateKey).isComplete) completedDays++;
+  }
+  return completedDays;
 }
 
 /**
  * Determine the state of a program
  */
 function determineProgramState(
-  habit: Habit,
+  program: ProgramEntity,
   todayKey: string,
   completedDays: number,
   totalDays: number,
 ): ProgramState {
-  if (!habit.startDate) return "Upcoming";
-
-  const daysElapsed = diffInDays(todayKey, habit.startDate);
+  const daysElapsed = diffInDays(todayKey, program.startDate);
 
   // Program hasn't started yet
   if (daysElapsed < 0) return "Upcoming";
 
-  // Program has ended and all days are complete
-  if (daysElapsed >= totalDays && completedDays >= totalDays) return "Completed";
+  if (completedDays >= totalDays) return "Completed";
+
+  // The duration has elapsed without every required day being complete.
+  if (daysElapsed >= totalDays) return "Incomplete";
 
   // Program is currently active
   return "Active";
@@ -135,7 +107,7 @@ function determineProgramState(
 /**
  * Get today's habits for a program
  */
-export function getTodayProgramHabits(program: Program, _dateKey: string, dayResetHour: number): Habit[] {
+export function getTodayProgramHabits(program: ProgramView, _dateKey: string, dayResetHour: number): Habit[] {
   const todayKeyAdjusted = getTodayKey(dayResetHour);
   const daysElapsed = diffInDays(todayKeyAdjusted, program.startDate);
 
@@ -151,20 +123,14 @@ export function getTodayProgramHabits(program: Program, _dateKey: string, dayRes
 /**
  * Calculate today's completion percentage for a program
  */
-export function calculateTodayProgress(program: Program, dateKey: string, dayResetHour: number): {
+export function calculateTodayProgress(program: ProgramView, _dateKey: string, dayResetHour: number): {
   completed: number;
   total: number;
   percent: number;
 } {
-  const todayHabits = getTodayProgramHabits(program, dateKey, dayResetHour);
   const todayKeyAdjusted = getTodayKey(dayResetHour);
-
-  // Only count non-archived habits for progress
-  const activeHabits = todayHabits.filter((habit) => !habit.isArchived);
-  const completed = activeHabits.filter((habit) =>
-    habit.completedDates.includes(todayKeyAdjusted),
-  ).length;
-  const total = activeHabits.length;
+  const todayHabits = getTodayProgramHabits(program, todayKeyAdjusted, dayResetHour);
+  const { completed, total } = calculateProgramDayCompletion(todayHabits, todayKeyAdjusted);
   const percent = total > 0 ? (completed / total) * 100 : 0;
 
   return { completed, total, percent };
@@ -174,7 +140,7 @@ export function calculateTodayProgress(program: Program, dateKey: string, dayRes
  * Get day-by-day progress for a program
  * Returns an array of day statuses: "complete", "partial", "upcoming"
  */
-export function getDayByDayProgress(program: Program): Array<{
+export function getDayByDayProgress(program: ProgramView, dayResetHour: number): Array<{
   dayNumber: number;
   dateKey: string;
   status: "complete" | "partial" | "upcoming";
@@ -185,7 +151,7 @@ export function getDayByDayProgress(program: Program): Array<{
     status: "complete" | "partial" | "upcoming";
   }> = [];
 
-  const todayKey = getTodayKey();
+  const todayKey = getTodayKey(dayResetHour);
 
   for (let i = 0; i < program.durationDays; i++) {
     const dateKey = diffInDaysToKey(program.startDate, i);
@@ -193,25 +159,17 @@ export function getDayByDayProgress(program: Program): Array<{
 
     // Determine if this day is complete, partial, or upcoming
     // Only consider non-archived habits
-    const habitsScheduledOnDay = program.habits.filter((habit) =>
-      !habit.isArchived && isHabitScheduledOnDate(habit, dateKey),
-    );
+    const { completed, total, isComplete } = calculateProgramDayCompletion(program.habits, dateKey);
 
-    if (habitsScheduledOnDay.length === 0) {
+    if (total === 0) {
       // No habits scheduled on this day
       days.push({ dayNumber, dateKey, status: "upcoming" });
       continue;
     }
 
-    const completedCount = habitsScheduledOnDay.filter((habit) =>
-      habit.completedDates.includes(dateKey),
-    ).length;
-
-    const totalCount = habitsScheduledOnDay.length;
-
-    if (completedCount === totalCount) {
+    if (isComplete) {
       days.push({ dayNumber, dateKey, status: "complete" });
-    } else if (completedCount > 0) {
+    } else if (completed > 0) {
       days.push({ dayNumber, dateKey, status: "partial" });
     } else {
       // Check if this day is in the past
@@ -226,6 +184,20 @@ export function getDayByDayProgress(program: Program): Array<{
   }
 
   return days;
+}
+
+function calculateProgramDayCompletion(habits: Habit[], dateKey: string): {
+  completed: number;
+  total: number;
+  isComplete: boolean;
+} {
+  const scheduledHabits = habits.filter(
+    (habit) => !habit.isArchived && isHabitScheduledOnDate(habit, dateKey),
+  );
+  const completed = scheduledHabits.filter((habit) => habit.completedDates.includes(dateKey)).length;
+  const total = scheduledHabits.length;
+
+  return { completed, total, isComplete: total > 0 && completed === total };
 }
 
 /**

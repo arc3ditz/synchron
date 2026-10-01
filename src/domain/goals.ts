@@ -1,5 +1,5 @@
-import type { Goal, Milestone, Task, Habit } from "../types";
-import { calculateStreak } from "../utils/dates";
+import type { FocusSessionRecord, Goal, Milestone, Task, Habit } from "../types";
+import { calculateStreak } from "../utils/dates.ts";
 
 export function createGoal(data: Omit<Goal, "id" | "createdAt" | "status">): Goal {
   return {
@@ -44,6 +44,32 @@ export function deleteMilestone(milestones: Milestone[], milestoneId: string): M
   return milestones.filter((m) => m.id !== milestoneId);
 }
 
+export function detachTasksFromDeletedMilestone(tasks: Task[], milestone: Milestone): Task[] {
+  return tasks.map((task) => task.milestoneId === milestone.id
+    ? { ...task, goalId: task.goalId ?? milestone.goalId, milestoneId: undefined }
+    : task);
+}
+
+export function disassociateGoalFocusSessions(
+  sessions: FocusSessionRecord[],
+  goalId: string,
+  milestoneIds: ReadonlySet<string>,
+  taskIds: ReadonlySet<string>,
+): FocusSessionRecord[] {
+  return sessions.map((session) => {
+    const milestoneWasDeleted = session.milestoneId !== undefined && milestoneIds.has(session.milestoneId);
+    const taskWasDeleted = session.taskId !== undefined && taskIds.has(session.taskId);
+    if (session.goalId !== goalId && !milestoneWasDeleted && !taskWasDeleted) return session;
+
+    return {
+      ...session,
+      goalId: session.goalId === goalId ? undefined : session.goalId,
+      milestoneId: milestoneWasDeleted ? undefined : session.milestoneId,
+      taskId: taskWasDeleted ? undefined : session.taskId,
+    };
+  });
+}
+
 export function calculateGoalProgress(
   goal: Goal,
   milestones: Milestone[],
@@ -75,9 +101,8 @@ export function calculateGoalProgress(
   
   // Calculate habit streak health if habits are provided
   let habitHealth = 0;
-  let linkedHabits: Habit[] = [];
   if (habits && streakFreeze !== undefined && dayResetHour !== undefined) {
-    linkedHabits = habits.filter((habit) => habit.goalId === goal.id);
+    const linkedHabits = habits.filter((habit) => habit.goalId === goal.id);
     if (linkedHabits.length > 0) {
       const totalStreak = linkedHabits.reduce((sum, habit) => sum + calculateStreak(habit, streakFreeze, dayResetHour), 0);
       habitHealth = Math.min(100, totalStreak * 10); // Cap at 100, 10 points per streak day
@@ -89,26 +114,12 @@ export function calculateGoalProgress(
   const milestoneWeight = goalMilestones.length > 0 ? (completedMilestones / goalMilestones.length) * 100 : 0;
   const habitWeight = habitHealth;
   
-  // Overall weighted average (tasks: 50%, milestones: 30%, habits: 20%)
-  const taskContribution = goalTasks.length > 0 ? 0.5 : 0;
-  const milestoneContribution = goalMilestones.length > 0 ? 0.3 : 0;
-  const habitContribution = linkedHabits.length > 0 ? 0.2 : 0;
-  
-  const totalWeight = taskContribution + milestoneContribution + habitContribution;
-  const weightedPercent = totalWeight > 0 
-    ? ((taskWeight * taskContribution) + (milestoneWeight * milestoneContribution) + (habitWeight * habitContribution)) / totalWeight
-    : 0;
-  
-  // For visual display: segment widths show individual component progress (0-100% each)
-  // This allows users to see the progress of each component independently
-  const taskSegmentWidth = taskWeight;
-  const milestoneSegmentWidth = milestoneWeight;
-  const habitSegmentWidth = habitWeight;
-  
   const totalItems = goalMilestones.length + goalTasks.length;
   const completedItems = completedMilestones + completedTasks;
-  
-  const percent = Math.round(weightedPercent);
+  const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+  const taskSegmentWidth = Math.round(Math.min(100, Math.max(0, taskWeight)));
+  const milestoneSegmentWidth = Math.round(Math.min(100, Math.max(0, milestoneWeight)));
+  const habitSegmentWidth = Math.round(Math.min(100, Math.max(0, habitWeight)));
   
   return {
     completed: completedItems,
@@ -117,8 +128,8 @@ export function calculateGoalProgress(
     taskWeight: Math.round(taskWeight),
     milestoneWeight: Math.round(milestoneWeight),
     habitWeight: Math.round(habitWeight),
-    taskSegmentWidth: Math.round(taskSegmentWidth * 100),
-    milestoneSegmentWidth: Math.round(milestoneSegmentWidth * 100),
-    habitSegmentWidth: Math.round(habitSegmentWidth * 100),
+    taskSegmentWidth,
+    milestoneSegmentWidth,
+    habitSegmentWidth,
   };
 }

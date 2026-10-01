@@ -9,6 +9,7 @@ import {
 import { CARD_SURFACE } from "../theme";
 import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task, Habit } from "../types";
 import { registerFocusTimerRunningState } from "../domain/notificationLogic";
+import { filterTasksForFocusSelection } from "../domain/tasks";
 
 type FocusTimerProps = {
   habits: FocusTimerHabit[];
@@ -566,9 +567,7 @@ function FocusTimer({
       (milestone) => activeGoalIds.has(milestone.goalId) && milestone.goalId === selectedGoalId,
     )
     : [];
-  const availableTasks = selectedMilestoneId
-    ? tasks.filter((task) => task.milestoneId === selectedMilestoneId)
-    : [];
+  const availableTasks = filterTasksForFocusSelection(tasks, selectedGoalId, selectedMilestoneId);
 
   function shouldLogSession(mode: Mode, session: Session, endTimestamp: number): boolean {
     const lastLogged = lastLoggedSessionRef.current;
@@ -1133,7 +1132,7 @@ function FocusTimer({
           </div>
         )}
 
-        {selectedMilestoneId !== "" && (
+        {selectedGoalId !== "" && (
           <div style={styles.panelSection}>
             <label style={styles.habitSelectLabel} htmlFor="task-select">
               Link to Task (Optional)

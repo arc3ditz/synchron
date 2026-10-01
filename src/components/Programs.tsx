@@ -1,18 +1,18 @@
-import { useState, useMemo, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Check, Flame, ChevronDown, ChevronUp, Pencil, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
 import type { Habit } from "../types";
 import {
-  groupHabitsIntoPrograms,
   getTodayProgramHabits,
   calculateTodayProgress,
   getDayByDayProgress,
-  type Program,
+  type ProgramView,
 } from "../domain/programLogic";
 import { formatFullDate, getTodayKey } from "../utils/dates";
 
 type ProgramsProps = {
   habits: Habit[];
+  programs: ProgramView[];
   onToggleHabit: (id: number, dateKey?: string) => void;
   onCreateProgram: () => void;
   dayResetHour: number;
@@ -20,9 +20,9 @@ type ProgramsProps = {
   onArchiveHabit: (id: number) => void;
   onUnarchiveHabit: (id: number) => void;
   onDeleteHabit: (habit: Habit) => void;
-  onEditProgram: (program: Program) => void;
+  onEditProgram: (program: ProgramView) => void;
   onToggleProgramArchive: (programId: number) => void;
-  onDeleteProgram: (program: Program) => void;
+  onDeleteProgram: (program: ProgramView) => void;
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -369,7 +369,7 @@ function ProgramCard({
   onDeleteProgram,
   isArchived,
 }: {
-  program: Program;
+  program: ProgramView;
   onToggleHabit: (id: number, dateKey?: string) => void;
   dayResetHour: number;
   isExpanded: boolean;
@@ -378,20 +378,21 @@ function ProgramCard({
   onArchiveHabit: (id: number) => void;
   onUnarchiveHabit: (id: number) => void;
   onDeleteHabit: (habit: Habit) => void;
-  onEditProgram: (program: Program) => void;
+  onEditProgram: (program: ProgramView) => void;
   onToggleProgramArchive: (programId: number) => void;
-  onDeleteProgram: (program: Program) => void;
+  onDeleteProgram: (program: ProgramView) => void;
   isArchived: boolean;
 }) {
   const todayKey = getTodayKey(dayResetHour);
   const todayHabits = getTodayProgramHabits(program, todayKey, dayResetHour);
   const todayProgress = calculateTodayProgress(program, todayKey, dayResetHour);
-  const dayByDayProgress = getDayByDayProgress(program);
+  const dayByDayProgress = getDayByDayProgress(program, dayResetHour);
 
   const stateStyle = {
     Upcoming: styles.stateUpcoming,
     Active: styles.stateActive,
     Completed: styles.stateCompleted,
+    Incomplete: styles.stateUpcoming,
   }[program.state];
 
   return (
@@ -403,6 +404,7 @@ function ProgramCard({
             {program.state === "Upcoming" && `Starts ${formatFullDate(program.startDate)}`}
             {program.state === "Active" && `Day ${program.currentDay} of ${program.totalDays}`}
             {program.state === "Completed" && `Completed ${formatFullDate(program.startDate)}`}
+            {program.state === "Incomplete" && "Program period ended without full completion"}
           </p>
           <span style={{ ...styles.programState, ...(isArchived || program.state === "Completed" ? styles.stateUpcoming : stateStyle) }}>
             {isArchived || program.state === "Completed" ? "Archived" : program.state}
@@ -454,7 +456,7 @@ function ProgramCard({
 
       <div style={styles.progressSection}>
         <div style={styles.progressHeader}>
-          <span style={styles.progressLabel}>Overall progress</span>
+          <span style={styles.progressLabel}>Overall Progress</span>
           <span style={styles.progressValue}>
             {Math.round(program.overallProgress)}%
           </span>
@@ -476,7 +478,7 @@ function ProgramCard({
         <>
           {program.state === "Active" && todayHabits.length > 0 && (
             <div style={styles.todaySection}>
-              <h4 style={styles.sectionTitle}>Today's habits</h4>
+              <h4 style={styles.sectionTitle}>Today's Habits</h4>
               <div style={styles.habitList}>
                 {todayHabits.map((habit) => {
                   const isCompleted = habit.completedDates.includes(todayKey);
@@ -554,7 +556,7 @@ function ProgramCard({
                 })}
               </div>
               <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 8 }}>
-                {todayProgress.completed} / {todayProgress.total} completed today
+                {todayProgress.completed} / {todayProgress.total} Completed Today
               </div>
             </div>
           )}
@@ -592,6 +594,7 @@ function ProgramCard({
 
 function Programs({
   habits,
+  programs,
   onToggleHabit,
   onCreateProgram,
   dayResetHour,
@@ -603,7 +606,6 @@ function Programs({
   onToggleProgramArchive,
   onDeleteProgram,
 }: ProgramsProps) {
-  const programs = useMemo(() => groupHabitsIntoPrograms(habits), [habits]);
   const [expandedPrograms, setExpandedPrograms] = useState<Set<number>>(new Set());
   const [showArchivedPrograms, setShowArchivedPrograms] = useState(false);
   const isProgramArchived = (programId: number) => {
@@ -611,10 +613,10 @@ function Programs({
     return members.length > 0 && members.every((habit) => habit.isArchived);
   };
   const activePrograms = programs.filter(
-    (program) => program.state !== "Completed" && !isProgramArchived(program.id),
+    (program) => program.state !== "Completed" && program.state !== "Incomplete" && !isProgramArchived(program.id),
   );
   const archivedPrograms = programs.filter(
-    (program) => program.state === "Completed" || isProgramArchived(program.id),
+    (program) => program.state === "Completed" || program.state === "Incomplete" || isProgramArchived(program.id),
   );
 
   const toggleExpand = (programId: number) => {

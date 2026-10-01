@@ -31,3 +31,13 @@ export function filterTasksByGoal(tasks: Task[], goalId: string): Task[] {
 export function filterTasksByMilestone(tasks: Task[], milestoneId: string): Task[] {
   return tasks.filter((task) => task.milestoneId === milestoneId);
 }
+
+export function filterTasksForFocusSelection(
+  tasks: Task[],
+  goalId: string,
+  milestoneId: string,
+): Task[] {
+  if (milestoneId) return filterTasksByMilestone(tasks, milestoneId);
+  if (!goalId) return [];
+  return tasks.filter((task) => task.goalId === goalId && !task.milestoneId);
+}
