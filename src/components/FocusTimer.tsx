@@ -29,7 +29,6 @@ type FocusTimerProps = {
 
 const DEFAULT_BREAK_MINUTES = 5;
 const MAX_DURATION_MINUTES = 999;
-const MAX_DURATION_MS = MAX_DURATION_MINUTES * 60000;
 const RADIUS = 80;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const DURATION_PRESETS = [15, 25, 45, 60];
@@ -142,21 +141,26 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
     maxWidth: "100%",
   },
-  timerAdjustButton: {
-    flex: "0 0 32px",
-    width: 32,
-    height: 32,
+  adjustmentRow: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 0,
+    gap: 12,
+  },
+  timerAdjustButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: "7px 12px",
     background: "var(--card-surface-bg)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: "50%",
+    borderRadius: 20,
     color: "#e4e4e7",
+    fontSize: 13,
+    fontWeight: 500,
     cursor: "pointer",
     transition: "transform 0.15s ease, color 0.15s ease, border-color 0.15s ease",
   },
@@ -806,19 +810,16 @@ function FocusTimer({
 
   function handleReset() {
     if (mode === "Timer") {
-      timerMinutesRef.current = defaultFocusDuration;
-      setTimerMinutes(defaultFocusDuration);
-      updateTimerTotalMs(defaultFocusDuration * 60000);
+      const totalMs = timerMinutesRef.current * 60000;
+      updateTimerTotalMs(totalMs);
       timerEndTimestampRef.current = null;
-      setTimerState(defaultFocusDuration * 60000, false);
+      setTimerState(totalMs, false);
     } else {
-      focusMinutesRef.current = defaultFocusDuration;
-      setFocusMinutes(defaultFocusDuration);
       const totalMs = getSessionTotalMs(
         "Pomodoro",
         pomodoroSessionRef.current,
         timerMinutesRef.current,
-        defaultFocusDuration,
+        focusMinutesRef.current,
         breakMinutesRef.current,
       );
       updatePomodoroTotalMs(totalMs);
@@ -896,26 +897,18 @@ function FocusTimer({
     if (mode === "Timer") {
       if (timerRunningRef.current) updateTimer(now);
       const previousRemaining = timerRemainingRef.current;
-      const elapsedMs = Math.max(0, timerTotalMsRef.current - previousRemaining);
-      const maxRemainingMs = Math.max(0, MAX_DURATION_MS - elapsedMs);
-      const nextRemaining = Math.max(0, Math.min(maxRemainingMs, previousRemaining + adjustmentMs));
-      const nextTotal = elapsedMs + nextRemaining;
+      const nextRemaining = Math.max(0, Math.min(timerTotalMsRef.current, previousRemaining + adjustmentMs));
       const remainsRunning = timerRunningRef.current && nextRemaining > 0;
       timerEndTimestampRef.current = remainsRunning ? now + nextRemaining : null;
-      updateTimerTotalMs(nextTotal);
       setTimerState(nextRemaining, remainsRunning);
       return;
     }
 
     if (pomodoroRunningRef.current) updatePomodoro(now);
     const previousRemaining = pomodoroRemainingRef.current;
-    const elapsedMs = Math.max(0, pomodoroTotalMsRef.current - previousRemaining);
-    const maxRemainingMs = Math.max(0, MAX_DURATION_MS - elapsedMs);
-    const nextRemaining = Math.max(0, Math.min(maxRemainingMs, previousRemaining + adjustmentMs));
-    const nextTotal = elapsedMs + nextRemaining;
+    const nextRemaining = Math.max(0, Math.min(pomodoroTotalMsRef.current, previousRemaining + adjustmentMs));
     const remainsRunning = pomodoroRunningRef.current && nextRemaining > 0;
     pomodoroEndTimestampRef.current = remainsRunning ? now + nextRemaining : null;
-    updatePomodoroTotalMs(nextTotal);
     setPomodoroState(nextRemaining, remainsRunning, pomodoroSessionRef.current);
   }
 
@@ -954,8 +947,8 @@ function FocusTimer({
   const session = pomodoroSession;
   const isRunning = mode === "Timer" ? timerRunning : pomodoroRunning;
   const remainingMs = mode === "Timer" ? timerRemainingMs : pomodoroRemainingMs;
-  const totalMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
-  const fraction = totalMs > 0 ? Math.min(1, Math.max(0, remainingMs / totalMs)) : 0;
+  const initialDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
+  const fraction = initialDurationMs > 0 ? Math.min(1, Math.max(0, remainingMs / initialDurationMs)) : 0;
   const timerLabelFontSize = remainingMs >= 100 * 60000 ? 40 : 54;
   const dashOffset = CIRCUMFERENCE * (1 - fraction);
   const ringColor =
@@ -966,7 +959,7 @@ function FocusTimer({
         : "var(--accent-teal)";
 
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
-  const isPaused = !isRunning && remainingMs > 0 && remainingMs < totalMs;
+  const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
   const primaryButtonText = isRunning ? "Pause" : isPaused ? "Resume" : "Start";
   const todayKey = new Date().toDateString();
   const todaySessions = focusSessions.filter(
@@ -1022,6 +1015,14 @@ function FocusTimer({
               cy={100}
               r={RADIUS}
               fill="none"
+              stroke="rgba(212, 212, 216, 0.35)"
+              strokeWidth={10}
+            />
+            <circle
+              cx={100}
+              cy={100}
+              r={RADIUS}
+              fill="none"
               stroke={ringColor}
               strokeWidth={10}
               strokeLinecap="round"
@@ -1032,30 +1033,35 @@ function FocusTimer({
             />
           </svg>
           <div style={styles.timerReadout}>
-            <button
-              type="button"
-              className="timer-adjust-button"
-              style={styles.timerAdjustButton}
-              onClick={(event) => handleQuickAdjust(-1, event.shiftKey)}
-              aria-label={`Decrease remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
-              title={`Decrease time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
-            >
-              <Minus size={16} />
-            </button>
             <span style={{ ...styles.ringLabel, fontSize: timerLabelFontSize }}>
               {formatTime(remainingMs)}
             </span>
-            <button
-              type="button"
-              className="timer-adjust-button"
-              style={styles.timerAdjustButton}
-              onClick={(event) => handleQuickAdjust(1, event.shiftKey)}
-              aria-label={`Increase remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
-              title={`Increase time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
-            >
-              <Plus size={16} />
-            </button>
           </div>
+        </div>
+
+        <div style={styles.adjustmentRow}>
+          <button
+            type="button"
+            className="timer-adjust-button"
+            style={styles.timerAdjustButton}
+            onClick={(event) => handleQuickAdjust(-1, event.shiftKey)}
+            aria-label={`Decrease remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
+            title={`Decrease time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
+          >
+            <Minus size={16} />
+            {quickAdjustStepMinutes}m
+          </button>
+          <button
+            type="button"
+            className="timer-adjust-button"
+            style={styles.timerAdjustButton}
+            onClick={(event) => handleQuickAdjust(1, event.shiftKey)}
+            aria-label={`Increase remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
+            title={`Increase time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
+          >
+            <Plus size={16} />
+            {quickAdjustStepMinutes}m
+          </button>
         </div>
 
         <div style={styles.controlsRow}>
