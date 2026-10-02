@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ListChecks,
   Timer as TimerIcon,
@@ -20,6 +20,8 @@ import {
   Keyboard,
   Filter,
   Bell,
+  Grid2X2,
+  List,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
@@ -116,6 +118,21 @@ const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
 const ALL_CATEGORIES = "All";
 const NO_CATEGORY = "No Category";
 const ADD_CATEGORY_VALUE = "__add_category__";
+type HabitsPopover = "filter" | "category" | null;
+type ShortcutContext = {
+  view: View;
+  editingId: number | null;
+  navigateTo: (view: View) => void;
+  openShortcuts: () => void;
+  shortcutsBlocked: boolean;
+  setHabitViewMode: (viewMode: "grid" | "list") => void;
+  focusNewHabit: () => void;
+  editFocusedHabit: () => boolean;
+  saveActiveEdit: () => void;
+  toggleTimer: (() => boolean) | null;
+  closeTransient: () => boolean;
+};
+
 const FREQUENCY_LABELS: Record<FrequencyType, string> = {
   daily: "Daily",
   weekdays: "Weekdays",
@@ -277,6 +294,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 4,
     alignItems: "center",
+    flexWrap: "wrap",
   },
   frequencyDay: {
     width: 28,
@@ -328,7 +346,7 @@ const styles: Record<string, CSSProperties> = {
     border: "none",
     borderBottom: "1px solid var(--border-color)",
     borderRadius: 0,
-    padding: "var(--space-3) 0",
+    padding: "var(--space-3) 16px",
     boxShadow: "none",
   },
   itemCompletedColors: {
@@ -542,15 +560,27 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 10,
     width: "100%",
+    minWidth: 0,
+  },
+  gridEditRow: {
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
+    borderBottom: "1px solid var(--border-strong)",
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-4)",
+    boxSizing: "border-box",
   },
   editFieldsRow: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
+    alignItems: "center",
+    width: "100%",
+    minWidth: 0,
   },
   editInput: {
-    flex: 1,
-    minWidth: 120,
+    flex: "2 1 220px",
+    minWidth: 0,
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
     borderRadius: 6,
@@ -558,8 +588,12 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
+    boxSizing: "border-box",
   },
   editSelect: {
+    flex: "1 1 160px",
+    minWidth: 0,
+    maxWidth: "100%",
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
     borderRadius: 6,
@@ -743,6 +777,9 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
     borderRadius: "var(--radius-md)",
+  },
+  settingsViewSegment: {
+    alignItems: "center",
   },
   settingsAboutRow: {
     display: "flex",
@@ -996,7 +1033,17 @@ function App() {
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
-  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [habitsPopover, setHabitsPopover] = useState<HabitsPopover>(null);
+  const filterPopoverRef = useRef<HTMLDivElement>(null);
+  const categoryPopoverTriggerRef = useRef<HTMLButtonElement>(null);
+  const categoryPopoverRef = useRef<HTMLDivElement>(null);
+  const newHabitInputRef = useRef<HTMLInputElement>(null);
+  const shortcutContextRef = useRef<ShortcutContext | null>(null);
+  const timerShortcutRef = useRef<(() => boolean) | null>(null);
+  const focusTimerAfterNavigationRef = useRef(false);
+  const registerTimerShortcut = useCallback((handler: (() => boolean) | null) => {
+    timerShortcutRef.current = handler;
+  }, []);
   const [editingCustomCategory, setEditingCustomCategory] = useState<string | null>(null);
   const [customCategoryDraft, setCustomCategoryDraft] = useState("");
   const [categoryPendingDeletion, setCategoryPendingDeletion] = useState<string | null>(null);
@@ -1006,7 +1053,6 @@ function App() {
   const [showArchived, setShowArchived] = useState(false);
 
   // Filter state
-  const [showFilterPopover, setShowFilterPopover] = useState(false);
   const [filterType, setFilterType] = useState<"All" | "Daily" | "Program Habits">("All");
   const [filterPriority, setFilterPriority] = useState<"All" | "Mandatory" | "Optional">("All");
   const [filterFrequency, setFilterFrequency] = useState<"All" | "daily" | "weekdays" | "weekends">("All");
@@ -1167,62 +1213,167 @@ function App() {
   }, [appSettings.defaultFocusDuration]);
 
   useEffect(() => {
+    if (!habitsPopover) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        filterPopoverRef.current?.contains(target) ||
+        categoryPopoverTriggerRef.current?.contains(target) ||
+        categoryPopoverRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setHabitsPopover(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [habitsPopover]);
+
+  useLayoutEffect(() => {
+    shortcutContextRef.current = {
+      view,
+      editingId,
+      toggleTimer: timerShortcutRef.current,
+      navigateTo: navigateToView,
+      openShortcuts: openKeyboardShortcuts,
+      shortcutsBlocked: showKeyboardShortcuts || showProgramModal ||
+        focusSessionPendingDeletion !== null || habitPendingDeletion !== null ||
+        categoryPendingDeletion !== null || programPendingDeletion !== null,
+      setHabitViewMode: changeHabitViewMode,
+      focusNewHabit: () => {
+        setHabitsPopover(null);
+        newHabitInputRef.current?.focus();
+      },
+      editFocusedHabit: () => {
+        if (editingId !== null) return false;
+        const activeElement = document.activeElement;
+        if (!(activeElement instanceof HTMLElement)) return false;
+        const habitElement = activeElement.closest<HTMLElement>("[data-habit-id]");
+        if (!habitElement) return false;
+        const editButton = habitElement.querySelector<HTMLButtonElement>('button[aria-label^="Edit "]');
+        if (!editButton) return false;
+        editButton.click();
+        return true;
+      },
+      saveActiveEdit: () => {
+        if (editingId === null) return;
+        const editRow = document.querySelector<HTMLElement>(`[data-habit-id="${editingId}"]`);
+        const saveButton = Array.from(editRow?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+          .find((button) => button.textContent?.trim() === "Save");
+        if (saveButton && !saveButton.disabled) saveButton.click();
+      },
+      closeTransient: () => {
+        if (focusSessionPendingDeletion) {
+          setFocusSessionPendingDeletion(null);
+        } else if (habitPendingDeletion) {
+          setHabitPendingDeletion(null);
+        } else if (categoryPendingDeletion) {
+          setCategoryPendingDeletion(null);
+        } else if (programPendingDeletion) {
+          setProgramPendingDeletion(null);
+        } else if (showProgramModal) {
+          closeProgramModal();
+        } else if (showKeyboardShortcuts) {
+          setShowKeyboardShortcuts(false);
+        } else if (editingCustomCategory !== null) {
+          cancelCategoryRename();
+        } else if (habitsPopover) {
+          setHabitsPopover(null);
+        } else if (editingId !== null) {
+          cancelEdit();
+        } else if (showArchived) {
+          setShowArchived(false);
+        } else {
+          return false;
+        }
+        return true;
+      },
+    };
+  });
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const context = shortcutContextRef.current;
+      if (!context) return;
+      if (event.key === "Escape") {
+        if (context.closeTransient()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+      if (event.defaultPrevented) return;
+      if (context.shortcutsBlocked) return;
+      const isMac = navigator.platform.toUpperCase().includes("MAC");
       const modifier = isMac ? event.metaKey : event.ctrlKey;
 
-      if (!modifier) return;
+      if (modifier) {
+        const key = event.key.toLowerCase();
+        if (key === "k") {
+          event.preventDefault();
+          context.openShortcuts();
+          return;
+        }
+        if (event.key === "Enter" && context.editingId !== null) {
+          event.preventDefault();
+          context.saveActiveEdit();
+          return;
+        }
 
-      switch (event.key) {
-        case "1":
+        const navigationKeys: Record<string, View> = {
+          "1": "Today",
+          "2": "Habits",
+          "3": "Timer",
+          "4": "Programs",
+          "5": "goals",
+          "6": "History",
+          "7": "Analytics",
+          ",": "Settings",
+        };
+        const nextView = navigationKeys[event.key];
+        if (nextView) {
           event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("Today");
-          break;
-        case "2":
+          context.navigateTo(nextView);
+        }
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      const isTyping = target instanceof HTMLElement && (
+        target.isContentEditable ||
+        target.matches("input, textarea, select")
+      );
+      if (isTyping) return;
+
+      const key = event.key.toLowerCase();
+      if ((context.view === "Habits" || context.view === "Today") && (key === "g" || key === "l")) {
+        event.preventDefault();
+        context.setHabitViewMode(key === "g" ? "grid" : "list");
+      } else if (context.view === "Habits" && key === "n") {
+        event.preventDefault();
+        context.focusNewHabit();
+      } else if (key === "e") {
+        if (context.editFocusedHabit()) {
           event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("Habits");
-          break;
-        case "3":
+          event.stopPropagation();
+        }
+      } else if (key === " " && event.code === "Space" && context.view === "Timer" && !event.repeat) {
+        const isInteractiveTarget = target instanceof HTMLElement && target.closest(
+          "button, a, input, textarea, select, [role='button'], [role='checkbox'], [role='radio'], [role='menuitem'], [contenteditable='true']",
+        );
+        if (!isInteractiveTarget && context.toggleTimer?.()) {
           event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("Programs");
-          break;
-        case "4":
-          event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("goals");
-          break;
-        case "5":
-          event.preventDefault();
-          setView("Timer");
-          break;
-        case "6":
-          event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("History");
-          break;
-        case "7":
-          event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("Analytics");
-          break;
-        case ",":
-          event.preventDefault();
-          setInitialFocusEntityId(undefined);
-          setView("Settings");
-          break;
-        case "/":
-        case "?":
-          event.preventDefault();
-          setShowKeyboardShortcuts((prev) => !prev);
-          break;
+          event.stopPropagation();
+        }
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, []);
 
   const categoriesInUse = Array.from(
@@ -1237,8 +1388,45 @@ function App() {
   ).sort();
   const categoryTabs = [ALL_CATEGORIES, NO_CATEGORY, ...categoriesInUse];
   function navigateToView(nextView: View) {
+    const activeElement = document.activeElement;
+    const isEditableOrDialog = activeElement instanceof HTMLElement && (
+      activeElement.isContentEditable ||
+      activeElement.matches("input, textarea, select") ||
+      activeElement.closest("[role='dialog']") !== null
+    );
+    focusTimerAfterNavigationRef.current = nextView === "Timer" && !isEditableOrDialog && (
+      activeElement === document.body ||
+      (activeElement instanceof HTMLElement && (
+        activeElement.closest(".sidebar-item") !== null ||
+        activeElement.closest(".main-content") !== null
+      ))
+    );
+    if (nextView === "Timer" && view === "Timer" && focusTimerAfterNavigationRef.current) {
+      focusTimerAfterNavigationRef.current = false;
+      focusTimerControl();
+    }
     if (nextView !== "Timer") setInitialFocusEntityId(undefined);
     setView(nextView);
+  }
+
+  function focusTimerControl() {
+    document.querySelector<HTMLButtonElement>(".focus-view .focus-primary-control")
+      ?.focus({ preventScroll: true });
+  }
+
+  useLayoutEffect(() => {
+    if (view !== "Timer" || !focusTimerAfterNavigationRef.current) return;
+    focusTimerAfterNavigationRef.current = false;
+    focusTimerControl();
+  }, [view]);
+
+  function changeHabitViewMode(viewMode: "grid" | "list") {
+    setAppSettings((current) => ({ ...current, viewMode }));
+    setHabitsPopover(null);
+  }
+
+  function openKeyboardShortcuts() {
+    setShowKeyboardShortcuts(true);
   }
 
   const currentCategory = categoryTabs.includes(activeCategory)
@@ -1810,17 +1998,29 @@ function App() {
 
     if (isEditing) {
       return (
-        <li key={habit.id} className="habit-row" style={rowColorStyle}>
+        <li
+          key={habit.id}
+          data-habit-id={habit.id}
+          className={`habit-row${appSettings.viewMode === "grid" ? " habit-grid-edit-row" : ""}`}
+          style={{
+            ...rowColorStyle,
+            ...(appSettings.viewMode === "grid" ? styles.gridEditRow : {}),
+          }}
+        >
           <div style={styles.editRow}>
-            <div style={styles.editFieldsRow}>
+            <div className="habit-edit-fields" style={styles.editFieldsRow}>
               <input
                 style={styles.editInput}
                 value={editingName}
                 autoFocus
                 onChange={(event) => setEditingName(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") saveEdit(habit.id);
-                  if (event.key === "Escape") cancelEdit();
+                  if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) saveEdit(habit.id);
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    cancelEdit();
+                  }
                 }}
               />
               <select
@@ -1916,7 +2116,13 @@ function App() {
     const challengeMetadata = getChallengeMetadata(habit, programs);
 
     return (
-      <li key={habit.id} className="habit-row" style={{ ...rowColorStyle, ...archivedStyle }}>
+      <li
+        key={habit.id}
+        data-habit-id={habit.id}
+        tabIndex={0}
+        className="habit-row"
+        style={{ ...rowColorStyle, ...archivedStyle }}
+      >
         <div className="habit-info-cluster">
           <div className="habit-cell-name">
             <span
@@ -2057,6 +2263,8 @@ function App() {
     return (
       <li
         key={habit.id}
+        data-habit-id={habit.id}
+        tabIndex={0}
         className="habit-grid-card"
         style={{ ...styles.habitGridCard, ...(isArchived ? { opacity: 0.65 } : {}) }}
       >
@@ -2148,13 +2356,22 @@ function App() {
             <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
           <button
+            className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
+            onClick={() => navigateToView("Timer")}
+            aria-current={view === "Timer" ? "page" : undefined}
+          >
+            <TimerIcon size={18} />
+            <span>Timer</span>
+            <span className="sidebar-shortcut">{shortcutKey}3</span>
+          </button>
+          <button
             className={`sidebar-item ${view === "Programs" ? "active" : ""}`}
             onClick={() => navigateToView("Programs")}
             aria-current={view === "Programs" ? "page" : undefined}
           >
             <Flame size={18} />
             <span>Programs</span>
-            <span className="sidebar-shortcut">{shortcutKey}3</span>
+            <span className="sidebar-shortcut">{shortcutKey}4</span>
           </button>
           <button
             className={`sidebar-item ${view === "goals" ? "active" : ""}`}
@@ -2163,15 +2380,6 @@ function App() {
           >
             <Target size={18} />
             <span>Goals</span>
-            <span className="sidebar-shortcut">{shortcutKey}4</span>
-          </button>
-          <button
-            className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
-            onClick={() => navigateToView("Timer")}
-            aria-current={view === "Timer" ? "page" : undefined}
-          >
-            <TimerIcon size={18} />
-            <span>Timer</span>
             <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <button
@@ -2346,24 +2554,25 @@ function App() {
                   className="category-settings"
                   style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}
                 >
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.categoryManageButton,
-                      width: "auto",
-                      gap: 7,
-                      padding: "0 10px",
-                    }}
-                    onClick={() => setShowFilterPopover((visible) => !visible)}
-                    aria-label={activeFilterCount > 0 ? `Filter habits (${activeFilterCount})` : "Filter habits"}
-                    aria-expanded={showFilterPopover}
-                    title={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter habits"}
-                  >
-                    <Filter size={16} />
-                    <span style={{ fontSize: 12 }}>Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
-                  </button>
-                  {showFilterPopover && (
-                    <div style={{
+                  <div ref={filterPopoverRef} style={{ position: "relative" }}>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.categoryManageButton,
+                        width: "auto",
+                        gap: 7,
+                        padding: "0 10px",
+                      }}
+                      onClick={() => setHabitsPopover((current) => current === "filter" ? null : "filter")}
+                      aria-label={activeFilterCount > 0 ? `Filter habits (${activeFilterCount})` : "Filter habits"}
+                      aria-expanded={habitsPopover === "filter"}
+                      title={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter habits"}
+                    >
+                      <Filter size={16} />
+                      <span style={{ fontSize: 12 }}>Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
+                    </button>
+                    {habitsPopover === "filter" && (
+                      <div style={{
                       position: "absolute",
                       top: "calc(100% + 8px)",
                       left: "50%",
@@ -2457,22 +2666,24 @@ function App() {
                           Reset Filters
                         </button>
                       )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     style={styles.categoryManageButton}
-                    onClick={() => setShowCategoryManager((visible) => !visible)}
+                    ref={categoryPopoverTriggerRef}
+                    onClick={() => setHabitsPopover((current) => current === "category" ? null : "category")}
                     aria-label="Manage custom categories"
-                    aria-expanded={showCategoryManager}
+                    aria-expanded={habitsPopover === "category"}
                     title="Manage custom categories"
                   >
                     <Settings size={16} />
                   </button>
                 </div>
               </div>
-              {showCategoryManager && (
-                <div style={styles.categoryManager}>
+              {habitsPopover === "category" && (
+                <div ref={categoryPopoverRef} style={styles.categoryManager}>
                   <strong style={{ color: "var(--text-primary)", fontSize: 13 }}>
                     Custom Categories
                   </strong>
@@ -2533,6 +2744,7 @@ function App() {
 
             <div style={{ ...styles.inputRow, justifyContent: "center", margin: "12px auto", maxWidth: 500 }}>
               <input
+                ref={newHabitInputRef}
                 style={styles.input}
                 value={newHabit}
                 onChange={(event) => setNewHabit(event.target.value)}
@@ -2650,7 +2862,7 @@ function App() {
                         <span>Habit Name</span>
                         <span>Priority</span>
                         <span className="habit-type-cell">Type / Progress</span>
-                        <span>Streak</span>
+                        <span className="habit-streak-header">Streak</span>
                         <span style={styles.headerActionsCell}>Actions</span>
                       </div>
                     )}
@@ -2671,7 +2883,7 @@ function App() {
                         <span>Habit Name</span>
                         <span>Priority</span>
                         <span className="habit-type-cell">Type / Progress</span>
-                        <span>Streak</span>
+                        <span className="habit-streak-header">Streak</span>
                         <span style={styles.headerActionsCell}>Actions</span>
                       </div>
                     )}
@@ -2710,7 +2922,7 @@ function App() {
                         <span>Habit Name</span>
                         <span>Priority</span>
                         <span className="habit-type-cell">Type / Progress</span>
-                        <span>Streak</span>
+                        <span className="habit-streak-header">Streak</span>
                         <span style={styles.headerActionsCell}>Actions</span>
                       </div>
                     )}
@@ -2751,6 +2963,7 @@ function App() {
               initialEntityId={initialFocusEntityId}
               autoStartAction={notificationTimerAction}
               onAutoStartHandled={() => setNotificationTimerAction(null)}
+              onTimerShortcutReady={registerTimerShortcut}
             />
           </div>
 
@@ -2948,16 +3161,23 @@ function App() {
                     <span style={styles.settingsLabel}>Default View Mode</span>
                     <span style={styles.settingsDescription}>Choose how habits are displayed by default.</span>
                   </div>
-                  <div style={styles.settingsSegment} role="group" aria-label="Default view mode">
+                  <div
+                    className="settings-segment"
+                    style={{ ...styles.settingsSegment, ...styles.settingsViewSegment }}
+                    role="group"
+                    aria-label="Default view mode"
+                  >
                     {(["grid", "list"] as const).map((viewMode) => (
                       <button
                         key={viewMode}
                         type="button"
-                        className="settings-segment-button"
-                        onClick={() => setAppSettings((current) => ({ ...current, viewMode }))}
+                        className="settings-segment-button settings-view-button"
+                        onClick={() => changeHabitViewMode(viewMode)}
                         aria-pressed={appSettings.viewMode === viewMode}
+                        aria-label={`${viewMode === "grid" ? "Grid" : "List"} view`}
+                        title={`${viewMode === "grid" ? "Grid" : "List"} view`}
                       >
-                        {viewMode === "grid" ? "Grid" : "List"}
+                        {viewMode === "grid" ? <Grid2X2 size={17} aria-hidden="true" /> : <List size={17} aria-hidden="true" />}
                       </button>
                     ))}
                   </div>
@@ -3185,11 +3405,11 @@ function App() {
                   <button
                     type="button"
                     style={styles.settingsActionButton}
-                    onClick={() => setShowKeyboardShortcuts(true)}
+                    onClick={openKeyboardShortcuts}
                   >
                     <Keyboard size={15} />
                     Keyboard Shortcuts
-                    <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{shortcutKey}/</span>
+                    <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{shortcutKey}K</span>
                   </button>
                 </div>
               </section>

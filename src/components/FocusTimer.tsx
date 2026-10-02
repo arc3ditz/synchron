@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Minus, Plus } from "lucide-react";
 import {
   isPermissionGranted,
@@ -28,6 +28,7 @@ type FocusTimerProps = {
   initialEntityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string };
   autoStartAction?: { habitId?: number; title?: string; durationMinutes?: number } | null;
   onAutoStartHandled?: () => void;
+  onTimerShortcutReady?: (handler: (() => boolean) | null) => void;
 };
 
 const DEFAULT_BREAK_MINUTES = 5;
@@ -103,24 +104,6 @@ const styles: Record<string, CSSProperties> = {
   modeButtonActive: {
     background: "var(--color-surface)",
     color: "var(--color-accent)",
-  },
-  sessionBadge: {
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-semibold)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-2) var(--space-3)",
-    letterSpacing: 0.3,
-    whiteSpace: "nowrap",
-  },
-  sessionFocus: {
-    color: "var(--color-accent)",
-    background: "var(--accent-wash-soft)",
-    border: "1px solid var(--accent-border-soft)",
-  },
-  sessionBreak: {
-    color: "var(--text-secondary)",
-    background: "transparent",
-    border: "1px solid var(--border-strong)",
   },
   ringWrapper: {
     position: "relative",
@@ -398,6 +381,7 @@ function FocusTimer({
   initialEntityId,
   autoStartAction,
   onAutoStartHandled,
+  onTimerShortcutReady,
 }: FocusTimerProps) {
   const [mode, setMode] = useState<Mode>("Timer");
   const [timerMinutes, setTimerMinutes] = useState(defaultFocusDuration);
@@ -413,7 +397,7 @@ function FocusTimer({
   const [pomodoroTotalMs, setPomodoroTotalMs] = useState(defaultFocusDuration * 60000);
   const [timerRunning, setTimerRunning] = useState(false);
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
-  const [pomodoroSession, setPomodoroSession] = useState<Session>("Focus");
+  const [, setPomodoroSession] = useState<Session>("Focus");
   const [selectedHabitId, setSelectedHabitId] = useState<number | "">("");
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
@@ -462,6 +446,7 @@ function FocusTimer({
   const updateTimerRef = useRef<(now: number) => void>(() => {});
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
   const quickAdjustStepInputFocusedRef = useRef(false);
+  const primaryControlRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
@@ -946,7 +931,6 @@ function FocusTimer({
     };
   }, []);
 
-  const session = pomodoroSession;
   const isRunning = mode === "Timer" ? timerRunning : pomodoroRunning;
   const remainingMs = mode === "Timer" ? timerRemainingMs : pomodoroRemainingMs;
   const initialDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
@@ -955,13 +939,25 @@ function FocusTimer({
     ? "var(--type-timer-compact)"
     : "var(--type-timer)";
   const dashOffset = CIRCUMFERENCE * (1 - fraction);
-  const ringColor = mode === "Pomodoro" && session === "Break"
-    ? "var(--text-muted)"
-    : "var(--color-accent)";
+  const ringColor = "var(--color-accent)";
 
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
   const primaryButtonText = isRunning ? "Pause" : isPaused ? "Resume" : "Start";
+  const timerShortcutActionRef = useRef<() => boolean>(() => false);
+  timerShortcutActionRef.current = () => {
+    const primaryControl = primaryControlRef.current;
+    if (!primaryControl || primaryControl.disabled) return false;
+    primaryControl.focus({ preventScroll: true });
+    primaryControl.click();
+    return true;
+  };
+  const handleTimerShortcut = useCallback(() => timerShortcutActionRef.current(), []);
+
+  useLayoutEffect(() => {
+    onTimerShortcutReady?.(handleTimerShortcut);
+    return () => onTimerShortcutReady?.(null);
+  }, [handleTimerShortcut, onTimerShortcutReady]);
   const todaySessions = getFocusSessionsForLogicalToday(focusSessions, dayResetHour);
   const focusedTodayMinutes = todaySessions.reduce(
     (total, focusSession) => total + focusSession.durationMinutes,
@@ -994,16 +990,6 @@ function FocusTimer({
               Pomodoro
             </button>
           </div>
-          {mode === "Pomodoro" && (
-            <span
-              style={{
-                ...styles.sessionBadge,
-                ...(session === "Focus" ? styles.sessionFocus : styles.sessionBreak),
-              }}
-            >
-              {session} Session
-            </span>
-          )}
         </div>
 
         <div style={styles.ringWrapper}>
@@ -1063,23 +1049,18 @@ function FocusTimer({
         </div>
 
         <div style={styles.controlsRow}>
-          {!isRunning ? (
-            <button
-              className="focus-primary-control"
-              style={{
-                ...styles.primaryButton,
-                ...(remainingMs <= 0 ? styles.primaryButtonDisabled : {}),
-              }}
-              onClick={handleStart}
-              disabled={remainingMs <= 0}
-            >
-              {primaryButtonText}
-            </button>
-          ) : (
-            <button className="focus-primary-control" style={styles.primaryButton} onClick={handlePause}>
-              Pause
-            </button>
-          )}
+          <button
+            ref={primaryControlRef}
+            className="focus-primary-control"
+            style={{
+              ...styles.primaryButton,
+              ...(!isRunning && remainingMs <= 0 ? styles.primaryButtonDisabled : {}),
+            }}
+            onClick={isRunning ? handlePause : handleStart}
+            disabled={!isRunning && remainingMs <= 0}
+          >
+            {primaryButtonText}
+          </button>
           <button className="focus-secondary-control" style={styles.secondaryButton} onClick={handleReset}>
             Reset
           </button>

@@ -261,6 +261,15 @@
   color: var(--color-accent);
 }
 
+.settings-view-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
 .main-content button.milestone-checkbox {
   display: flex;
   align-items: center;
@@ -480,13 +489,22 @@
 
 .habit-row .my-habits-streak {
   width: fit-content;
+  grid-column: 4;
   justify-self: center;
   flex-shrink: 0;
+}
+
+.habit-streak-header {
+  text-align: center;
 }
 
 .habit-row {
   row-gap: 8px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
 }
 
 .habit-row:hover {
@@ -494,6 +512,23 @@
   border-color: var(--accent-border-soft) !important;
   transform: none;
   box-shadow: none;
+}
+
+.habit-grid-edit-row {
+  grid-column: 1 / -1;
+  display: block;
+  min-width: 0;
+}
+
+.habit-grid-edit-row .habit-edit-fields > div {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.habit-grid-edit-row .habit-cell-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .habit-grid-card:hover {
@@ -695,6 +730,10 @@
   .habit-row {
     grid-template-columns: 1fr;
     row-gap: 12px;
+  }
+
+  .habit-row .my-habits-streak {
+    grid-column: auto;
   }
 
   .habit-info-cluster {
