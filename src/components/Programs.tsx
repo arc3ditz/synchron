@@ -562,7 +562,7 @@ function ProgramCard({
           )}
 
           <div style={styles.dayByDaySection}>
-            <h4 style={styles.sectionTitle}>Day-by-day progress</h4>
+            <h4 style={styles.sectionTitle}>Day-by-Day Progress</h4>
             <div style={styles.dayByDayGrid}>
               {dayByDayProgress.map((day) => {
                 const cellStyle = {

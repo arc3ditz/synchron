@@ -383,11 +383,18 @@ const styles: Record<string, CSSProperties> = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  timeBucketLabel: {
+    width: "100%",
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: 600,
+    lineHeight: 1.1,
+  },
   timeBucketLegend: {
-    display: "flex",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     columnGap: 16,
-    rowGap: 8,
+    rowGap: 10,
     marginTop: 16,
     marginBottom: 4,
     padding: "0 4px",
@@ -396,11 +403,29 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   timeBucketLegendItem: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "8px minmax(0, 1fr)",
+    gridTemplateRows: "auto auto",
     alignItems: "center",
-    gap: 6,
+    columnGap: 6,
+    rowGap: 2,
     fontSize: 12,
     color: "var(--text-secondary)",
+    minWidth: 0,
+  },
+  timeBucketLegendItemPeak: {
+    color: "var(--accent-teal)",
+  },
+  timeBucketLegendName: {
+    fontSize: 12,
+    fontWeight: 500,
+    lineHeight: 1.2,
+  },
+  timeBucketLegendStats: {
+    fontSize: 11,
+    lineHeight: 1.2,
+    color: "var(--text-secondary)",
+    gridColumn: 2,
   },
   timeBucketDot: {
     width: 8,
@@ -496,6 +521,12 @@ function Analytics({
     timeOfDayInsights.afternoonMinutes +
     timeOfDayInsights.eveningMinutes +
     timeOfDayInsights.nightMinutes;
+  const timeBuckets = [
+    { name: "Morning", minutes: timeOfDayInsights.morningMinutes, sessions: timeOfDayInsights.morningSessions },
+    { name: "Afternoon", minutes: timeOfDayInsights.afternoonMinutes, sessions: timeOfDayInsights.afternoonSessions },
+    { name: "Evening", minutes: timeOfDayInsights.eveningMinutes, sessions: timeOfDayInsights.eveningSessions },
+    { name: "Night", minutes: timeOfDayInsights.nightMinutes, sessions: timeOfDayInsights.nightSessions },
+  ] as const;
 
   const weekdayFriction = useMemo(() => {
     return getWeekdayFrictionMetrics(dataset);
@@ -707,69 +738,52 @@ function Analytics({
                 You logged the most focus minutes during <strong style={{ color: "var(--text-primary)" }}>{timeOfDayInsights.peakFocusWindow}</strong> hours.
               </p>
               <div style={styles.timeBucketBar}>
-            <div
-              style={{
-                ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.morningMinutes || 0.001,
-                background: timeOfDayInsights.peakFocusWindow === "Morning" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
-              }}
-            >
-              {timeOfDayInsights.morningMinutes / timeBucketFlexTotal > 0.15
-                ? formatHours(timeOfDayInsights.morningMinutes)
-                : ""}
-            </div>
-            <div
-              style={{
-                ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.afternoonMinutes || 0.001,
-                background: timeOfDayInsights.peakFocusWindow === "Afternoon" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
-              }}
-            >
-              {timeOfDayInsights.afternoonMinutes / timeBucketFlexTotal > 0.15
-                ? formatHours(timeOfDayInsights.afternoonMinutes)
-                : ""}
-            </div>
-            <div
-              style={{
-                ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.eveningMinutes || 0.001,
-                background: timeOfDayInsights.peakFocusWindow === "Evening" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
-              }}
-            >
-              {timeOfDayInsights.eveningMinutes / timeBucketFlexTotal > 0.15
-                ? formatHours(timeOfDayInsights.eveningMinutes)
-                : ""}
-            </div>
-            <div
-              style={{
-                ...styles.timeBucketSegment,
-                flex: timeOfDayInsights.nightMinutes || 0.001,
-                background: timeOfDayInsights.peakFocusWindow === "Night" ? "rgba(var(--accent-rgb), 0.3)" : "rgba(var(--accent-rgb), 0.1)",
-              }}
-            >
-              {timeOfDayInsights.nightMinutes / timeBucketFlexTotal > 0.15
-                ? formatHours(timeOfDayInsights.nightMinutes)
-                : ""}
-            </div>
-          </div>
-          <div style={styles.timeBucketLegend}>
-            <div style={styles.timeBucketLegendItem}>
-              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Morning" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Morning ({formatSessionCount(timeOfDayInsights.morningSessions)})
-            </div>
-            <div style={styles.timeBucketLegendItem}>
-              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Afternoon" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Afternoon ({formatSessionCount(timeOfDayInsights.afternoonSessions)})
-            </div>
-            <div style={styles.timeBucketLegendItem}>
-              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Evening" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Evening ({formatSessionCount(timeOfDayInsights.eveningSessions)})
-            </div>
-            <div style={styles.timeBucketLegendItem}>
-              <div style={{ ...styles.timeBucketDot, background: timeOfDayInsights.peakFocusWindow === "Night" ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)" }} />
-              Night ({formatSessionCount(timeOfDayInsights.nightSessions)})
-            </div>
-          </div>
+                {timeBuckets.map((bucket) => (
+                  <div
+                    key={bucket.name}
+                    style={{
+                      ...styles.timeBucketSegment,
+                      flex: bucket.minutes,
+                      background: timeOfDayInsights.peakFocusWindow === bucket.name
+                        ? "rgba(var(--accent-rgb), 0.3)"
+                        : "rgba(var(--accent-rgb), 0.1)",
+                    }}
+                  >
+                    {bucket.minutes / timeBucketFlexTotal > 0.15 && (
+                      <span style={styles.timeBucketLabel}>{formatHours(bucket.minutes)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={styles.timeBucketLegend}>
+                {timeBuckets.map((bucket) => {
+                  const isPeak = timeOfDayInsights.peakFocusWindow === bucket.name;
+                  return (
+                    <div
+                      key={bucket.name}
+                      style={{
+                        ...styles.timeBucketLegendItem,
+                        ...(isPeak ? styles.timeBucketLegendItemPeak : {}),
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...styles.timeBucketDot,
+                          background: isPeak ? "rgba(var(--accent-rgb), 0.6)" : "rgba(var(--accent-rgb), 0.3)",
+                          gridRow: "1 / span 2",
+                        }}
+                      />
+                      <span style={styles.timeBucketLegendName}>{bucket.name}</span>
+                      <span style={{
+                        ...styles.timeBucketLegendStats,
+                        ...(isPeak ? { color: "var(--accent-teal)", fontWeight: 600 } : {}),
+                      }}>
+                        {formatSessionCount(bucket.sessions)} / {formatHours(bucket.minutes)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>

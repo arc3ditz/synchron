@@ -139,7 +139,12 @@ function getHabitStartDate(habit: Habit): string | undefined {
   if (habit.type === "Challenge" && isDateKey(challengeStart)) {
     return isDateKey(createdDate) && createdDate > challengeStart ? createdDate : challengeStart;
   }
-  return isDateKey(createdDate) ? createdDate : undefined;
+  if (isDateKey(createdDate)) return createdDate;
+  if (habit.type === "Challenge") return undefined;
+  return (habit.completedDates ?? [])
+    .map(readLocalDateKey)
+    .filter(isDateKey)
+    .sort()[0];
 }
 
 function isValidFocusSession(session: FocusSessionRecord): boolean {

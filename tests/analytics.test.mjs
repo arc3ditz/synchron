@@ -176,6 +176,20 @@ test("habit creation and challenge start dates bound expected occurrences", () =
   ]);
 });
 
+test("legacy habits infer their start from the earliest valid completion only when needed", () => {
+  const compatibilityHabits = [
+    { id: 16, name: "Modern", createdAt: "2025-05-14", priority: "Optional", type: "Daily", completedDates: ["2025-05-12", "2025-05-14"] },
+    { id: 17, name: "Legacy", priority: "Optional", type: "Daily", completedDates: ["not-a-date", "2025-05-14", "2025-05-13"] },
+  ];
+  const data = queryAnalyticsData({ habits: compatibilityHabits, tasks: [], focusSessions: [], horizon: "This Week", weekStart: "Monday", dayResetHour: 0, now });
+
+  assert.deepEqual(data.habitOccurrences.map(({ habit, dateKey, completed }) => [habit.name, dateKey, completed]), [
+    ["Modern", "2025-05-14", true],
+    ["Legacy", "2025-05-13", true],
+    ["Legacy", "2025-05-14", true],
+  ]);
+});
+
 test("missed occurrences are based only on scheduled dates in the selected period", () => {
   const habit = { id: 20, name: "New", createdAt: "2025-05-14", priority: "Optional", type: "Daily", completedDates: [] };
   const data = queryAnalyticsData({ habits: [habit], tasks: [], focusSessions: [], horizon: "This Week", weekStart: "Monday", dayResetHour: 0, now });
@@ -195,6 +209,39 @@ test("focus buckets distinguish minutes from session counts", () => {
   assert.equal(timeOfDay.eveningMinutes, 60);
   assert.equal(timeOfDay.eveningSessions, 1);
   assert.equal(timeOfDay.peakFocusWindow, "Evening");
+});
+
+test("time-of-day distribution reflects changed focus session data", () => {
+  const sessions = [
+    { id: 1, timestamp: timestampAt(2025, 4, 14, 8), durationMinutes: 55 },
+    { id: 2, timestamp: timestampAt(2025, 4, 14, 13), durationMinutes: 40 },
+    { id: 3, timestamp: timestampAt(2025, 4, 14, 19), durationMinutes: 95 },
+    { id: 4, timestamp: timestampAt(2025, 4, 14, 22), durationMinutes: 75 },
+  ];
+  const initial = getTimeOfDayInsights(sessions);
+
+  assert.deepEqual([
+    initial.morningMinutes,
+    initial.afternoonMinutes,
+    initial.eveningMinutes,
+    initial.nightMinutes,
+  ], [55, 40, 95, 75]);
+  assert.deepEqual([
+    initial.morningSessions,
+    initial.afternoonSessions,
+    initial.eveningSessions,
+    initial.nightSessions,
+  ], [1, 1, 1, 1]);
+
+  const changed = getTimeOfDayInsights([...sessions, {
+    id: 5,
+    timestamp: timestampAt(2025, 4, 14, 23),
+    durationMinutes: 30,
+  }]);
+
+  assert.equal(changed.nightMinutes, 105);
+  assert.equal(changed.nightSessions, 2);
+  assert.equal(changed.peakFocusWindow, "Night");
 });
 
 test("goal allocation percentages use filtered minutes and sum to 100", () => {
@@ -286,8 +333,8 @@ test("logical local dates respect timezone and configured day reset", () => {
   assert.equal(data.taskOccurrences[0].dateKey, "2025-05-13");
 });
 
-test("missing start dates and empty periods produce neutral no-data results", () => {
-  const unknownStart = { ...habits[0], createdAt: undefined, completedDates: ["2025-05-14"] };
+test("habits without a valid creation or completion date keep neutral no-data results", () => {
+  const unknownStart = { ...habits[0], createdAt: "invalid", completedDates: ["also-invalid"] };
   const data = queryAnalyticsData({ habits: [unknownStart], tasks: [], focusSessions: [], horizon: "This Week", weekStart: "Monday", dayResetHour: 0, now });
   const performance = getHabitPerformanceDiagnostics(data);
   const timeOfDay = getTimeOfDayInsights(data.focusSessions);
