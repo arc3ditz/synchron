@@ -67,7 +67,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     width: "100%",
     minWidth: 0,
-    gap: 24,
+    gap: "var(--space-6)",
   },
   header: {
     display: "flex",
@@ -77,8 +77,8 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
   },
   title: {
-    fontSize: 20,
-    fontWeight: 600,
+    fontSize: "var(--type-lg)",
+    fontWeight: "var(--font-semibold)",
     color: "var(--text-primary)",
     margin: 0,
   },
@@ -87,35 +87,35 @@ const styles: Record<string, CSSProperties> = {
     gap: 4,
     background: "var(--bg-inset)",
     border: "1px solid var(--border-color)",
-    borderRadius: 20,
-    padding: 3,
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-1)",
   },
   modeButton: {
     background: "transparent",
     border: "none",
-    borderRadius: 16,
-    padding: "8px 18px",
-    fontSize: 14,
-    fontWeight: 500,
+    borderRadius: "var(--radius-sm)",
+    padding: "var(--space-2) var(--space-4)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-secondary)",
     cursor: "pointer",
   },
   modeButtonActive: {
-    background: "rgba(var(--accent-rgb), 0.1)",
-    color: "var(--accent-teal)",
+    background: "var(--color-surface)",
+    color: "var(--color-accent)",
   },
   sessionBadge: {
-    fontSize: 13,
-    fontWeight: 600,
-    borderRadius: 20,
-    padding: "6px 16px",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-2) var(--space-3)",
     letterSpacing: 0.3,
     whiteSpace: "nowrap",
   },
   sessionFocus: {
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.08)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
+    color: "var(--color-accent)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid var(--accent-border-soft)",
   },
   sessionBreak: {
     color: "var(--text-secondary)",
@@ -132,7 +132,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
   },
   ringLabel: {
-    fontSize: 54,
+    fontSize: "var(--type-timer)",
     flex: "0 0 auto",
     fontWeight: 600,
     color: "var(--text-primary)",
@@ -157,15 +157,15 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    padding: "7px 12px",
-    background: "var(--card-surface-bg)",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: 20,
-    color: "#e4e4e7",
-    fontSize: 13,
-    fontWeight: 500,
+    padding: "var(--space-2) var(--space-3)",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: "var(--radius-md)",
+    color: "var(--text-body)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-medium)",
     cursor: "pointer",
-    transition: "transform 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+    transition: "color var(--transition-standard), border-color var(--transition-standard), background-color var(--transition-standard)",
   },
   durationRow: {
     display: "flex",
@@ -198,10 +198,11 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 96,
     background: "var(--card-surface-bg)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 8,
-    padding: "8px 10px",
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-2) var(--space-3)",
     color: "var(--text-primary)",
-    fontSize: 15,
+    fontSize: "var(--type-base)",
+    fontVariantNumeric: "tabular-nums",
     outline: "none",
   },
   durationInputFieldDisabled: {
@@ -226,16 +227,15 @@ const styles: Record<string, CSSProperties> = {
   },
   primaryButton: {
     flex: 1,
-    background: "linear-gradient(135deg, var(--accent-teal-soft), var(--accent-teal))",
-    border: "1px solid rgba(var(--accent-rgb), 0.65)",
-    borderRadius: 12,
-    padding: "13px 16px",
-    fontSize: 15,
-    fontWeight: 600,
-    color: "var(--bg-primary)",
+    background: "var(--color-accent)",
+    border: "1px solid var(--color-accent)",
+    borderRadius: "var(--radius-lg)",
+    padding: "var(--space-3) var(--space-4)",
+    fontSize: "var(--type-base)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--color-accent-contrast)",
     cursor: "pointer",
-    boxShadow: "0 6px 20px rgba(var(--accent-rgb), 0.16)",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease",
+    transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), opacity var(--transition-standard), transform var(--transition-standard)",
   },
   primaryButtonDisabled: {
     opacity: 0.5,
@@ -245,13 +245,13 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     background: "var(--bg-surface)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 12,
-    padding: "13px 16px",
-    fontSize: 15,
-    fontWeight: 500,
+    borderRadius: "var(--radius-lg)",
+    padding: "var(--space-3) var(--space-4)",
+    fontSize: "var(--type-base)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-secondary)",
     cursor: "pointer",
-    transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
+    transition: "background-color var(--transition-standard), border-color var(--transition-standard), color var(--transition-standard)",
   },
   habitSelectRow: {
     display: "flex",
@@ -277,13 +277,12 @@ const styles: Record<string, CSSProperties> = {
   },
   controlPanel: {
     ...CARD_SURFACE,
-    background: "color-mix(in srgb, var(--bg-surface) 88%, transparent)",
-    borderRadius: 16,
-    backdropFilter: "blur(16px)",
+    background: "var(--color-surface)",
+    borderRadius: "var(--radius-lg)",
     display: "flex",
     flexDirection: "column",
-    gap: 24,
-    padding: 24,
+    gap: "var(--space-6)",
+    padding: "var(--space-4)",
     width: "100%",
   },
   panelSection: {
@@ -292,10 +291,10 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
   },
   panelCard: {
-    padding: 14,
-    background: "color-mix(in srgb, var(--bg-surface) 72%, transparent)",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: 12,
+    padding: 0,
+    background: "transparent",
+    border: "none",
+    borderRadius: 0,
   },
   panelSectionTitle: {
     margin: 0,
@@ -311,7 +310,7 @@ const styles: Record<string, CSSProperties> = {
   presetButton: {
     background: "transparent",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 20,
+    borderRadius: "var(--radius-md)",
     padding: "8px 10px",
     color: "var(--text-secondary)",
     fontSize: 13,
@@ -323,8 +322,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
   },
   overviewCard: {
-    ...CARD_SURFACE,
-    padding: 12,
+    padding: "var(--space-2) 0",
+    background: "transparent",
+    borderBottom: "1px solid var(--border-color)",
   },
   overviewLabel: {
     display: "block",
@@ -335,9 +335,9 @@ const styles: Record<string, CSSProperties> = {
   overviewValue: {
     display: "block",
     marginTop: 6,
-    color: "var(--accent-teal)",
-    fontSize: 20,
-    fontWeight: 600,
+    color: "var(--color-accent)",
+    fontSize: "var(--type-lg)",
+    fontWeight: "var(--font-semibold)",
     fontVariantNumeric: "tabular-nums",
   },
 };
@@ -951,14 +951,13 @@ function FocusTimer({
   const remainingMs = mode === "Timer" ? timerRemainingMs : pomodoroRemainingMs;
   const initialDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
   const fraction = initialDurationMs > 0 ? Math.min(1, Math.max(0, remainingMs / initialDurationMs)) : 0;
-  const timerLabelFontSize = remainingMs >= 100 * 60000 ? 40 : 54;
+  const timerLabelFontSize = remainingMs >= 100 * 60000
+    ? "var(--type-timer-compact)"
+    : "var(--type-timer)";
   const dashOffset = CIRCUMFERENCE * (1 - fraction);
-  const ringColor =
-    mode === "Timer"
-      ? "var(--accent-amber)"
-      : session === "Break"
-        ? "var(--text-muted)"
-        : "var(--accent-teal)";
+  const ringColor = mode === "Pomodoro" && session === "Break"
+    ? "var(--text-muted)"
+    : "var(--color-accent)";
 
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
@@ -1014,7 +1013,7 @@ function FocusTimer({
               cy={100}
               r={RADIUS}
               fill="none"
-              stroke="rgba(212, 212, 216, 0.35)"
+              stroke="var(--border-strong)"
               strokeWidth={10}
             />
             <circle

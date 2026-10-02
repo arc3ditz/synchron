@@ -124,10 +124,10 @@ const FREQUENCY_LABELS: Record<FrequencyType, string> = {
 };
 
 const typeBadgeBase: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 500,
-  borderRadius: 12,
-  padding: "3px 10px",
+  fontSize: "var(--type-xs)",
+  fontWeight: "var(--font-medium)",
+  borderRadius: "var(--radius-md)",
+  padding: "var(--space-1) var(--space-2)",
   lineHeight: 1.35,
   textAlign: "center",
   whiteSpace: "normal",
@@ -321,31 +321,35 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     display: "flex",
     flexDirection: "column",
-    gap: 6,
+    gap: "var(--space-2)",
   },
   itemColors: {
-    ...CARD_SURFACE,
+    background: "transparent",
+    border: "none",
+    borderBottom: "1px solid var(--border-color)",
+    borderRadius: 0,
+    padding: "var(--space-3) 0",
+    boxShadow: "none",
   },
   itemCompletedColors: {
-    ...CARD_SURFACE,
-    background: "var(--bg-completed)",
-    opacity: 0.8,
+    background: "var(--accent-wash-soft)",
+    borderBottom: "1px solid var(--accent-border-soft)",
+    opacity: 1,
   },
   habitGridList: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-    gap: 12,
+    gap: "var(--space-3)",
   },
   habitGridCard: {
     ...CARD_SURFACE,
     background: "var(--bg-surface)",
     display: "flex",
     flexDirection: "column",
-    gap: 16,
+    gap: "var(--space-3)",
     minWidth: 0,
-    padding: 16,
-    borderRadius: 12,
-    transition: "border-color 0.15s ease, transform 0.15s ease",
+    padding: "var(--space-4)",
+    transition: "border-color var(--transition-standard), transform var(--transition-standard)",
   },
   gridCardTop: {
     display: "flex",
@@ -364,19 +368,19 @@ const styles: Record<string, CSSProperties> = {
   gridCardMiddle: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: "var(--space-2)",
   },
   gridProgressTrack: {
-    height: 5,
-    marginTop: 8,
+    height: "var(--space-1)",
+    marginTop: "var(--space-2)",
     overflow: "hidden",
     background: "var(--bg-inset)",
-    borderRadius: 5,
+    borderRadius: "var(--radius-sm)",
   },
   gridProgressFill: {
     height: "100%",
     background: "var(--accent-teal)",
-    borderRadius: 5,
+    borderRadius: "var(--radius-sm)",
     transition: "width 0.2s ease",
   },
   gridCardBottom: {
@@ -388,7 +392,7 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 40,
   },
   habitName: {
-    fontSize: 14,
+    fontSize: "var(--type-sm)",
     color: "var(--text-body)",
     wordBreak: "break-word",
     overflowWrap: "break-word",
@@ -398,29 +402,32 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "line-through",
   },
   priorityBadge: {
-    fontSize: 11,
-    fontWeight: 500,
-    borderRadius: 20,
-    padding: "2px 9px",
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 22,
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
+    borderRadius: "var(--radius-md)",
+    padding: "2px var(--space-2)",
     whiteSpace: "nowrap",
     letterSpacing: 0.2,
     width: "fit-content",
   },
   priorityMandatory: {
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.08)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
+    color: "var(--color-accent)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid var(--accent-border-soft)",
   },
   priorityOptional: {
-    color: "var(--text-muted)",
-    background: "transparent",
-    border: "1px solid var(--border-strong)",
+    color: "var(--text-secondary)",
+    background: "var(--color-priority-neutral-wash)",
+    border: "1px solid var(--border-color)",
   },
   challengeBadge: {
     ...typeBadgeBase,
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.08)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
+    color: "var(--color-accent)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid var(--accent-border-soft)",
   },
   challengeBadgeCompleted: {
     color: "var(--text-dim)",
@@ -442,43 +449,43 @@ const styles: Record<string, CSSProperties> = {
   toggleButton: {
     background: "var(--bg-raised)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 20,
-    padding: "0 14px",
+    borderRadius: "var(--radius-md)",
+    padding: "0 var(--space-3)",
     minWidth: 128,
     height: 40,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    fontSize: 12,
-    fontWeight: 500,
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-secondary)",
     cursor: "pointer",
     whiteSpace: "nowrap",
-    transition: "background 0.15s ease",
+    transition: "background-color var(--transition-standard), color var(--transition-standard), border-color var(--transition-standard)",
   },
   toggleButtonDone: {
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
-    color: "var(--accent-teal)",
+    background: "var(--accent-wash)",
+    border: "1px solid var(--accent-border)",
+    color: "var(--color-accent)",
   },
   habitCompletionButton: {
     background: "var(--bg-raised)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 6,
+    borderRadius: "var(--radius-md)",
     padding: "0 10px",
     height: 28,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    fontSize: 12,
-    fontWeight: 500,
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-secondary)",
     cursor: "pointer",
     whiteSpace: "nowrap",
     flexShrink: 0,
-    transition: "background 0.15s ease",
+    transition: "background-color var(--transition-standard), color var(--transition-standard), border-color var(--transition-standard)",
   },
   iconButton: {
     background: "transparent",
@@ -516,18 +523,18 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     background: "transparent",
     border: "1px solid var(--border-strong)",
-    borderRadius: 20,
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 500,
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-2) var(--space-3)",
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-secondary)",
     cursor: "pointer",
-    transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+    transition: "background-color var(--transition-standard), color var(--transition-standard), border-color var(--transition-standard)",
   },
   streakFreezeToggleActive: {
-    background: "rgba(var(--accent-rgb), 0.08)",
-    color: "var(--accent-teal)",
-    borderColor: "rgba(var(--accent-rgb), 0.3)",
+    background: "var(--accent-wash-soft)",
+    color: "var(--color-accent)",
+    borderColor: "var(--accent-border-soft)",
   },
   editRow: {
     gridColumn: "1 / -1",
@@ -624,13 +631,16 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
   },
   categoryBadge: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "var(--text-secondary)",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 4,
-    padding: "1px 7px",
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 22,
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
+    color: "var(--color-category)",
+    background: "var(--color-category-wash)",
+    border: "1px solid var(--color-category-border)",
+    borderRadius: "var(--radius-md)",
+    padding: "2px var(--space-2)",
     whiteSpace: "nowrap",
   },
   categoryManageButton: {
@@ -679,33 +689,36 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
   },
   settingsCard: {
-    ...CARD_SURFACE,
     display: "flex",
     flexDirection: "column",
-    gap: 18,
-    marginBottom: 14,
-    padding: 20,
+    gap: "var(--space-4)",
+    marginBottom: "var(--space-3)",
+    padding: "var(--space-5)",
+    border: "none",
+    borderBottom: "1px solid var(--border-color)",
+    borderRadius: 0,
+    background: "transparent",
   },
   settingsCardTitle: {
     display: "flex",
     alignItems: "center",
-    gap: 9,
+    gap: "var(--space-2)",
     margin: 0,
     color: "var(--text-primary)",
-    fontSize: 15,
-    fontWeight: 600,
+    fontSize: "var(--type-base)",
+    fontWeight: "var(--font-semibold)",
   },
   settingsRow: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 18,
+    gap: "var(--space-4)",
     flexWrap: "wrap",
   },
   settingsLabel: {
     color: "var(--text-body)",
-    fontSize: 14,
-    fontWeight: 500,
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-medium)",
   },
   settingsSubheading: {
     margin: "8px 0 0",
@@ -717,67 +730,19 @@ const styles: Record<string, CSSProperties> = {
     display: "block",
     marginTop: 4,
     color: "var(--text-secondary)",
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     lineHeight: 1.5,
   },
   settingsSelect: {
     minWidth: 190,
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 8,
-    padding: "9px 12px",
-    color: "var(--text-body)",
-    fontSize: 13,
-    outline: "none",
-    cursor: "pointer",
   },
   settingsSegment: {
     display: "inline-flex",
-    gap: 4,
-    padding: 3,
+    gap: "var(--space-1)",
+    padding: "var(--space-1)",
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 9,
-  },
-  settingsSegmentButton: {
-    border: "1px solid transparent",
-    borderRadius: 6,
-    padding: "7px 12px",
-    background: "transparent",
-    color: "var(--text-secondary)",
-    fontSize: 12,
-    cursor: "pointer",
-  },
-  settingsSegmentButtonActive: {
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
-  },
-  settingsToggle: {
-    width: 44,
-    height: 26,
-    padding: 3,
-    border: "1px solid var(--border-strong)",
-    borderRadius: 20,
-    background: "var(--bg-toggle)",
-    cursor: "pointer",
-    transition: "background 0.15s ease, border-color 0.15s ease",
-  },
-  settingsToggleActive: {
-    background: "rgba(var(--accent-rgb), 0.28)",
-    border: "1px solid rgba(var(--accent-rgb), 0.6)",
-  },
-  settingsToggleThumb: {
-    display: "block",
-    width: 18,
-    height: 18,
-    borderRadius: "50%",
-    background: "var(--text-secondary)",
-    transition: "transform 0.15s ease, background 0.15s ease",
-  },
-  settingsToggleThumbActive: {
-    transform: "translateX(18px)",
-    background: "var(--accent-teal)",
+    borderRadius: "var(--radius-md)",
   },
   settingsAboutRow: {
     display: "flex",
@@ -904,6 +869,30 @@ function computeSummary(habits: Habit[], dateKey: string): Summary {
 
 function createHabitId(): number {
   return Date.now();
+}
+
+function SettingsSwitch({
+  label,
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="ui-toggle"
+      role="switch"
+      aria-label={label}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onChange}
+    />
+  );
 }
 
 function App() {
@@ -1938,6 +1927,12 @@ function App() {
             >
               {habit.name}
             </span>
+            {(doneOnSelectedDate || completed) && (
+              <span className="habit-completion-state">
+                <Check size={12} aria-hidden="true" />
+                Done
+              </span>
+            )}
             {habit.category && (
               <span style={styles.categoryBadge}>{habit.category}</span>
             )}
@@ -2132,72 +2127,84 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-body">
-        <nav className="sidebar">
-          <button
-            className={`sidebar-item ${view === "Today" ? "active" : ""}`}
-            onClick={() => navigateToView("Today")}
-          >
-            <CalendarDays size={20} />
-            <span>Today</span>
-            <span className="sidebar-shortcut">{shortcutKey}1</span>
-          </button>
+        <nav className="sidebar" aria-label="Main navigation">
+          <div className="sidebar-primary" role="group" aria-label="Workspace">
+            <button
+              className={`sidebar-item ${view === "Today" ? "active" : ""}`}
+              onClick={() => navigateToView("Today")}
+              aria-current={view === "Today" ? "page" : undefined}
+            >
+              <CalendarDays size={18} />
+              <span>Today</span>
+              <span className="sidebar-shortcut">{shortcutKey}1</span>
+            </button>
           <button
             className={`sidebar-item ${view === "Habits" ? "active" : ""}`}
             onClick={() => navigateToView("Habits")}
+            aria-current={view === "Habits" ? "page" : undefined}
           >
-            <ListChecks size={20} />
+            <ListChecks size={18} />
             <span>My Habits</span>
             <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
           <button
             className={`sidebar-item ${view === "Programs" ? "active" : ""}`}
             onClick={() => navigateToView("Programs")}
+            aria-current={view === "Programs" ? "page" : undefined}
           >
-            <Flame size={20} />
+            <Flame size={18} />
             <span>Programs</span>
             <span className="sidebar-shortcut">{shortcutKey}3</span>
           </button>
           <button
             className={`sidebar-item ${view === "goals" ? "active" : ""}`}
             onClick={() => navigateToView("goals")}
+            aria-current={view === "goals" ? "page" : undefined}
           >
-            <Target size={20} />
+            <Target size={18} />
             <span>Goals</span>
             <span className="sidebar-shortcut">{shortcutKey}4</span>
           </button>
           <button
             className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
             onClick={() => navigateToView("Timer")}
+            aria-current={view === "Timer" ? "page" : undefined}
           >
-            <TimerIcon size={20} />
+            <TimerIcon size={18} />
             <span>Timer</span>
             <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
             onClick={() => navigateToView("History")}
+            aria-current={view === "History" ? "page" : undefined}
           >
-            <HistoryIcon size={20} />
+            <HistoryIcon size={18} />
             <span>History</span>
             <span className="sidebar-shortcut">{shortcutKey}6</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
             onClick={() => navigateToView("Analytics")}
+            aria-current={view === "Analytics" ? "page" : undefined}
           >
-            <BarChart3 size={20} />
+            <BarChart3 size={18} />
             <span>Analytics</span>
             <span className="sidebar-shortcut">{shortcutKey}7</span>
           </button>
+          </div>
           <div className="sidebar-spacer" />
-          <button
-            className={`sidebar-item ${view === "Settings" ? "active" : ""}`}
-            onClick={() => navigateToView("Settings")}
-          >
-            <Settings size={20} />
-            <span>Settings</span>
-            <span className="sidebar-shortcut">{shortcutKey},</span>
-          </button>
+          <div className="sidebar-utility" role="group" aria-label="Preferences">
+            <button
+              className={`sidebar-item ${view === "Settings" ? "active" : ""}`}
+              onClick={() => navigateToView("Settings")}
+              aria-current={view === "Settings" ? "page" : undefined}
+            >
+              <Settings size={18} />
+              <span>Settings</span>
+              <span className="sidebar-shortcut">{shortcutKey},</span>
+            </button>
+          </div>
         </nav>
 
         <main className="main-content">
@@ -2927,10 +2934,7 @@ function App() {
                       <button
                         key={theme}
                         type="button"
-                        style={{
-                          ...styles.settingsSegmentButton,
-                          ...(appSettings.theme === theme ? styles.settingsSegmentButtonActive : {}),
-                        }}
+                        className="settings-segment-button"
                         onClick={() => setAppSettings((current) => ({ ...current, theme }))}
                         aria-pressed={appSettings.theme === theme}
                       >
@@ -2949,10 +2953,7 @@ function App() {
                       <button
                         key={viewMode}
                         type="button"
-                        style={{
-                          ...styles.settingsSegmentButton,
-                          ...(appSettings.viewMode === viewMode ? styles.settingsSegmentButtonActive : {}),
-                        }}
+                        className="settings-segment-button"
                         onClick={() => setAppSettings((current) => ({ ...current, viewMode }))}
                         aria-pressed={appSettings.viewMode === viewMode}
                       >
@@ -2967,6 +2968,7 @@ function App() {
                     <span style={styles.settingsDescription}>Choose when a new habit day begins.</span>
                   </div>
                   <select
+                    className="ui-select"
                     id="day-reset-time"
                     style={styles.settingsSelect}
                     value={appSettings.dayResetHour}
@@ -2992,10 +2994,7 @@ function App() {
                       <button
                         key={weekStart}
                         type="button"
-                        style={{
-                          ...styles.settingsSegmentButton,
-                          ...(appSettings.weekStart === weekStart ? styles.settingsSegmentButtonActive : {}),
-                        }}
+                        className="settings-segment-button"
                         onClick={() => setAppSettings((current) => ({ ...current, weekStart }))}
                         aria-pressed={appSettings.weekStart === weekStart}
                       >
@@ -3016,27 +3015,14 @@ function App() {
                     <span style={styles.settingsLabel}>Show Mandatory Habits in Important Items</span>
                     <span style={styles.settingsDescription}>Include pending mandatory habits in today&apos;s important items.</span>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Show Mandatory Habits in Important Items"
-                    aria-checked={appSettings.showMandatoryHabitsInImportantItems ?? false}
-                    style={{
-                      ...styles.settingsToggle,
-                      ...((appSettings.showMandatoryHabitsInImportantItems ?? false) ? styles.settingsToggleActive : {}),
-                    }}
-                    onClick={() => setAppSettings((current) => ({
+                  <SettingsSwitch
+                    label="Show Mandatory Habits in Important Items"
+                    checked={appSettings.showMandatoryHabitsInImportantItems ?? false}
+                    onChange={() => setAppSettings((current) => ({
                       ...current,
                       showMandatoryHabitsInImportantItems: !(current.showMandatoryHabitsInImportantItems ?? false),
                     }))}
-                  >
-                    <span
-                      style={{
-                        ...styles.settingsToggleThumb,
-                        ...((appSettings.showMandatoryHabitsInImportantItems ?? false) ? styles.settingsToggleThumbActive : {}),
-                      }}
-                    />
-                  </button>
+                  />
                 </div>
               </section>
 
@@ -3055,10 +3041,7 @@ function App() {
                       <button
                         key={minutes}
                         type="button"
-                        style={{
-                          ...styles.settingsSegmentButton,
-                          ...(appSettings.defaultFocusDuration === minutes ? styles.settingsSegmentButtonActive : {}),
-                        }}
+                        className="settings-segment-button"
                         onClick={() => setAppSettings((current) => ({ ...current, defaultFocusDuration: minutes }))}
                         aria-pressed={appSettings.defaultFocusDuration === minutes}
                       >
@@ -3074,6 +3057,7 @@ function App() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <select
+                      className="ui-select"
                       style={{ ...styles.settingsSelect, minWidth: 120 }}
                       value={[1, 5, 10].includes(appSettings.quickAdjustStepMinutes) ? appSettings.quickAdjustStepMinutes : "custom"}
                       onChange={(event) => {
@@ -3092,6 +3076,7 @@ function App() {
                     </select>
                     {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
                       <input
+                        className="ui-input ui-numeric"
                         type="number"
                         min={1}
                         max={180}
@@ -3119,24 +3104,11 @@ function App() {
                     <span style={styles.settingsLabel}>Sound Alerts</span>
                     <span style={styles.settingsDescription}>Play chime on timer completion.</span>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Play chime on timer completion"
-                    aria-checked={appSettings.soundAlerts}
-                    style={{
-                      ...styles.settingsToggle,
-                      ...(appSettings.soundAlerts ? styles.settingsToggleActive : {}),
-                    }}
-                    onClick={() => setAppSettings((current) => ({ ...current, soundAlerts: !current.soundAlerts }))}
-                  >
-                    <span
-                      style={{
-                        ...styles.settingsToggleThumb,
-                        ...(appSettings.soundAlerts ? styles.settingsToggleThumbActive : {}),
-                      }}
-                    />
-                  </button>
+                  <SettingsSwitch
+                    label="Play chime on timer completion"
+                    checked={appSettings.soundAlerts}
+                    onChange={() => setAppSettings((current) => ({ ...current, soundAlerts: !current.soundAlerts }))}
+                  />
                 </div>
               </section>
 
@@ -3150,27 +3122,14 @@ function App() {
                     <span style={styles.settingsLabel}>Enable Intelligent Notifications</span>
                     <span style={styles.settingsDescription}>Allow Synchron to send useful reminders based on your activity.</span>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Enable Intelligent Notifications"
-                    aria-checked={appSettings.enableIntelligentNotifications}
-                    style={{
-                      ...styles.settingsToggle,
-                      ...(appSettings.enableIntelligentNotifications ? styles.settingsToggleActive : {}),
-                    }}
-                    onClick={() => setAppSettings((current) => ({
+                  <SettingsSwitch
+                    label="Enable Intelligent Notifications"
+                    checked={appSettings.enableIntelligentNotifications}
+                    onChange={() => setAppSettings((current) => ({
                       ...current,
                       enableIntelligentNotifications: !current.enableIntelligentNotifications,
                     }))}
-                  >
-                    <span
-                      style={{
-                        ...styles.settingsToggleThumb,
-                        ...(appSettings.enableIntelligentNotifications ? styles.settingsToggleThumbActive : {}),
-                      }}
-                    />
-                  </button>
+                  />
                 </div>
                 <div style={styles.settingsRow}>
                   <div>
@@ -3178,6 +3137,7 @@ function App() {
                     <span style={styles.settingsDescription}>Minimum time between proactive notifications.</span>
                   </div>
                   <select
+                    className="ui-select"
                     id="notification-frequency"
                     style={styles.settingsSelect}
                     value={appSettings.notificationFrequency}
@@ -3202,26 +3162,12 @@ function App() {
                   return (
                     <div key={setting} style={styles.settingsRow}>
                       <span style={{ ...styles.settingsLabel, opacity: appSettings.enableIntelligentNotifications ? 1 : 0.5 }}>{label}</span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-label={label}
-                        aria-checked={enabled}
+                      <SettingsSwitch
+                        label={label}
+                        checked={enabled}
                         disabled={!appSettings.enableIntelligentNotifications}
-                        style={{
-                          ...styles.settingsToggle,
-                          ...(enabled ? styles.settingsToggleActive : {}),
-                          ...(!appSettings.enableIntelligentNotifications ? { opacity: 0.45, cursor: "not-allowed" } : {}),
-                        }}
-                        onClick={() => setAppSettings((current) => ({ ...current, [setting]: !current[setting] }))}
-                      >
-                        <span
-                          style={{
-                            ...styles.settingsToggleThumb,
-                            ...(enabled ? styles.settingsToggleThumbActive : {}),
-                          }}
-                        />
-                      </button>
+                        onChange={() => setAppSettings((current) => ({ ...current, [setting]: !current[setting] }))}
+                      />
                     </div>
                   );
                 })}

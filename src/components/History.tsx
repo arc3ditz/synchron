@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { ChevronLeft, ChevronRight, History as HistoryIcon, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, History as HistoryIcon, Trash2 } from "lucide-react";
 
 import { CARD_SURFACE } from "../theme";
 import type { HistoryHabit, FocusSessionRecord } from "../types";
@@ -32,26 +32,27 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
   title: {
-    fontSize: 22,
-    fontWeight: 600,
+    fontSize: "var(--type-xl)",
+    fontWeight: "var(--font-semibold)",
     color: "var(--text-primary)",
     margin: "0 0 4px",
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
     margin: "0 0 20px",
   },
   summaryBar: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
-    gap: 10,
-    margin: "20px 0 24px",
+    gap: "var(--space-2)",
+    margin: "var(--space-5) 0 var(--space-6)",
   },
   summaryCard: {
-    ...CARD_SURFACE,
     minWidth: 0,
-    padding: 14,
+    padding: "var(--space-2) 0",
+    borderBottom: "1px solid var(--border-color)",
+    background: "transparent",
   },
   summaryLabel: {
     display: "block",
@@ -63,8 +64,9 @@ const styles: Record<string, CSSProperties> = {
   summaryValue: {
     display: "block",
     color: "var(--text-primary)",
-    fontSize: 20,
-    fontWeight: 650,
+    fontSize: "var(--type-lg)",
+    fontWeight: "var(--font-semibold)",
+    fontVariantNumeric: "tabular-nums",
     overflowWrap: "anywhere",
   },
   selectWrapper: {
@@ -78,9 +80,11 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 420,
     background: "var(--bg-surface)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 8,
-    padding: "10px 12px",
+    borderRadius: "var(--radius-md)",
+    paddingTop: "var(--space-2)",
     paddingRight: 38,
+    paddingBottom: "var(--space-2)",
+    paddingLeft: "var(--space-3)",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
@@ -116,13 +120,13 @@ const styles: Record<string, CSSProperties> = {
     padding: 0,
   },
   todayButton: {
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
-    borderRadius: 20,
-    padding: "6px 14px",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "var(--accent-teal)",
+    background: "var(--accent-wash)",
+    border: "1px solid var(--accent-border)",
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-1) var(--space-3)",
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
+    color: "var(--color-accent)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
@@ -139,6 +143,7 @@ const styles: Record<string, CSSProperties> = {
     paddingBottom: 4,
   },
   day: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -153,10 +158,18 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-unscheduled)",
   },
   completedDay: {
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
+    color: "var(--color-accent)",
+    background: "var(--accent-wash)",
+    border: "1px solid var(--accent-border)",
     fontWeight: 600,
+  },
+  completedDayMark: {
+    position: "absolute",
+    right: 2,
+    bottom: 2,
+    width: 8,
+    height: 8,
+    color: "var(--color-accent)",
   },
   today: {
     outline: "1px solid rgba(var(--accent-rgb), 0.5)",
@@ -195,50 +208,57 @@ const styles: Record<string, CSSProperties> = {
   focusSessionsList: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: "var(--space-2)",
   },
   focusSessionsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-    gap: 12,
+    gap: "var(--space-3)",
   },
   focusSessionItem: {
-    ...CARD_SURFACE,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: "var(--space-3)",
+    padding: "var(--space-3) 0",
+    borderBottom: "1px solid var(--border-color)",
+    background: "transparent",
+  },
+  focusSessionItemGrid: {
+    ...CARD_SURFACE,
+    borderBottom: "none",
   },
   focusSessionInfo: {
     display: "flex",
     flexDirection: "column",
-    gap: 4,
+    gap: "var(--space-1)",
     flex: 1,
     minWidth: 0,
   },
   focusSessionType: {
-    fontSize: 13,
-    fontWeight: 500,
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-body)",
   },
   focusSessionMeta: {
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     color: "var(--text-secondary)",
   },
   focusSessionHabit: {
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     color: "var(--text-secondary)",
   },
   focusSessionDuration: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "var(--accent-teal)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--color-accent)",
+    fontVariantNumeric: "tabular-nums",
     whiteSpace: "nowrap",
   },
   deleteFocusSessionButton: {
     background: "transparent",
     border: "1px solid var(--border-strong)",
-    borderRadius: 20,
+    borderRadius: "var(--radius-md)",
     width: 28,
     height: 28,
     display: "flex",
@@ -247,7 +267,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-dim)",
     cursor: "pointer",
     padding: 0,
-    transition: "color 0.15s ease, border-color 0.15s ease",
+    transition: "color var(--transition-standard), border-color var(--transition-standard)",
     flexShrink: 0,
   },
   noFocusSessions: {
@@ -354,30 +374,30 @@ function History({
           <>
             <div style={styles.summaryCard}>
               <span style={styles.summaryLabel}>Current Streak</span>
-              <strong style={styles.summaryValue}>{calculateStreak(selectedHabit, streakFreeze, dayResetHour)}</strong>
+              <strong className="ui-numeric" style={styles.summaryValue}>{calculateStreak(selectedHabit, streakFreeze, dayResetHour)}</strong>
             </div>
             <div style={styles.summaryCard}>
               <span style={styles.summaryLabel}>Total Completed Days</span>
-              <strong style={styles.summaryValue}>{selectedHabit.completedDates.length}</strong>
+              <strong className="ui-numeric" style={styles.summaryValue}>{selectedHabit.completedDates.length}</strong>
             </div>
             <div style={styles.summaryCard}>
               <span style={styles.summaryLabel}>Completion Count</span>
-              <strong style={styles.summaryValue}>{monthCompletionCount}</strong>
+              <strong className="ui-numeric" style={styles.summaryValue}>{monthCompletionCount}</strong>
             </div>
           </>
         ) : (
           <>
             <div style={styles.summaryCard}>
               <span style={styles.summaryLabel}>Habit Completions</span>
-              <strong style={styles.summaryValue}>{completedHabitDays}</strong>
+              <strong className="ui-numeric" style={styles.summaryValue}>{completedHabitDays}</strong>
             </div>
             <div style={styles.summaryCard}>
               <span style={styles.summaryLabel}>Active Streaks</span>
-              <strong style={styles.summaryValue}>{activeStreakCount}</strong>
+              <strong className="ui-numeric" style={styles.summaryValue}>{activeStreakCount}</strong>
             </div>
             <div style={styles.summaryCard}>
               <span style={styles.summaryLabel}>Log Date Range</span>
-              <strong style={{ ...styles.summaryValue, fontSize: 14 }}>{logDateRange}</strong>
+              <strong style={{ ...styles.summaryValue, fontSize: "var(--type-sm)" }}>{logDateRange}</strong>
             </div>
           </>
         )}
@@ -463,8 +483,15 @@ function History({
                     ...(isCompleted ? styles.completedDay : {}),
                     ...(isToday ? styles.today : {}),
                   }}
+                  aria-label={date
+                    ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
+                    : undefined}
+                  title={date
+                    ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
+                    : undefined}
                 >
                   {date?.getDate() ?? ""}
+                  {isCompleted && <Check aria-hidden="true" style={styles.completedDayMark} />}
                 </span>
               );
             })}
@@ -481,17 +508,23 @@ function History({
         ) : (
           <div style={{ ...styles.focusSessionsList, ...(viewMode === "grid" ? styles.focusSessionsGrid : {}) }}>
             {sortedFocusSessions.map((session) => (
-              <div key={session.id} style={styles.focusSessionItem}>
+              <div
+                key={session.id}
+                style={{
+                  ...styles.focusSessionItem,
+                  ...(viewMode === "grid" ? styles.focusSessionItemGrid : {}),
+                }}
+              >
                 <div style={styles.focusSessionInfo}>
                   <span style={styles.focusSessionType}>{session.sessionType}</span>
                   <span style={styles.focusSessionMeta}>{formatTimestamp(session.timestamp)}</span>
                   <span style={styles.focusSessionHabit}>{session.habitName}</span>
                 </div>
-                <span style={styles.focusSessionDuration}>{session.durationMinutes}m</span>
+                <span className="ui-numeric" style={styles.focusSessionDuration}>{session.durationMinutes}m</span>
                 <button
                   style={styles.deleteFocusSessionButton}
                   onClick={() => onRequestDeleteFocusSession(session.id)}
-                  aria-label={`Delete focus session`}
+                  aria-label={`Delete focus session ${formatTimestamp(session.timestamp)}`}
                 >
                   <Trash2 size={14} />
                 </button>

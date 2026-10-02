@@ -38,80 +38,88 @@ const styles: Record<string, CSSProperties> = {
   page: {
     maxWidth: "100%",
     width: "100%",
-    padding: "16px 24px",
+    padding: "var(--space-4)",
     boxSizing: "border-box",
   },
   header: {
-    marginBottom: 32,
+    marginBottom: "var(--space-6)",
   },
   title: {
-    fontSize: 28,
-    fontWeight: 700,
+    fontSize: "var(--type-xl)",
+    fontWeight: "var(--font-bold)",
     color: "var(--text-primary)",
     margin: "0 0 8px",
   },
   date: {
-    fontSize: 15,
+    fontSize: "var(--type-base)",
     color: "var(--text-secondary)",
     margin: "0 0 16px",
   },
   progressSection: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
-    marginBottom: 32,
+    gap: "var(--space-4)",
+    marginBottom: "var(--space-6)",
   },
   progressText: {
-    fontSize: 14,
+    fontSize: "var(--type-sm)",
     color: "var(--text-body)",
     fontWeight: 500,
   },
   progressBar: {
     flex: 1,
-    height: 8,
+    height: "var(--space-1)",
     background: "var(--bg-inset)",
     borderRadius: 4,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    background: "linear-gradient(90deg, var(--accent-teal-soft), var(--accent-teal))",
+    background: "var(--color-accent)",
     transition: "width 0.3s ease",
   },
   section: {
-    marginBottom: 32,
+    marginBottom: "var(--space-6)",
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: 600,
+    fontSize: "var(--type-md)",
+    fontWeight: "var(--font-semibold)",
     color: "var(--text-primary)",
-    margin: "0 0 16px",
+    margin: "0 0 var(--space-3)",
   },
   habitList: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: "var(--space-2)",
   },
   habitGridList: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 16,
+    gap: "var(--space-4)",
   },
   taskList: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: "var(--space-2)",
   },
   habitCard: {
-    ...CARD_SURFACE,
     display: "flex",
     alignItems: "center",
-    gap: 16,
-    padding: 16,
+    gap: "var(--space-3)",
+    padding: "var(--space-3) 0",
     width: "100%",
     height: "100%",
     minWidth: 0,
     boxSizing: "border-box",
+    background: "transparent",
+    border: "none",
+    borderBottom: "1px solid var(--border-color)",
+    borderRadius: 0,
+  },
+  habitCardGrid: {
+    ...CARD_SURFACE,
+    padding: "var(--space-3)",
+    background: "var(--color-surface)",
   },
   habitInfo: {
     flex: 1,
@@ -130,36 +138,43 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
   priorityBadge: {
-    fontSize: 11,
-    fontWeight: 500,
-    borderRadius: 12,
-    padding: "2px 8px",
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 22,
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
+    borderRadius: "var(--radius-md)",
+    padding: "2px var(--space-2)",
     whiteSpace: "nowrap",
   },
   priorityMandatory: {
-    color: "var(--accent-teal)",
-    background: "rgba(var(--accent-rgb), 0.08)",
-    border: "1px solid rgba(var(--accent-rgb), 0.3)",
+    color: "var(--color-accent)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid var(--accent-border-soft)",
   },
   priorityOptional: {
-    color: "var(--text-muted)",
-    background: "transparent",
-    border: "1px solid var(--border-strong)",
+    color: "var(--text-secondary)",
+    background: "var(--color-priority-neutral-wash)",
+    border: "1px solid var(--border-color)",
   },
   categoryBadge: {
-    fontSize: 11,
-    fontWeight: 500,
-    padding: "2px 8px",
-    borderRadius: 12,
-    backgroundColor: "var(--button-hover-bg)",
-    color: "var(--text-secondary)",
-    border: "1px solid var(--button-hover-border)",
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 22,
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
+    padding: "2px var(--space-2)",
+    borderRadius: "var(--radius-md)",
+    backgroundColor: "var(--color-category-wash)",
+    color: "var(--color-category)",
+    border: "1px solid var(--color-category-border)",
     whiteSpace: "nowrap",
   },
   habitCardCompleted: {
     ...CARD_SURFACE,
-    background: "var(--bg-completed)",
-    opacity: 0.8,
+    background: "var(--accent-wash-soft)",
+    borderBottom: "1px solid var(--accent-border-soft)",
+    opacity: 1,
   },
   habitNameCompleted: {
     color: "var(--text-dim)",
@@ -193,13 +208,13 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     width: "fit-content",
     maxWidth: "100%",
-    padding: "2px 8px",
-    border: "1px solid rgba(6, 182, 212, 0.2)",
-    borderRadius: 999,
-    background: "rgba(6, 182, 212, 0.1)",
-    color: "#22d3ee",
-    fontSize: 11,
-    fontWeight: 500,
+    padding: "var(--space-1) var(--space-2)",
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-md)",
+    background: "var(--accent-wash)",
+    color: "var(--color-accent)",
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
     overflowWrap: "anywhere",
   },
   milestoneTag: {
@@ -207,13 +222,13 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     width: "fit-content",
     maxWidth: "100%",
-    padding: "2px 8px",
-    border: "1px solid rgba(99, 102, 241, 0.2)",
-    borderRadius: 999,
-    background: "rgba(99, 102, 241, 0.1)",
-    color: "#818cf8",
-    fontSize: 11,
-    fontWeight: 500,
+    padding: "var(--space-1) var(--space-2)",
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-md)",
+    background: "var(--bg-raised)",
+    color: "var(--text-secondary)",
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-medium)",
     overflowWrap: "anywhere",
   },
   checkbox: {
@@ -240,27 +255,30 @@ const styles: Record<string, CSSProperties> = {
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-    marginBottom: 32,
+    gap: "var(--space-3)",
   },
   statCard: {
-    ...CARD_SURFACE,
-    padding: 16,
-    border: "1px solid var(--stat-card-border)",
+    padding: "var(--space-3) var(--space-2)",
+    borderTop: "1px solid var(--border-color)",
+    background: "transparent",
   },
   statLabel: {
     display: "block",
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     color: "var(--text-secondary)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: 8,
+    marginBottom: "var(--space-2)",
   },
   statValue: {
     display: "block",
-    fontSize: 24,
-    fontWeight: 700,
+    fontSize: "var(--type-xl)",
+    fontWeight: "var(--font-bold)",
     color: "var(--text-primary)",
+    fontVariantNumeric: "tabular-nums",
+  },
+  statsSection: {
+    margin: "var(--space-6) 0",
   },
   statValueAccent: {
     color: "var(--accent-teal)",
@@ -337,7 +355,7 @@ const styles: Record<string, CSSProperties> = {
   quickActionList: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
+    gap: "var(--space-3)",
     width: "100%",
   },
   quickActionButton: {
@@ -346,17 +364,17 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     gap: 8,
     width: "100%",
-    height: 40,
+    minHeight: 44,
     minWidth: 0,
     padding: "8px 12px",
-    background: "var(--bg-surface)",
-    border: "1px solid var(--card-surface-border)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid var(--accent-border-soft)",
     borderRadius: 8,
-    color: "var(--text-body)",
+    color: "var(--text-primary)",
     fontSize: 13,
     textAlign: "center",
     cursor: "pointer",
-    transition: "border-color 0.15s ease, background 0.15s ease",
+    transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard), transform var(--transition-standard)",
   },
   scheduleSection: {
     marginBottom: 32,
@@ -368,28 +386,29 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
   scheduleTimeSummary: {
-    fontSize: 13,
+    fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
     fontWeight: 500,
   },
   scheduleTimeline: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: "var(--space-2)",
   },
   scheduleItem: {
-    ...CARD_SURFACE,
     display: "flex",
     alignItems: "center",
-    gap: 16,
-    padding: 16,
+    gap: "var(--space-3)",
+    padding: "var(--space-3) 0",
     position: "relative",
+    borderBottom: "1px solid var(--border-color)",
   },
   scheduleTimeSlot: {
     flexShrink: 0,
     width: 70,
-    fontSize: 14,
+    fontSize: "var(--type-sm)",
     fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
     color: "var(--accent-teal)",
     textAlign: "right",
   },
@@ -398,8 +417,8 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
   scheduleItemTitle: {
-    fontSize: 15,
-    fontWeight: 500,
+    fontSize: "var(--type-base)",
+    fontWeight: "var(--font-medium)",
     color: "var(--text-body)",
     margin: "0 0 4px",
   },
@@ -407,14 +426,14 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     color: "var(--text-secondary)",
   },
   scheduleDuration: {
     display: "flex",
     alignItems: "center",
     gap: 4,
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     color: "var(--text-muted)",
   },
   scheduleButton: {
@@ -423,10 +442,10 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     padding: "6px 10px",
     border: "1px solid var(--border-strong)",
-    borderRadius: 7,
+    borderRadius: "var(--radius-md)",
     background: "transparent",
     color: "var(--text-secondary)",
-    fontSize: 12,
+    fontSize: "var(--type-xs)",
     cursor: "pointer",
   },
   scheduleModal: {
@@ -435,7 +454,7 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: "rgba(0, 0, 0, 0.6)",
+    background: "var(--overlay-dim)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -513,8 +532,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   goalProgressItem: {
-    ...CARD_SURFACE,
-    padding: 14,
+    padding: "var(--space-2) 0",
+    borderBottom: "1px solid var(--border-color)",
   },
   goalProgressHeader: {
     display: "flex",
@@ -921,25 +940,6 @@ function Today({
 
       {renderHighPrioritySection()}
 
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>
-          <span style={styles.statLabel}>Items Completed</span>
-          <span style={styles.statValue}>{completedCount}</span>
-        </div>
-        <div style={styles.statCard}>
-          <span style={styles.statLabel}>Highest Streak</span>
-          <span style={{ ...styles.statValue, ...styles.statValueAccent }}>{bestStreak}</span>
-        </div>
-        <div style={styles.statCard}>
-          <span style={styles.statLabel}>Today's Focus Time</span>
-          <span style={styles.statValue}>{todayFocusTime}m</span>
-        </div>
-        <div style={styles.statCard}>
-          <span style={styles.statLabel}>Remaining Items</span>
-          <span style={styles.statValue}>{totalCount - completedCount}</span>
-        </div>
-      </div>
-
       {scheduledItems.length > 0 && (
         <div style={styles.scheduleSection}>
           <div style={styles.scheduleHeader}>
@@ -1004,7 +1004,7 @@ function Today({
                 key={habit.id}
                 style={{
                   ...styles.habitCard,
-                  ...(viewMode === "grid" ? { background: "var(--bg-surface)" } : {}),
+                  ...(viewMode === "grid" ? styles.habitCardGrid : {}),
                   ...(isCompleted ? styles.habitCardCompleted : {}),
                 }}
               >
@@ -1017,7 +1017,7 @@ function Today({
                   aria-label={`Toggle ${habit.name}`}
                   aria-checked={isCompleted}
                 >
-                  {isCompleted && <Check size={14} color="#ffffff" />}
+                  {isCompleted && <Check size={14} color="var(--color-accent-contrast)" />}
                 </button>
                 
                 <div style={styles.habitInfo}>
@@ -1087,9 +1087,31 @@ function Today({
         </div>
       </div>
 
+      <section style={styles.statsSection} aria-labelledby="today-summary-title">
+        <h2 id="today-summary-title" style={styles.sectionTitle}>Daily Summary</h2>
+        <div style={styles.statsGrid}>
+          <div style={styles.statCard}>
+            <span style={styles.statLabel}>Items Completed</span>
+            <span className="ui-numeric" style={styles.statValue}>{completedCount}</span>
+          </div>
+          <div style={styles.statCard}>
+            <span style={styles.statLabel}>Highest Streak</span>
+            <span className="ui-numeric" style={{ ...styles.statValue, ...styles.statValueAccent }}>{bestStreak}</span>
+          </div>
+          <div style={styles.statCard}>
+            <span style={styles.statLabel}>Today's Focus Time</span>
+            <span className="ui-numeric" style={styles.statValue}>{todayFocusTime}m</span>
+          </div>
+          <div style={styles.statCard}>
+            <span style={styles.statLabel}>Remaining Items</span>
+            <span className="ui-numeric" style={styles.statValue}>{totalCount - completedCount}</span>
+          </div>
+        </div>
+      </section>
+
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Quick Actions</h2>
-        <div style={styles.quickActionList}>
+        <div className="today-quick-action-list" style={styles.quickActionList}>
           <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHabits}>
             <ListChecks size={16} />
             Configure Habits

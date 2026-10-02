@@ -295,16 +295,16 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
   },
   insightCardPositive: {
-    borderColor: "rgba(34, 197, 94, 0.5)",
-    background: "rgba(34, 197, 94, 0.05)",
+    borderColor: "var(--color-success-border)",
+    background: "var(--color-success-wash)",
   },
   insightCardWarning: {
-    borderColor: "rgba(234, 179, 8, 0.5)",
-    background: "rgba(234, 179, 8, 0.05)",
+    borderColor: "var(--color-warning-border)",
+    background: "var(--color-warning-wash)",
   },
   insightCardActionable: {
-    borderColor: "rgba(6, 182, 212, 0.5)",
-    background: "rgba(6, 182, 212, 0.05)",
+    borderColor: "var(--accent-border-soft)",
+    background: "var(--accent-wash-soft)",
   },
   insightHeader: {
     display: "flex",
@@ -466,9 +466,9 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 20,
     fontSize: 13,
     fontWeight: 500,
-    background: "rgba(234, 179, 8, 0.1)",
-    color: "rgba(234, 179, 8, 0.9)",
-    border: "1px solid rgba(234, 179, 8, 0.3)",
+    background: "var(--color-warning-wash)",
+    color: "var(--color-warning)",
+    border: "1px solid var(--color-warning-border)",
   },
 };
 
@@ -621,11 +621,11 @@ function Analytics({
               const getInsightIcon = (type: ActionableInsight["type"]) => {
                 switch (type) {
                   case "positive":
-                    return <CheckCircle size={16} color="rgba(34, 197, 94, 0.8)" />;
+                    return <CheckCircle size={16} color="var(--color-success)" />;
                   case "warning":
-                    return <AlertTriangle size={16} color="rgba(234, 179, 8, 0.8)" />;
+                    return <AlertTriangle size={16} color="var(--color-warning)" />;
                   case "actionable":
-                    return <Zap size={16} color="rgba(6, 182, 212, 0.8)" />;
+                    return <Zap size={16} color="var(--color-accent)" />;
                 }
               };
 
@@ -699,7 +699,7 @@ function Analytics({
                     }}
                   >
                     <span style={styles.performanceName}>{habit.name}</span>
-                    <span style={{ ...styles.performanceRate, color: "rgba(234, 179, 8, 0.9)" }}>
+                    <span style={{ ...styles.performanceRate, color: "var(--color-warning)" }}>
                       Needs Work
                     </span>
                   </div>
