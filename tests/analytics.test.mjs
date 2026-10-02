@@ -161,6 +161,74 @@ test("daily, weekday-only, and custom-day habits count only scheduled occurrence
   ]);
 });
 
+test("habit performance groups use the threshold boundaries and calculated completion rates", () => {
+  const ratesToTest = [
+    { name: "Top threshold", completed: 85, strongest: true, weakest: false },
+    { name: "Below top threshold", completed: 84, strongest: false, weakest: false },
+    { name: "Attention threshold", completed: 60, strongest: false, weakest: false },
+    { name: "Needs attention", completed: 59, strongest: false, weakest: true },
+    { name: "Displayed percentage", completed: 94, strongest: true, weakest: false },
+  ];
+  const dataset = {
+    habitOccurrences: ratesToTest.flatMap(({ name, completed }, index) =>
+      Array.from({ length: 100 }, (_, occurrenceIndex) => ({
+        habit: { id: index + 1, name },
+        dateKey: `2025-05-${String((occurrenceIndex % 31) + 1).padStart(2, "0")}`,
+        completed: occurrenceIndex < completed,
+      })),
+    ),
+  };
+  const performance = getHabitPerformanceDiagnostics(dataset);
+
+  assert.deepEqual(
+    performance.strongestHabits.map(({ habit }) => habit.name),
+    ["Displayed percentage", "Top threshold"],
+  );
+  assert.deepEqual(
+    performance.weakestHabits.map(({ habit }) => habit.name),
+    ["Needs attention"],
+  );
+  for (const expected of ratesToTest) {
+    const rate = performance.habitRates.find(({ habit }) => habit.name === expected.name);
+    assert.equal(rate.completionRate, expected.completed);
+    assert.equal(Math.round(rate.completionRate), expected.completed);
+    assert.equal(performance.strongestHabits.includes(rate), expected.strongest);
+    assert.equal(performance.weakestHabits.includes(rate), expected.weakest);
+  }
+});
+
+test("habit performance lists sort by rate and break ties by habit id", () => {
+  const rates = [
+    { id: 6, name: "Attention 38", completed: 38 },
+    { id: 4, name: "Top 96", completed: 96 },
+    { id: 3, name: "Attention 25 later id", completed: 25 },
+    { id: 2, name: "Top 96 earlier id", completed: 96 },
+    { id: 1, name: "Attention 25 earlier id", completed: 25 },
+    { id: 5, name: "Top 100", completed: 100 },
+    { id: 7, name: "Attention 59", completed: 59 },
+    { id: 8, name: "Top 85", completed: 85 },
+  ];
+  const dataset = {
+    habitOccurrences: rates.flatMap(({ id, name, completed }) =>
+      Array.from({ length: 100 }, (_, occurrenceIndex) => ({
+        habit: { id, name },
+        dateKey: `2025-05-${String((occurrenceIndex % 31) + 1).padStart(2, "0")}`,
+        completed: occurrenceIndex < completed,
+      })),
+    ),
+  };
+  const performance = getHabitPerformanceDiagnostics(dataset);
+
+  assert.deepEqual(
+    performance.weakestHabits.map(({ habit }) => habit.name),
+    ["Attention 25 earlier id", "Attention 25 later id", "Attention 38", "Attention 59"],
+  );
+  assert.deepEqual(
+    performance.strongestHabits.map(({ habit }) => habit.name),
+    ["Top 100", "Top 96 earlier id", "Top 96", "Top 85"],
+  );
+});
+
 test("habit creation and challenge start dates bound expected occurrences", () => {
   const boundedHabits = [
     { id: 13, name: "Created Midweek", createdAt: "2025-05-13", priority: "Optional", type: "Daily", completedDates: ["2025-05-12", "2025-05-13"] },
@@ -188,6 +256,49 @@ test("legacy habits infer their start from the earliest valid completion only wh
     ["Legacy", "2025-05-13", true],
     ["Legacy", "2025-05-14", true],
   ]);
+});
+
+test("timestamp-id daily habits count missed dates before their first completion", () => {
+  const contentCreation = {
+    id: 1790515133827,
+    name: "Content Creation",
+    priority: "Optional",
+    type: "Daily",
+    frequencyType: "daily",
+    customDays: [],
+    completedDates: ["2026-10-01", "2026-10-02"],
+    isArchived: false,
+  };
+  const data = queryAnalyticsData({
+    habits: [contentCreation],
+    tasks: [],
+    focusSessions: [],
+    horizon: "This Week",
+    weekStart: "Sunday",
+    dayResetHour: 0,
+    now: new Date(2026, 9, 2, 17),
+  });
+  const performance = getHabitPerformanceDiagnostics(data);
+
+  assert.deepEqual(data.range, {
+    horizon: "This Week",
+    startDateKey: "2026-09-27",
+    endDateKey: "2026-10-02",
+  });
+  assert.deepEqual(
+    data.habitOccurrences.map(({ dateKey, completed }) => [dateKey, completed]),
+    [
+      ["2026-09-27", false],
+      ["2026-09-28", false],
+      ["2026-09-29", false],
+      ["2026-09-30", false],
+      ["2026-10-01", true],
+      ["2026-10-02", true],
+    ],
+  );
+  assert.equal(performance.habitRates[0].completedOccurrences, 2);
+  assert.equal(performance.habitRates[0].expectedOccurrences, 6);
+  assert.equal(performance.habitRates[0].completionRate, (2 / 6) * 100);
 });
 
 test("missed occurrences are based only on scheduled dates in the selected period", () => {
@@ -253,6 +364,29 @@ test("goal allocation percentages use filtered minutes and sum to 100", () => {
   assert.ok(Math.abs(allocation.allocations[0].percentage + allocation.unlinkedPercentage - 100) < 0.001);
 });
 
+test("goal insight recommends linking focus when the period has no goal-linked focus", () => {
+  const data = queryAnalyticsData({
+    habits: [],
+    tasks: [],
+    focusSessions: [{
+      id: 91,
+      timestamp: timestampAt(2025, 4, 14, 10),
+      sessionType: "Timer",
+      durationMinutes: 30,
+    }],
+    horizon: "This Week",
+    weekStart: "Monday",
+    dayResetHour: 0,
+    now,
+  });
+  const goalAllocation = getGoalFocusAllocation(data.focusSessions, []);
+  const insight = generateActionableInsights(data, []).find((item) => item.id === "unlinked_focus");
+
+  assert.equal(goalAllocation.allocations.length, 0);
+  assert.equal(goalAllocation.unlinkedPercentage, 100);
+  assert.match(insight.description, /100% of your focus time is unlinked to goals/);
+});
+
 test("habit focus uses ids and does not merge duplicate names", () => {
   const duplicateHabits = [
     { ...habits[0], id: 30, createdAt: "2025-05-12" },
@@ -312,6 +446,20 @@ test("weakest-habit insight reports that habit's rate, not the overall rate", ()
 
   assert.match(insight.description, /Needs Work completion is at 33%/);
   assert.doesNotMatch(insight.description, /67%/);
+});
+
+test("habit improvement recommendation skips zero percent and selects lowest non-zero rate", () => {
+  const insightHabits = [
+    { id: 52, name: "Workout", createdAt: "2025-05-12", priority: "Optional", type: "Daily", completedDates: [] },
+    { id: 53, name: "Reading", createdAt: "2025-05-12", priority: "Optional", type: "Daily", completedDates: ["2025-05-12"] },
+    { id: 54, name: "Meditation", createdAt: "2025-05-12", priority: "Optional", type: "Daily", completedDates: ["2025-05-12", "2025-05-13"] },
+    { id: 55, name: "Journaling", createdAt: "2025-05-12", priority: "Optional", type: "Daily", completedDates: ["2025-05-12", "2025-05-13", "2025-05-14"] },
+  ];
+  const data = queryAnalyticsData({ habits: insightHabits, tasks: [], focusSessions: [], horizon: "This Week", weekStart: "Monday", dayResetHour: 0, now });
+  const insight = generateActionableInsights(data, []).find((item) => item.id === "struggling_habit");
+
+  assert.match(insight.description, /Reading completion is at 33%/);
+  assert.doesNotMatch(insight.description, /Workout/);
 });
 
 test("logical local dates respect timezone and configured day reset", () => {

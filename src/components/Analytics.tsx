@@ -25,6 +25,8 @@ import {
   getWeekdayFrictionMetrics,
   getGoalFocusAllocation,
   generateActionableInsights,
+  TOP_PERFORMING_THRESHOLD,
+  NEEDS_ATTENTION_THRESHOLD,
   type ActionableInsight,
 } from "../domain/analytics";
 
@@ -660,47 +662,47 @@ function Analytics({
           <div style={styles.performanceSection}>
             <div style={{ marginBottom: 12 }}>
               <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
-                Top Performing (80% & Above)
+                Top Performing ({TOP_PERFORMING_THRESHOLD}% & Above)
               </span>
               {habitPerformance.strongestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  {habitPerformance.hasData ? "No habits at 80% completion or above in this period." : "No reliable data for this period."}
+                  {habitPerformance.hasData ? `No habits at ${TOP_PERFORMING_THRESHOLD}% completion or above in this period.` : "No reliable data for this period."}
                 </p>
               ) : (
                 habitPerformance.strongestHabits.slice(0, 3).map((habit, index) => (
                   <div
-                    key={habit.id}
+                    key={habit.habit.id}
                     style={{
                       ...styles.performanceItem,
                       ...(index === Math.min(habitPerformance.strongestHabits.length - 1, 2) ? styles.performanceItemLast : {}),
                     }}
                   >
-                    <span style={styles.performanceName}>{habit.name}</span>
-                    <span style={styles.performanceRate}>Strong</span>
+                    <span style={styles.performanceName}>{habit.habit.name}</span>
+                    <span style={styles.performanceRate}>{Math.round(habit.completionRate)}%</span>
                   </div>
                 ))
               )}
             </div>
             <div>
               <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
-                Needs Attention (Under 50%)
+                Needs Attention (Under {NEEDS_ATTENTION_THRESHOLD}%)
               </span>
               {habitPerformance.weakestHabits.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-                  {habitPerformance.hasData ? "No habits under 50% in this period." : "No reliable data for this period."}
+                  {habitPerformance.hasData ? `No habits under ${NEEDS_ATTENTION_THRESHOLD}% in this period.` : "No reliable data for this period."}
                 </p>
               ) : (
                 habitPerformance.weakestHabits.slice(0, 3).map((habit, index) => (
                   <div
-                    key={habit.id}
+                    key={habit.habit.id}
                     style={{
                       ...styles.performanceItem,
                       ...(index === Math.min(habitPerformance.weakestHabits.length - 1, 2) ? styles.performanceItemLast : {}),
                     }}
                   >
-                    <span style={styles.performanceName}>{habit.name}</span>
+                    <span style={styles.performanceName}>{habit.habit.name}</span>
                     <span style={{ ...styles.performanceRate, color: "var(--color-warning)" }}>
-                      Needs Work
+                      {Math.round(habit.completionRate)}%
                     </span>
                   </div>
                 ))

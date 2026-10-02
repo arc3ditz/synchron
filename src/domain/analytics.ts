@@ -73,7 +73,7 @@ export function queryAnalyticsData({
     case "All Time": {
       const historicalDates = [
         ...habits.filter((habit) => !habit.isArchived).flatMap((habit) => {
-          const start = getHabitStartDate(habit);
+          const start = getHabitStartDate(habit, dayResetHour);
           const completions = (habit.completedDates ?? [])
             .map(readLocalDateKey)
             .filter(isDateKey)
@@ -97,7 +97,7 @@ export function queryAnalyticsData({
 
   const habitOccurrences: HabitOccurrence[] = [];
   for (const habit of activeHabits) {
-    const habitStart = getHabitStartDate(habit);
+    const habitStart = getHabitStartDate(habit, dayResetHour);
     if (!habitStart || habitStart > endDateKey) continue;
 
     let firstDate = habitStart > startDateKey ? habitStart : startDateKey;
@@ -133,7 +133,7 @@ export function queryAnalyticsData({
   return { range, habits: activeHabits, focusSessions: filteredSessions, taskOccurrences, habitOccurrences };
 }
 
-function getHabitStartDate(habit: Habit): string | undefined {
+function getHabitStartDate(habit: Habit, dayResetHour: number): string | undefined {
   const createdDate = readLocalDateKey(habit.createdAt);
   const challengeStart = habit.type === "Challenge" ? readLocalDateKey(habit.startDate) : undefined;
   if (habit.type === "Challenge" && isDateKey(challengeStart)) {
@@ -141,10 +141,22 @@ function getHabitStartDate(habit: Habit): string | undefined {
   }
   if (isDateKey(createdDate)) return createdDate;
   if (habit.type === "Challenge") return undefined;
-  return (habit.completedDates ?? [])
+
+  const firstCompletion = (habit.completedDates ?? [])
     .map(readLocalDateKey)
     .filter(isDateKey)
     .sort()[0];
+  const hasTimestampId = Number.isSafeInteger(habit.id) && habit.id >= 1_000_000_000_000;
+  if (hasTimestampId) {
+    const idDate = new Date(habit.id);
+    if (Number.isFinite(idDate.getTime())) {
+      const inferredCreatedDate = getHabitDateKey(idDate, dayResetHour);
+      if (isDateKey(inferredCreatedDate) && (!firstCompletion || firstCompletion >= inferredCreatedDate)) {
+        return inferredCreatedDate;
+      }
+    }
+  }
+  return firstCompletion;
 }
 
 function isValidFocusSession(session: FocusSessionRecord): boolean {
@@ -171,17 +183,22 @@ function parseAnalyticsDateKey(dateKey: string): Date {
 }
 
 export interface HabitPerformanceDiagnostics {
-  habitRates: Array<{
-    habit: Habit;
-    expectedOccurrences: number;
-    completedOccurrences: number;
-    completionRate: number;
-  }>;
-  strongestHabits: Habit[];
-  weakestHabits: Habit[];
+  habitRates: HabitPerformanceRate[];
+  strongestHabits: HabitPerformanceRate[];
+  weakestHabits: HabitPerformanceRate[];
   overallCompletionRate: number | null;
   hasData: boolean;
 }
+
+export interface HabitPerformanceRate {
+  habit: Habit;
+  expectedOccurrences: number;
+  completedOccurrences: number;
+  completionRate: number;
+}
+
+export const TOP_PERFORMING_THRESHOLD = 85;
+export const NEEDS_ATTENTION_THRESHOLD = 60;
 
 export interface TimeOfDayInsights {
   morningMinutes: number;
@@ -256,13 +273,23 @@ export function getHabitPerformanceDiagnostics(dataset: AnalyticsDataset): Habit
     completedOccurrences: completed,
     completionRate: (completed / expected) * 100,
   }));
+  const byCompletionRate = (direction: "ascending" | "descending") => (a: HabitPerformanceRate, b: HabitPerformanceRate) => {
+    const rateDifference = direction === "ascending"
+      ? a.completionRate - b.completionRate
+      : b.completionRate - a.completionRate;
+    return rateDifference || a.habit.id - b.habit.id;
+  };
   const totalExpected = habitRates.reduce((sum, item) => sum + item.expectedOccurrences, 0);
   const totalCompleted = habitRates.reduce((sum, item) => sum + item.completedOccurrences, 0);
 
   return {
     habitRates,
-    strongestHabits: habitRates.filter((item) => item.completionRate >= 80).map((item) => item.habit),
-    weakestHabits: habitRates.filter((item) => item.completionRate < 50).map((item) => item.habit),
+    strongestHabits: habitRates
+      .filter((item) => item.completionRate >= TOP_PERFORMING_THRESHOLD)
+      .sort(byCompletionRate("descending")),
+    weakestHabits: habitRates
+      .filter((item) => item.completionRate < NEEDS_ATTENTION_THRESHOLD)
+      .sort(byCompletionRate("ascending")),
     overallCompletionRate: totalExpected > 0 ? Math.round((totalCompleted / totalExpected) * 100) : null,
     hasData: totalExpected > 0,
   };
@@ -481,24 +508,26 @@ export function generateActionableInsights(dataset: AnalyticsDataset, goals: Goa
   if (habitDiagnostics.strongestHabits.length > 0) {
     const habitNames = habitDiagnostics.strongestHabits
       .slice(0, 3)
-      .map((h) => h.name)
+      .map(({ habit }) => habit.name)
       .join(", ");
     insights.push({
       id: "strong_habits",
       type: "positive",
       title: "Strong Habit Performance",
-      description: `Great job on ${habitNames} with completion rates of 80% or higher!`,
+      description: `Great job on ${habitNames} with completion rates of ${TOP_PERFORMING_THRESHOLD}% or higher!`,
     });
   }
 
-  if (habitDiagnostics.weakestHabits.length > 0) {
-    const habit = habitDiagnostics.weakestHabits[0];
-    const rate = habitDiagnostics.habitRates.find((item) => item.habit.id === habit.id)?.completionRate ?? 0;
+  const habitToImprove = habitDiagnostics.habitRates
+    .filter((item) => item.completionRate > 0)
+    .sort((a, b) => a.completionRate - b.completionRate || a.habit.id - b.habit.id)[0];
+  if (habitToImprove) {
+    const { habit, completionRate } = habitToImprove;
     insights.push({
       id: "struggling_habit",
       type: "actionable",
       title: "Habit Needs Adjustment",
-      description: `${habit.name} completion is at ${Math.round(rate)}% for ${dataset.range.horizon.toLowerCase()}. Try reducing its frequency or adjusting the schedule.`,
+      description: `${habit.name} completion is at ${Math.round(completionRate)}% for ${dataset.range.horizon.toLowerCase()}. Try reducing its frequency or adjusting the schedule.`,
     });
   }
 
@@ -536,23 +565,21 @@ export function generateActionableInsights(dataset: AnalyticsDataset, goals: Goa
 
   // Goal focus allocation insights
   const goalAllocation = getGoalFocusAllocation(dataset.focusSessions, goals);
-  if (goalAllocation.allocations.length > 0) {
-    const topGoal = goalAllocation.allocations[0];
-    if (topGoal.percentage > 50) {
-      insights.push({
-        id: "goal_focus",
-        type: "positive",
-        title: "Strong Goal Alignment",
-        description: `${topGoal.percentage.toFixed(0)}% of your focus time is aligned with "${topGoal.goalTitle}". Great prioritization!`,
-      });
-    } else if (goalAllocation.unlinkedPercentage > 50) {
-      insights.push({
-        id: "unlinked_focus",
-        type: "actionable",
-        title: "Link Focus to Goals",
-        description: `${goalAllocation.unlinkedPercentage.toFixed(0)}% of your focus time is unlinked to goals. Consider linking sessions to specific goals for better tracking.`,
-      });
-    }
+  const topGoal = goalAllocation.allocations[0];
+  if (topGoal && topGoal.percentage > 50) {
+    insights.push({
+      id: "goal_focus",
+      type: "positive",
+      title: "Strong Goal Alignment",
+      description: `${topGoal.percentage.toFixed(0)}% of your focus time is aligned with "${topGoal.goalTitle}". Great prioritization!`,
+    });
+  } else if (goalAllocation.unlinkedPercentage > 50) {
+    insights.push({
+      id: "unlinked_focus",
+      type: "actionable",
+      title: "Link Focus to Goals",
+      description: `${goalAllocation.unlinkedPercentage.toFixed(0)}% of your focus time is unlinked to goals. Consider linking sessions to specific goals for better tracking.`,
+    });
   }
 
   return insights;
