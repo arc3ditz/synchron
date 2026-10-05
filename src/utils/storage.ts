@@ -26,8 +26,26 @@ export function loadStorageData<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return parsed as T;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed as T;
+    } catch {
+      // Invalid/corrupted JSON: never silently treat it as valid empty data.
+      // Preserve the original stored value under a backup key and remove the
+      // corrupted entry so later saves of the fallback cannot overwrite it.
+      try {
+        const backupKey = `${key}CorruptedBackup`;
+        if (localStorage.getItem(backupKey) === null) {
+          localStorage.setItem(backupKey, raw);
+        }
+        localStorage.removeItem(key);
+      } catch {
+        // If preservation fails, still return the fallback for this session
+        // and leave the original value untouched.
+        return fallback;
+      }
+      return fallback;
+    }
   } catch {
     return fallback;
   }

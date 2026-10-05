@@ -90,6 +90,7 @@ import {
   disassociateProjectFocusSessions,
 } from "./domain/projects";
 import { createTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
+import { normalizeRelationships } from "./domain/relationships";
 import {
   getTodayKey,
   formatDateDisplay,
@@ -995,11 +996,16 @@ function App() {
     };
     return localLoadHabits();
   });
+  // Normalize Goal → Project → Milestone → Task relationships at the
+  // storage loading boundary so invalid references are detached safely.
+  const [initialRelationships] = useState(() =>
+    normalizeRelationships(loadGoals(), loadProjects(), loadMilestones(), loadTasks()),
+  );
   const [goals, setGoals] = useState<Goal[]>(loadGoals);
-  const [projects, setProjects] = useState<Project[]>(loadProjects);
+  const [projects, setProjects] = useState<Project[]>(() => initialRelationships.projects);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(loadTasks);
-  const [milestones, setMilestones] = useState<Milestone[]>(loadMilestones);
+  const [tasks, setTasks] = useState<Task[]>(() => initialRelationships.tasks);
+  const [milestones, setMilestones] = useState<Milestone[]>(() => initialRelationships.milestones);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
     const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
     if (!Array.isArray(parsed)) return [];
@@ -2257,6 +2263,7 @@ function App() {
               tasks={tasks}
               goals={goals}
               milestones={milestones}
+              projects={projects}
               focusSessions={focusSessions}
               onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
               onToggleTask={(taskId) =>

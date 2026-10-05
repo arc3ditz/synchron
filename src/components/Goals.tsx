@@ -1017,7 +1017,7 @@ export default function Goals({
           const focusTimeLabel = focusHours > 0
             ? `${focusHours}h ${focusRemainder}m`
             : `${focusRemainder}m`;
-          const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour);
+          const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour, projects);
           const progressPercent = progress.percent;
 
           return (

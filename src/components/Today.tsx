@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, History as HistoryIcon, BarChart3 } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
 import StreakBadge from "./StreakBadge";
-import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
+import type { FocusSessionRecord, Goal, Habit, Milestone, Project, Task } from "../types";
 import {
   getTodayKey,
   isHabitScheduledOnDate,
@@ -17,6 +17,7 @@ type TodayProps = {
   tasks: Task[];
   goals: Goal[];
   milestones: Milestone[];
+  projects?: Project[];
   focusSessions: FocusSessionRecord[];
   onToggleHabit: (id: number, dateKey?: string) => void;
   onToggleTask: (id: string) => void;
@@ -587,6 +588,7 @@ function Today({
   tasks,
   goals,
   milestones,
+  projects,
   focusSessions,
   onToggleHabit,
   onToggleTask,
@@ -721,13 +723,13 @@ function Today({
 
   const goalProgressData = useMemo(() => {
     return activeGoals.map((goal) => {
-      const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour);
+      const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour, projects);
       return {
         goal,
         progress,
       };
     });
-  }, [activeGoals, milestones, tasks, habits, streakFreeze, dayResetHour]);
+  }, [activeGoals, milestones, tasks, habits, streakFreeze, dayResetHour, projects]);
 
   function renderHighPrioritySection() {
     if (highPriorityTasks.length === 0 && highPriorityHabits.length === 0) return null;

@@ -80,13 +80,13 @@ test("completed task, milestone, and habit categories share one progress bar", (
   }];
   const progress = calculateGoalProgress(goal, milestones, tasks, habits, false, 0);
 
-  assert.equal(progress.percent, 50);
+  assert.equal(progress.percent, 60);
   assert.equal(progress.taskSegmentWidth, 25);
   assert.equal(progress.milestoneSegmentWidth, 15);
   assert.equal(progress.habitSegmentWidth, 20);
   assert.equal(
     progress.taskSegmentWidth + progress.milestoneSegmentWidth + progress.habitSegmentWidth,
-    60,
+    progress.percent,
   );
 });
 
@@ -105,6 +105,61 @@ test("habit-only progress does not report completed Goal items", () => {
 
   assert.equal(progress.total, 0);
   assert.equal(progress.completed, 0);
-  assert.equal(progress.percent, 0);
   assert.equal(progress.habitWeight, 100);
+  // Percent stays mathematically consistent with the segment breakdown.
+  assert.equal(progress.percent, progress.habitSegmentWidth);
+});
+test("Goal progress includes work reached through its Projects", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+    { id: "project-2", name: "Independent", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", projectId: "project-1", title: "Via project", completed: true },
+    { id: "m-2", projectId: "project-2", title: "Other project", completed: true },
+    { id: "m-3", goalId: goal.id, title: "Direct", completed: false },
+  ];
+  const tasks = [
+    { id: "t-1", projectId: "project-1", title: "Via project", completed: true, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-2", milestoneId: "m-1", title: "Via project milestone", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-3", projectId: "project-2", title: "Other project", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const progress = calculateGoalProgress(goal, milestones, tasks, undefined, undefined, undefined, projects);
+
+  assert.equal(progress.total, 4); // m-1, m-3, t-1, t-2
+  assert.equal(progress.completed, 2); // m-1, t-1
+});
+
+test("Goal progress does not double-count directly and indirectly linked items", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", goalId: goal.id, projectId: "project-1", title: "Both", completed: true },
+  ];
+  const tasks = [
+    { id: "t-1", goalId: goal.id, projectId: "project-1", milestoneId: "m-1", title: "All links", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const progress = calculateGoalProgress(goal, milestones, tasks, undefined, undefined, undefined, projects);
+
+  assert.equal(progress.total, 2);
+  assert.equal(progress.completed, 2);
+});
+
+test("Independent tasks and milestones still contribute only when directly linked", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const milestones = [{ id: "m-1", title: "Orphan", completed: true }];
+  const tasks = [
+    { id: "t-1", title: "Orphan", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const progress = calculateGoalProgress(goal, milestones, tasks);
+
+  assert.equal(progress.total, 0);
+  assert.equal(progress.completed, 0);
+  assert.equal(progress.percent, 0);
 });

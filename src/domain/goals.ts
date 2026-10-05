@@ -1,4 +1,4 @@
-import type { FocusSessionRecord, Goal, Milestone, Task, Habit } from "../types";
+import type { FocusSessionRecord, Goal, Milestone, Project, Task, Habit } from "../types";
 import { calculateStreak } from "../utils/dates.ts";
 
 export function createGoal(data: Omit<Goal, "id" | "createdAt" | "status">): Goal {
@@ -77,7 +77,8 @@ export function calculateGoalProgress(
   habits?: Habit[],
   streakFreeze?: boolean,
   dayResetHour?: number,
-): { 
+  projects?: Project[],
+): {
   completed: number; 
   total: number; 
   percent: number;
@@ -88,13 +89,33 @@ export function calculateGoalProgress(
   milestoneSegmentWidth: number;
   habitSegmentWidth: number;
 } {
-  const goalMilestones = milestones.filter((m) => m.goalId === goal.id);
-  const milestoneIds = new Set(goalMilestones.map((m) => m.id));
-  
-  // Get tasks directly linked to goal or via milestones
-  const goalTasks = tasks.filter(
-    (task) => task.goalId === goal.id || (task.milestoneId && milestoneIds.has(task.milestoneId)),
+  const goalProjectIds = new Set(
+    (projects ?? []).filter((project) => project.goalId === goal.id).map((project) => project.id),
   );
+
+  // Milestones linked directly to the Goal or indirectly through its Projects.
+  const goalMilestonesById = new Map<string, Milestone>();
+  for (const milestone of milestones) {
+    const belongsToGoal = milestone.goalId === goal.id;
+    const belongsToGoalProject = milestone.projectId !== undefined && goalProjectIds.has(milestone.projectId);
+    if (belongsToGoal || belongsToGoalProject) {
+      goalMilestonesById.set(milestone.id, milestone);
+    }
+  }
+  const goalMilestones = [...goalMilestonesById.values()];
+  const milestoneIds = new Set(goalMilestones.map((m) => m.id));
+
+  // Tasks linked directly to the Goal, to one of its Milestones, or to one of its Projects.
+  const goalTasksById = new Map<string, Task>();
+  for (const task of tasks) {
+    const belongsToGoal = task.goalId === goal.id;
+    const belongsToGoalMilestone = task.milestoneId !== undefined && milestoneIds.has(task.milestoneId);
+    const belongsToGoalProject = task.projectId !== undefined && goalProjectIds.has(task.projectId);
+    if (belongsToGoal || belongsToGoalMilestone || belongsToGoalProject) {
+      goalTasksById.set(task.id, task);
+    }
+  }
+  const goalTasks = [...goalTasksById.values()];
   
   const completedMilestones = goalMilestones.filter((m) => m.completed).length;
   const completedTasks = goalTasks.filter((t) => t.completed).length;
@@ -121,10 +142,12 @@ export function calculateGoalProgress(
   
   const totalItems = goalMilestones.length + goalTasks.length;
   const completedItems = completedMilestones + completedTasks;
-  const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   const taskSegmentWidth = getSegmentWidth(taskWeight, taskShare, availableShare);
   const milestoneSegmentWidth = getSegmentWidth(milestoneWeight, milestoneShare, availableShare);
   const habitSegmentWidth = getSegmentWidth(habitWeight, habitShare, availableShare);
+  // One deterministic progress breakdown: the displayed percent is exactly the
+  // fill represented by the segment widths of the same bar.
+  const percent = Math.min(100, taskSegmentWidth + milestoneSegmentWidth + habitSegmentWidth);
   
   return {
     completed: completedItems,
