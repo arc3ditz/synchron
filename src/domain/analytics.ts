@@ -100,15 +100,8 @@ export function queryAnalyticsData({
     const habitStart = getHabitStartDate(habit, dayResetHour);
     if (!habitStart || habitStart > endDateKey) continue;
 
-    let firstDate = habitStart > startDateKey ? habitStart : startDateKey;
-    let lastDate = endDateKey;
-    if (habit.type === "Challenge") {
-      const challengeStart = readLocalDateKey(habit.startDate);
-      if (!isDateKey(challengeStart) || !Number.isInteger(habit.durationDays) || (habit.durationDays ?? 0) <= 0) continue;
-      const challengeEnd = shiftDateKey(challengeStart, habit.durationDays! - 1);
-      if (firstDate < challengeStart) firstDate = challengeStart;
-      if (lastDate > challengeEnd) lastDate = challengeEnd;
-    }
+    const firstDate = habitStart > startDateKey ? habitStart : startDateKey;
+    const lastDate = endDateKey;
     if (firstDate > lastDate) continue;
 
     const completedDates = new Set((habit.completedDates ?? []).map(readLocalDateKey).filter(isDateKey));
@@ -135,12 +128,7 @@ export function queryAnalyticsData({
 
 function getHabitStartDate(habit: Habit, dayResetHour: number): string | undefined {
   const createdDate = readLocalDateKey(habit.createdAt);
-  const challengeStart = habit.type === "Challenge" ? readLocalDateKey(habit.startDate) : undefined;
-  if (habit.type === "Challenge" && isDateKey(challengeStart)) {
-    return isDateKey(createdDate) && createdDate > challengeStart ? createdDate : challengeStart;
-  }
   if (isDateKey(createdDate)) return createdDate;
-  if (habit.type === "Challenge") return undefined;
 
   const firstCompletion = (habit.completedDates ?? [])
     .map(readLocalDateKey)

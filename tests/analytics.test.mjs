@@ -229,10 +229,10 @@ test("habit performance lists sort by rate and break ties by habit id", () => {
   );
 });
 
-test("habit creation and challenge start dates bound expected occurrences", () => {
+test("habit creation dates bound expected occurrences after Program Habits become normal Habits", () => {
   const boundedHabits = [
     { id: 13, name: "Created Midweek", createdAt: "2025-05-13", priority: "Optional", type: "Daily", completedDates: ["2025-05-12", "2025-05-13"] },
-    { id: 14, name: "Challenge", createdAt: "2025-05-01", priority: "Optional", type: "Challenge", startDate: "2025-05-13", durationDays: 1, completedDates: ["2025-05-12", "2025-05-13", "2025-05-14"] },
+    { id: 14, name: "Migrated Program Habit", createdAt: "2025-05-01", priority: "Optional", type: "Daily", completedDates: ["2025-05-12", "2025-05-13", "2025-05-14"] },
     { id: 15, name: "Archived", createdAt: "2025-05-12", priority: "Optional", type: "Daily", isArchived: true, completedDates: ["2025-05-12"] },
   ];
   const data = queryAnalyticsData({ habits: boundedHabits, tasks: [], focusSessions: [], horizon: "This Week", weekStart: "Monday", dayResetHour: 0, now });
@@ -240,7 +240,7 @@ test("habit creation and challenge start dates bound expected occurrences", () =
 
   assert.deepEqual(rates.map(({ habit, expectedOccurrences, completedOccurrences }) => [habit.name, expectedOccurrences, completedOccurrences]), [
     ["Created Midweek", 2, 1],
-    ["Challenge", 1, 1],
+    ["Migrated Program Habit", 3, 3],
   ]);
 });
 

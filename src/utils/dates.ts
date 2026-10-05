@@ -212,21 +212,4 @@ export function getDaysAgo(days: number): Date {
   return date;
 }
 
-/**
- * Check if a challenge habit is active on a given date
- * @param habit - The habit object
- * @param dateKey - The date key in YYYY-MM-DD format
- * @returns Whether the challenge is active on the given date
- */
-export function isChallengeActiveOnDate(
-  habit: { type?: string; startDate?: string; durationDays?: number },
-  dateKey: string,
-): boolean {
-  if (habit.type !== "Challenge" || !habit.startDate || !habit.durationDays) {
-    return false;
-  }
-  const daysElapsed = diffInDays(dateKey, habit.startDate);
-  return daysElapsed >= 0 && daysElapsed < habit.durationDays;
-}
-
 export { WEEKDAYS };

@@ -1,12 +1,11 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, Layers, History as HistoryIcon, BarChart3 } from "lucide-react";
+import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, History as HistoryIcon, BarChart3 } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
 import StreakBadge from "./StreakBadge";
 import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
 import {
   getTodayKey,
   isHabitScheduledOnDate,
-  diffInDays,
   calculateStreak,
   formatFullDate,
 } from "../utils/dates";
@@ -23,7 +22,6 @@ type TodayProps = {
   onToggleTask: (id: string) => void;
   onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
   onNavigateToHabits: () => void;
-  onNavigateToPrograms: () => void;
   onNavigateToGoals: () => void;
   onNavigateToHistory: () => void;
   onNavigateToAnalytics: () => void;
@@ -583,14 +581,6 @@ function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
   );
 }
 
-function isChallengeActiveOnDate(habit: Habit, dateKey: string): boolean {
-  if (habit.type !== "Challenge" || !habit.startDate || !habit.durationDays) {
-    return false;
-  }
-  const daysElapsed = diffInDays(dateKey, habit.startDate);
-  return daysElapsed >= 0 && daysElapsed < habit.durationDays;
-}
-
 function Today({
   viewMode,
   habits,
@@ -602,7 +592,6 @@ function Today({
   onToggleTask,
   onStartFocus,
   onNavigateToHabits,
-  onNavigateToPrograms,
   onNavigateToGoals,
   onNavigateToHistory,
   onNavigateToAnalytics,
@@ -623,7 +612,7 @@ function Today({
     return habits.filter(
       (habit) =>
         !habit.isArchived &&
-        (habit.type === "Daily" || isChallengeActiveOnDate(habit, todayKey)) &&
+        habit.type === "Daily" &&
         isHabitScheduledOnDate(habit, todayKey),
     );
   }, [habits, todayKey]);
@@ -1119,10 +1108,6 @@ function Today({
           <button className="today-quick-action" style={styles.quickActionButton} onClick={() => onStartFocus()}>
             <Play size={16} />
             Start Focus Session
-          </button>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToPrograms}>
-            <Layers size={16} />
-            Check Programs
           </button>
           <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToGoals}>
             <Target size={16} />

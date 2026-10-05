@@ -587,17 +587,10 @@
 }
 
 .habit-icon-group button:hover,
-.today-focus-button:hover,
-.program-action-button:hover {
+.today-focus-button:hover {
   background: var(--button-hover-bg) !important;
   color: var(--text-primary) !important;
   border-radius: 8px;
-}
-
-.program-action-button {
-  border-radius: 8px;
-  padding: 6px;
-  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .habit-row button svg {

@@ -1,11 +1,11 @@
 // Core domain types
 export type Priority = "Mandatory" | "Optional";
-export type HabitType = "Daily" | "Challenge";
+export type HabitType = "Daily";
 export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
 export type Theme = "dark" | "light";
 export type NotificationFrequency = "conservative" | "balanced" | "frequent";
-export type View = "Today" | "Habits" | "Programs" | "Projects" | "Timer" | "History" | "Analytics" | "goals" | "Settings";
+export type View = "Today" | "Habits" | "Timer" | "Projects" | "goals" | "History" | "Analytics" | "Settings";
 
 export interface AppSettings {
   viewMode: "grid" | "list";
@@ -40,22 +40,11 @@ export interface Habit {
   type: HabitType;
   frequencyType?: FrequencyType;
   customDays?: string[];
-  durationDays?: number; // only meaningful when type === "Challenge"
-  startDate?: string; // "YYYY-MM-DD", only meaningful when type === "Challenge"
   completedDates: string[]; // "YYYY-MM-DD" local calendar days this habit was completed
   isArchived?: boolean; // if true, habit is archived and hidden from active list
   category?: string; // optional Title Case label, e.g. "School"
   scheduledTime?: string; // "HH:MM" format for time blocking
   durationMinutes?: number; // estimated duration in minutes for time blocking
-  programId?: number;
-}
-
-export interface Program {
-  id: number;
-  name: string;
-  startDate: string;
-  durationDays: number;
-  habitIds: number[];
 }
 
 export interface Summary {
