@@ -500,7 +500,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
   },
   scheduleFormInput: {
-    padding: "10px 12px",
+    padding: "10px 14px",
     border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
     background: "var(--card-surface-bg)",
@@ -634,7 +634,7 @@ function Today({
   );
   const activeMilestoneIds = useMemo(
     () => new Set(milestones
-      .filter((milestone) => !milestone.completed && activeGoalIds.has(milestone.goalId))
+      .filter((milestone) => !milestone.completed && milestone.goalId !== undefined && activeGoalIds.has(milestone.goalId))
       .map((milestone) => milestone.id)),
     [milestones, activeGoalIds],
   );

@@ -11,6 +11,7 @@ import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task, Habit } fro
 import { registerFocusTimerRunningState } from "../domain/notificationLogic";
 import { filterTasksForFocusSelection } from "../domain/tasks";
 import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
+import { playSfx, primeAudioContext as primeSfxContext } from "../utils/sfx";
 
 type FocusTimerProps = {
   habits: FocusTimerHabit[];
@@ -20,7 +21,6 @@ type FocusTimerProps = {
   dayResetHour: number;
   quickAdjustStepMinutes: number;
   onQuickAdjustStepChange: (minutes: number) => void;
-  soundAlerts: boolean;
   goals: Goal[];
   milestones: Milestone[];
   tasks: Task[];
@@ -252,7 +252,7 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--card-surface-bg)",
     border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
-    padding: "8px 12px",
+    padding: "10px 14px",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
@@ -356,15 +356,6 @@ function isValidMinuteInput(value: string): boolean {
   return value.trim() !== "" && Number.isInteger(parsed) && parsed >= 1 && parsed <= MAX_DURATION_MINUTES;
 }
 
-// Minimal cross-browser handle for the (still vendor-prefixed in old
-// Safari) AudioContext constructor.
-type AudioContextConstructor = typeof AudioContext;
-function getAudioContextConstructor(): AudioContextConstructor | null {
-  if (typeof window === "undefined") return null;
-  const win = window as typeof window & { webkitAudioContext?: AudioContextConstructor };
-  return win.AudioContext ?? win.webkitAudioContext ?? null;
-}
-
 function FocusTimer({
   habits,
   focusSessions,
@@ -373,7 +364,6 @@ function FocusTimer({
   dayResetHour,
   quickAdjustStepMinutes,
   onQuickAdjustStepChange,
-  soundAlerts,
   goals,
   milestones,
   tasks,
@@ -447,6 +437,7 @@ function FocusTimer({
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
   const quickAdjustStepInputFocusedRef = useRef(false);
   const primaryControlRef = useRef<HTMLButtonElement>(null);
+  const wasRunningBeforePauseRef = useRef(false);
 
   useEffect(() => {
     const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
@@ -552,7 +543,7 @@ function FocusTimer({
   const activeGoalIds = new Set(goals.filter((goal) => goal.status === "active").map((goal) => goal.id));
   const availableMilestones = selectedGoalId
     ? milestones.filter(
-      (milestone) => activeGoalIds.has(milestone.goalId) && milestone.goalId === selectedGoalId,
+      (milestone) => milestone.goalId !== undefined && activeGoalIds.has(milestone.goalId) && milestone.goalId === selectedGoalId,
     )
     : [];
   const availableTasks = filterTasksForFocusSelection(tasks, selectedGoalId, selectedMilestoneId);
@@ -567,66 +558,6 @@ function FocusTimer({
 
   function markSessionLogged(mode: Mode, session: Session, endTimestamp: number) {
     lastLoggedSessionRef.current = { mode, session, endTimestamp };
-  }
-
-  // A single shared AudioContext, created lazily on the first user
-  // gesture (Start) so autoplay-blocking browsers don't refuse it.
-  const audioContextRef = useRef<AudioContext | null>(null);
-
-  function getAudioContext(): AudioContext | null {
-    const Ctor = getAudioContextConstructor();
-    if (!Ctor) return null;
-    if (!audioContextRef.current) {
-      audioContextRef.current = new Ctor();
-    }
-    return audioContextRef.current;
-  }
-
-  // Called from Start (a real user gesture) so the context is already
-  // running by the time a session actually ends, possibly while the
-  // tab is backgrounded and no new gesture is available.
-  const primeAudioContext = useCallback(() => {
-    const ctx = getAudioContext();
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume().catch(() => {
-        // Autoplay was blocked; the chime simply won't play this run.
-      });
-    }
-  }, []);
-
-  function playTone(ctx: AudioContext, frequency: number, startTime: number, duration: number) {
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = frequency;
-    gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(0.18, startTime + 0.02);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    oscillator.start(startTime);
-    oscillator.stop(startTime + duration + 0.05);
-  }
-
-  // A gentle two-tone chime (a soft rising interval), built purely
-  // from oscillators — no audio files involved.
-  function playChime() {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    const fire = () => {
-      const now = ctx.currentTime;
-      playTone(ctx, 880, now, 0.22); // A5
-      playTone(ctx, 1174.66, now + 0.22, 0.28); // D6
-    };
-
-    if (ctx.state === "suspended") {
-      ctx.resume().then(fire).catch(() => {
-        // Blocked without a fresh gesture; skip this chime silently.
-      });
-    } else {
-      fire();
-    }
   }
 
   const requestNotificationPermissionIfNeeded = useCallback(() => {
@@ -695,7 +626,7 @@ function FocusTimer({
         markSessionLogged("Timer", "Focus", end);
       }
       
-      if (soundAlerts) playChime();
+      playSfx("timerComplete");
       void notifyTimerFinished();
     }
   }
@@ -745,7 +676,7 @@ function FocusTimer({
       updatePomodoroTotalMs(sessionTotalMs);
       pomodoroSessionRef.current = currentSession;
       setPomodoroSession(currentSession);
-      if (soundAlerts) playChime();
+      playSfx("pomodoroTransition");
       notifyIfBackgrounded(
         "Session Switch",
         `Now On Your ${currentSession} Session`,
@@ -760,7 +691,15 @@ function FocusTimer({
 
   const handleStart = useCallback(() => {
     requestNotificationPermissionIfNeeded();
-    primeAudioContext();
+    primeSfxContext();
+
+    // Play start sound only if this is a fresh start (not a resume)
+    if (!wasRunningBeforePauseRef.current) {
+      playSfx("start");
+    } else {
+      playSfx("pauseResume");
+    }
+    wasRunningBeforePauseRef.current = true;
 
     const now = Date.now();
     if (mode === "Timer") {
@@ -776,7 +715,7 @@ function FocusTimer({
         pomodoroSessionRef.current,
       );
     }
-  }, [mode, primeAudioContext, requestNotificationPermissionIfNeeded]);
+  }, [mode, requestNotificationPermissionIfNeeded]);
 
   function handlePause() {
     const now = Date.now();
@@ -793,9 +732,11 @@ function FocusTimer({
         pomodoroSessionRef.current,
       );
     }
+    playSfx("pauseResume");
   }
 
   function handleReset() {
+    wasRunningBeforePauseRef.current = false;
     if (mode === "Timer") {
       const totalMs = timerMinutesRef.current * 60000;
       updateTimerTotalMs(totalMs);
@@ -920,14 +861,6 @@ function FocusTimer({
     return () => {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
-
-  // Release the audio hardware handle when the component finally
-  // unmounts (not on every hide — it stays mounted across views).
-  useEffect(() => {
-    return () => {
-      audioContextRef.current?.close().catch(() => {});
     };
   }, []);
 

@@ -2,7 +2,7 @@
  * Storage utility functions for localStorage operations
  */
 
-import type { Goal, Milestone, Task, Habit, Program } from "../types";
+import type { Goal, Milestone, Task, Habit, Program, Project } from "../types";
 
 export const STORAGE_KEYS = {
   HABITS: "habits",
@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   GOALS: "goals",
   TASKS: "tasks",
   MILESTONES: "milestones",
+  PROJECTS: "projects",
   FOCUS_SESSIONS: "focusSessions",
   STREAK_FREEZE: "streakFreeze",
   CUSTOM_CATEGORIES: "habitCategories",
@@ -63,6 +64,7 @@ export function loadTasks(): Task[] {
       id: item.id,
       milestoneId: typeof item.milestoneId === "string" ? item.milestoneId : undefined,
       goalId: typeof item.goalId === "string" ? item.goalId : undefined,
+      projectId: typeof item.projectId === "string" ? item.projectId : undefined,
       title: item.title,
       dueDate: typeof item.dueDate === "string" ? item.dueDate : undefined,
       estimatedMinutes: typeof item.estimatedMinutes === "number" && item.estimatedMinutes > 0 ? item.estimatedMinutes : undefined,
@@ -80,7 +82,19 @@ export function saveTasks(tasks: Task[]): void {
 }
 
 export function loadMilestones(): Milestone[] {
-  return loadStorageData<Milestone[]>(STORAGE_KEYS.MILESTONES, []);
+  const parsed = loadStorageData<(Partial<Milestone> & { id: string; title: string })[]>(STORAGE_KEYS.MILESTONES, []);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.map((item) => {
+    return {
+      id: item.id,
+      goalId: typeof item.goalId === "string" ? item.goalId : undefined,
+      projectId: typeof item.projectId === "string" ? item.projectId : undefined,
+      title: item.title,
+      targetDate: typeof item.targetDate === "string" ? item.targetDate : undefined,
+      completed: item.completed === true,
+    };
+  });
 }
 
 export function saveMilestones(milestones: Milestone[]): void {
@@ -146,6 +160,30 @@ export function loadPrograms(): Program[] {
 
 export function savePrograms(programs: Program[]): void {
   saveStorageData(STORAGE_KEYS.PROGRAMS, programs);
+}
+
+export function loadProjects(): Project[] {
+  const parsed = loadStorageData<(Partial<Project> & { id: string; name: string })[]>(STORAGE_KEYS.PROJECTS, []);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.map((item) => {
+    return {
+      id: item.id,
+      goalId: typeof item.goalId === "string" ? item.goalId : undefined,
+      name: item.name,
+      description: typeof item.description === "string" ? item.description : undefined,
+      startDate: typeof item.startDate === "string" ? item.startDate : undefined,
+      targetDate: typeof item.targetDate === "string" ? item.targetDate : undefined,
+      status: (item.status === "planned" || item.status === "active" || item.status === "completed" || item.status === "archived")
+        ? item.status
+        : "planned",
+      createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+    };
+  });
+}
+
+export function saveProjects(projects: Project[]): void {
+  saveStorageData(STORAGE_KEYS.PROJECTS, projects);
 }
 
 function isProgram(value: unknown): value is Program {

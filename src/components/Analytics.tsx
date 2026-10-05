@@ -248,7 +248,7 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
-    padding: "8px 12px",
+    padding: "10px 14px",
     color: "var(--text-primary)",
     fontSize: 14,
     width: 80,

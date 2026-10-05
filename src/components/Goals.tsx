@@ -2,8 +2,9 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { CARD_SURFACE } from "../theme";
-import type { FocusSessionRecord, Goal, Habit, Milestone, Task } from "../types";
+import type { FocusSessionRecord, Goal, Habit, Milestone, Project, Task } from "../types";
 import { filterTasksByMilestone } from "../domain/tasks";
+import { calculateProjectProgress } from "../domain/projects";
 import { calculateGoalProgress } from "../domain/goals";
 import { calculateStreak, formatFullDate } from "../utils/dates";
 import StreakBadge from "./StreakBadge";
@@ -28,6 +29,8 @@ type GoalsProps = {
   onEditMilestone: (milestoneId: string, data: Omit<Milestone, "id" | "completed">) => void;
   onDeleteMilestone: (milestoneId: string) => void;
   onToggleMilestone: (goalId: string, milestoneId: string) => void;
+  projects?: Project[];
+  onOpenProject: (projectId: string) => void;
 };
 
 type PendingDeletion = {
@@ -104,7 +107,7 @@ const styles: Record<string, CSSProperties> = {
   input: {
     width: "100%",
     minWidth: 0,
-    padding: "10px 12px",
+    padding: "10px 14px",
     border: "1px solid var(--card-surface-border)",
     borderRadius: 8,
     background: "var(--card-surface-bg)",
@@ -180,6 +183,31 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     fontSize: 13,
     overflowWrap: "anywhere",
+  },
+  projectOpenButton: {
+    minWidth: 0,
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    color: "var(--text-primary)",
+    fontSize: 13,
+    fontWeight: 500,
+    textAlign: "left",
+    overflowWrap: "anywhere",
+    cursor: "pointer",
+  },
+  projectRowMeta: {
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+    gap: 8,
+  },
+  projectProgressTrack: {
+    width: 56,
+    height: 6,
+    borderRadius: 3,
+    background: "var(--bg-inset)",
+    overflow: "hidden",
   },
   cardHeader: {
     display: "flex",
@@ -566,6 +594,7 @@ export default function Goals({
   streakFreeze,
   dayResetHour,
   milestones = [],
+  projects = [],
   onAddGoal,
   onAddTask,
   onToggleTask,
@@ -578,6 +607,7 @@ export default function Goals({
   onEditMilestone,
   onDeleteMilestone,
   onToggleMilestone,
+  onOpenProject,
 }: GoalsProps) {
   const [showForm, setShowForm] = useState(false);
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
@@ -606,6 +636,10 @@ export default function Goals({
   const [milestoneEditTargetDate, setMilestoneEditTargetDate] = useState("");
   const [taskMilestoneId, setTaskMilestoneId] = useState<string>("");
   const [itemToDelete, setItemToDelete] = useState<PendingDeletion | null>(null);
+  const [taskProjectId, setTaskProjectId] = useState("");
+  const [taskEditProjectId, setTaskEditProjectId] = useState("");
+  const [milestoneProjectId, setMilestoneProjectId] = useState("");
+  const [milestoneEditProjectId, setMilestoneEditProjectId] = useState("");
 
   const activeGoals = goals.filter((goal) => goal.status !== "archived");
   const archivedGoals = goals.filter((goal) => goal.status === "archived");
@@ -645,6 +679,7 @@ export default function Goals({
       title: trimmedTitle,
       goalId,
       milestoneId: taskMilestoneId || undefined,
+      projectId: taskProjectId || undefined,
       dueDate: taskDueDate || undefined,
       estimatedMinutes: Number.isFinite(estimatedMinutes) && estimatedMinutes > 0
         ? estimatedMinutes
@@ -656,7 +691,44 @@ export default function Goals({
     setTaskEstimatedMinutes("");
     setTaskPriority("medium");
     setTaskMilestoneId("");
+    setTaskProjectId("");
     setTaskGoalId(null);
+  }
+
+  function renderProjectSelect(
+    value: string,
+    onChange: (next: string) => void,
+    goalId: string,
+    ariaLabel: string,
+  ) {
+    const available = projects.filter((project) =>
+      project.status !== "archived" && (project.goalId === undefined || project.goalId === goalId),
+    );
+    const current = value && !available.some((project) => project.id === value)
+      ? projects.find((project) => project.id === value)
+      : undefined;
+    const options = current ? [...available, current] : available;
+    if (options.length === 0) return null;
+
+    return (
+      <select
+        style={styles.compactInput}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={ariaLabel}
+      >
+        <option value="">No project</option>
+        {options.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  function projectNameFor(projectId?: string): string | undefined {
+    return projectId ? projects.find((project) => project.id === projectId)?.name : undefined;
   }
 
   function beginGoalEdit(goal: Goal) {
@@ -685,6 +757,7 @@ export default function Goals({
     setTaskEditDueDate(task.dueDate ?? "");
     setTaskEditEstimatedMinutes(task.estimatedMinutes?.toString() ?? "");
     setTaskEditPriority(task.priority);
+    setTaskEditProjectId(task.projectId ?? "");
   }
 
   function handleTaskEditSubmit(event: FormEvent<HTMLFormElement>, task: Task) {
@@ -702,6 +775,7 @@ export default function Goals({
       priority: taskEditPriority,
       goalId: task.goalId,
       milestoneId: task.milestoneId,
+      projectId: taskEditProjectId || undefined,
     });
     setEditingTaskId(null);
   }
@@ -714,10 +788,12 @@ export default function Goals({
     onAddMilestone({
       title: trimmedTitle,
       goalId,
+      projectId: milestoneProjectId || undefined,
       targetDate: milestoneTargetDate || undefined,
     });
     setMilestoneTitle("");
     setMilestoneTargetDate("");
+    setMilestoneProjectId("");
     setMilestoneGoalId(null);
   }
 
@@ -725,6 +801,7 @@ export default function Goals({
     setEditingMilestoneId(milestone.id);
     setMilestoneEditTitle(milestone.title);
     setMilestoneEditTargetDate(milestone.targetDate ?? "");
+    setMilestoneEditProjectId(milestone.projectId ?? "");
   }
 
   function handleMilestoneEditSubmit(event: FormEvent<HTMLFormElement>, milestoneId: string) {
@@ -734,6 +811,7 @@ export default function Goals({
 
     onEditMilestone(milestoneId, {
       title: trimmedTitle,
+      projectId: milestoneEditProjectId || undefined,
       targetDate: milestoneEditTargetDate || undefined,
       goalId: milestones?.find((m) => m.id === milestoneId)?.goalId || "",
     });
@@ -751,11 +829,16 @@ export default function Goals({
                 required
                 maxLength={120}
                 style={styles.compactInput}
-                value={taskEditTitle}
-                onChange={(event) => setTaskEditTitle(event.target.value)}
-                aria-label="Task title"
-              />
-              <div style={styles.taskFormFields}>
+                value={taskEditTitle}                  onChange={(event) => setTaskEditTitle(event.target.value)}
+                  aria-label="Task title"
+                />
+                {renderProjectSelect(
+                  taskEditProjectId,
+                  setTaskEditProjectId,
+                  task.goalId ?? "",
+                  "Link to project (optional)",
+                )}
+                <div style={styles.taskFormFields}>
                 <input
                   type="date"
                   style={styles.compactInput}
@@ -826,6 +909,9 @@ export default function Goals({
                       <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>
                     )}
                     {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
+                    {projectNameFor(task.projectId) && (
+                      <span>{projectNameFor(task.projectId)}</span>
+                    )}
                   </span>
                 </span>
               </button>
@@ -913,6 +999,7 @@ export default function Goals({
           <div style={styles.empty}>No active goals. Create one to get started.</div>
         ) : activeGoals.map((goal) => {
           const linkedHabits = habits.filter((habit) => habit.goalId === goal.id);
+          const goalProjects = projects.filter((project) => project.goalId === goal.id);
           const goalMilestones = milestones.filter((milestone) => milestone.goalId === goal.id);
           const goalMilestoneIds = new Set(goalMilestones.map((milestone) => milestone.id));
           const goalTaskIds = new Set(tasks
@@ -1055,6 +1142,43 @@ export default function Goals({
               </p>
               <p style={{ ...styles.meta, marginTop: 6 }}>Total Focus: {focusTimeLabel}</p>
 
+              {goalProjects.length > 0 && (
+                <section style={styles.linkedHabits} aria-label={`Projects for "${goal.title}"`}>
+                  <h3 style={styles.linkedHabitsTitle}>Projects</h3>
+                  {goalProjects.map((project) => {
+                    const projectProgress = calculateProjectProgress(project, milestones, tasks);
+                    return (
+                      <div key={project.id} style={styles.linkedHabitRow}>
+                        <button
+                          type="button"
+                          style={styles.projectOpenButton}
+                          onClick={() => onOpenProject(project.id)}
+                          aria-label={`Open project "${project.name}"`}
+                        >
+                          {project.name}
+                        </button>
+                        <span style={styles.projectRowMeta}>
+                          <span style={styles.status}>{project.status}</span>
+                          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                            {projectProgress.percent}%
+                          </span>
+                          <span style={styles.projectProgressTrack}>
+                            <span
+                              style={{
+                                display: "block",
+                                height: "100%",
+                                width: `${projectProgress.percent}%`,
+                                background: "var(--color-accent)",
+                              }}
+                            />
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </section>
+              )}
+
               <section style={styles.linkedHabits} aria-label={`Habits linked to "${goal.title}"`}>
                 <h3 style={styles.linkedHabitsTitle}>Linked Habits</h3>
                 {linkedHabits.length === 0 ? (
@@ -1093,6 +1217,12 @@ export default function Goals({
                               onChange={(event) => setMilestoneEditTargetDate(event.target.value)}
                               aria-label="Milestone target date"
                             />
+                            {renderProjectSelect(
+                              milestoneEditProjectId,
+                              setMilestoneEditProjectId,
+                              goal.id,
+                              "Link to project (optional)",
+                            )}
                             <div style={styles.formActions}>
                               <button type="button" style={styles.secondaryButton} onClick={() => setEditingMilestoneId(null)}>
                                 Cancel
@@ -1126,6 +1256,11 @@ export default function Goals({
                               {milestone.targetDate && (
                                 <p style={styles.milestoneMeta}>
                                   Target: <time dateTime={milestone.targetDate}>{formatFullDate(milestone.targetDate)}</time>
+                                </p>
+                              )}
+                              {projectNameFor(milestone.projectId) && (
+                                <p style={styles.milestoneMeta}>
+                                  Project: {projectNameFor(milestone.projectId)}
                                 </p>
                               )}
                             </div>
@@ -1180,6 +1315,12 @@ export default function Goals({
                       onChange={(event) => setMilestoneTargetDate(event.target.value)}
                       aria-label="Milestone target date"
                     />
+                    {renderProjectSelect(
+                      milestoneProjectId,
+                      setMilestoneProjectId,
+                      goal.id,
+                      "Link to project (optional)",
+                    )}
                     <div style={styles.formActions}>
                       <button type="button" style={styles.secondaryButton} onClick={() => setMilestoneGoalId(null)}>
                         Cancel
@@ -1267,6 +1408,12 @@ export default function Goals({
                         </option>
                       ))}
                     </select>
+                  )}
+                  {renderProjectSelect(
+                    taskProjectId,
+                    setTaskProjectId,
+                    goal.id,
+                    "Link to project (optional)",
                   )}
                   <div style={styles.taskFormFields}>
                     <input

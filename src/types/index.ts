@@ -5,7 +5,7 @@ export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
 export type Theme = "dark" | "light";
 export type NotificationFrequency = "conservative" | "balanced" | "frequent";
-export type View = "Today" | "Habits" | "Programs" | "Timer" | "History" | "Analytics" | "goals" | "Settings";
+export type View = "Today" | "Habits" | "Programs" | "Projects" | "Timer" | "History" | "Analytics" | "goals" | "Settings";
 
 export interface AppSettings {
   viewMode: "grid" | "list";
@@ -14,12 +14,21 @@ export interface AppSettings {
   defaultFocusDuration: number;
   quickAdjustStepMinutes: number;
   soundAlerts: boolean;
+  sfxVolume: number;
+  sfxEnabled: {
+    start: boolean;
+    pauseResume: boolean;
+    habitComplete: boolean;
+    pomodoroTransition: boolean;
+    timerComplete: boolean;
+  };
   showMandatoryHabitsInImportantItems?: boolean;
   enableIntelligentNotifications: boolean;
   notificationFrequency: NotificationFrequency;
   habitReminders: boolean;
   incompleteHabitReminders: boolean;
   theme: Theme;
+  onboardingCompleted: boolean;
 }
 
 export interface Habit {
@@ -76,6 +85,7 @@ export interface FocusSessionRecord {
   taskId?: string;
   goalId?: string;
   milestoneId?: string;
+  projectId?: string;
 }
 
 // Analytics component types (subset of Habit)
@@ -124,9 +134,21 @@ export interface Goal {
   milestones?: Milestone[];
 }
 
+export interface Project {
+  id: string;
+  goalId?: string;
+  name: string;
+  description?: string;
+  startDate?: string;
+  targetDate?: string;
+  status: 'planned' | 'active' | 'completed' | 'archived';
+  createdAt: string;
+}
+
 export interface Milestone {
   id: string;
-  goalId: string;
+  goalId?: string;
+  projectId?: string;
   title: string;
   targetDate?: string;
   completed: boolean;
@@ -136,6 +158,7 @@ export interface Task {
   id: string;
   milestoneId?: string;
   goalId?: string;
+  projectId?: string;
   title: string;
   dueDate?: string;
   estimatedMinutes?: number;

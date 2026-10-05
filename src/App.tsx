@@ -13,6 +13,7 @@ import {
   ArchiveRestore,
   Snowflake,
   Flame,
+  Folder,
   Settings,
   Target,
   Clock3,
@@ -22,6 +23,7 @@ import {
   Bell,
   Grid2X2,
   List,
+  RotateCcw,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
@@ -31,9 +33,12 @@ import Analytics from "./components/Analytics";
 import Today from "./components/Today";
 import Goals from "./components/Goals";
 import Programs from "./components/Programs";
+import Projects from "./components/Projects";
 import StreakBadge from "./components/StreakBadge";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
+import Onboarding from "./components/Onboarding";
 import { CARD_SURFACE } from "./theme";
+import { configureSfx, playSfx } from "./utils/sfx";
 import "./styles/AppLayout.css";
 import type {
   Priority,
@@ -51,6 +56,7 @@ import type {
   Summary,
   FocusSessionRecord,
   Program as ProgramEntity,
+  Project,
 } from "./types";
 import {
   STORAGE_KEYS,
@@ -65,6 +71,8 @@ import {
   saveHabits,
   loadPrograms,
   savePrograms,
+  loadProjects,
+  saveProjects,
 } from "./utils/storage";
 import {
   createGoal,
@@ -77,6 +85,16 @@ import {
   detachTasksFromDeletedMilestone,
   disassociateGoalFocusSessions,
 } from "./domain/goals";
+import {
+  createProject,
+  updateProject,
+  updateProjectStatus,
+  deleteProject,
+  detachMilestonesFromDeletedProject,
+  detachTasksFromDeletedProject,
+  detachGoalFromProjects,
+  disassociateProjectFocusSessions,
+} from "./domain/projects";
 import { createTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
 import {
   getTodayKey,
@@ -107,12 +125,21 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultFocusDuration: 25,
   quickAdjustStepMinutes: 5,
   soundAlerts: true,
+  sfxVolume: 80,
+  sfxEnabled: {
+    start: true,
+    pauseResume: true,
+    habitComplete: true,
+    pomodoroTransition: true,
+    timerComplete: true,
+  },
   showMandatoryHabitsInImportantItems: false,
   enableIntelligentNotifications: true,
   notificationFrequency: "balanced",
   habitReminders: true,
   incompleteHabitReminders: true,
   theme: "dark",
+  onboardingCompleted: false,
 };
 const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
 const ALL_CATEGORIES = "All";
@@ -251,7 +278,7 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-surface)",
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
-    padding: "10px 12px",
+    padding: "10px 14px",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
@@ -261,14 +288,13 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-surface)",
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
-    padding: "10px 12px",
+    padding: "10px 14px",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
     cursor: "pointer",
     flex: "1 1 140px",
     minWidth: 140,
-    height: 40,
     boxSizing: "border-box",
   },
   durationField: {
@@ -281,7 +307,7 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-surface)",
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
-    padding: "10px 10px",
+    padding: "10px 8px",
     color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
@@ -583,8 +609,8 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 6,
-    padding: "6px 10px",
+    borderRadius: 8,
+    padding: "10px 14px",
     color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
@@ -596,8 +622,8 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "100%",
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 6,
-    padding: "6px 10px",
+    borderRadius: 8,
+    padding: "10px 14px",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
@@ -607,8 +633,8 @@ const styles: Record<string, CSSProperties> = {
     width: 56,
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 6,
-    padding: "6px 8px",
+    borderRadius: 8,
+    padding: "10px 8px",
     color: "var(--text-primary)",
     fontSize: 14,
     outline: "none",
@@ -659,7 +685,7 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-surface)",
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
-    padding: "10px 12px",
+    padding: "10px 14px",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
@@ -866,6 +892,20 @@ function loadAppSettings(): AppSettings {
     soundAlerts: typeof parsed.soundAlerts === "boolean"
       ? parsed.soundAlerts
       : DEFAULT_SETTINGS.soundAlerts,
+    sfxVolume: typeof parsed.sfxVolume === "number"
+      && parsed.sfxVolume >= 0
+      && parsed.sfxVolume <= 100
+      ? parsed.sfxVolume
+      : DEFAULT_SETTINGS.sfxVolume,
+    sfxEnabled: typeof parsed.sfxEnabled === "object" && parsed.sfxEnabled !== null
+      ? {
+          start: typeof parsed.sfxEnabled.start === "boolean" ? parsed.sfxEnabled.start : DEFAULT_SETTINGS.sfxEnabled.start,
+          pauseResume: typeof parsed.sfxEnabled.pauseResume === "boolean" ? parsed.sfxEnabled.pauseResume : DEFAULT_SETTINGS.sfxEnabled.pauseResume,
+          habitComplete: typeof parsed.sfxEnabled.habitComplete === "boolean" ? parsed.sfxEnabled.habitComplete : DEFAULT_SETTINGS.sfxEnabled.habitComplete,
+          pomodoroTransition: typeof parsed.sfxEnabled.pomodoroTransition === "boolean" ? parsed.sfxEnabled.pomodoroTransition : DEFAULT_SETTINGS.sfxEnabled.pomodoroTransition,
+          timerComplete: typeof parsed.sfxEnabled.timerComplete === "boolean" ? parsed.sfxEnabled.timerComplete : DEFAULT_SETTINGS.sfxEnabled.timerComplete,
+        }
+      : DEFAULT_SETTINGS.sfxEnabled,
     showMandatoryHabitsInImportantItems: typeof parsed.showMandatoryHabitsInImportantItems === "boolean"
       ? parsed.showMandatoryHabitsInImportantItems
       : DEFAULT_SETTINGS.showMandatoryHabitsInImportantItems,
@@ -883,6 +923,9 @@ function loadAppSettings(): AppSettings {
       : DEFAULT_SETTINGS.incompleteHabitReminders,
     theme: parsed.theme === "light" ? "light" : "dark",
     viewMode: parsed.viewMode === "list" ? "list" : "grid",
+    onboardingCompleted: typeof parsed.onboardingCompleted === "boolean"
+      ? parsed.onboardingCompleted
+      : DEFAULT_SETTINGS.onboardingCompleted,
   };
 }
 
@@ -996,6 +1039,8 @@ function App() {
     (program) => program.state === "Active" && program.habits.some((habit) => !habit.isArchived),
   );
   const [goals, setGoals] = useState<Goal[]>(loadGoals);
+  const [projects, setProjects] = useState<Project[]>(loadProjects);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [milestones, setMilestones] = useState<Milestone[]>(loadMilestones);
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
@@ -1027,6 +1072,11 @@ function App() {
   const [editingPriority, setEditingPriority] = useState<Priority>("Optional");
   const [editingType, setEditingType] = useState<HabitType>("Daily");
   const [editingProgramId, setEditingProgramId] = useState("");
+
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    const hasExistingData = habits.length > 0 || goals.length > 0 || tasks.length > 0;
+    return !appSettings.onboardingCompleted && !hasExistingData;
+  });
   const [editingFrequencyType, setEditingFrequencyType] = useState<FrequencyType>("daily");
   const [editingCustomDays, setEditingCustomDays] = useState<string[]>([]);
   const [editingCategory, setEditingCategory] = useState("");
@@ -1086,6 +1136,14 @@ function App() {
     saveStorageData(STORAGE_KEYS.SETTINGS, appSettings);
   }, [appSettings]);
 
+  useEffect(() => {
+    configureSfx({
+      enabled: appSettings.soundAlerts,
+      volume: appSettings.sfxVolume,
+      sfxEnabled: appSettings.sfxEnabled,
+    });
+  }, [appSettings.soundAlerts, appSettings.sfxVolume, appSettings.sfxEnabled]);
+
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", appSettings.theme);
   }, [appSettings.theme]);
@@ -1140,6 +1198,10 @@ function App() {
   }, [goals]);
 
   useEffect(() => {
+    saveProjects(projects);
+  }, [projects]);
+
+  useEffect(() => {
     saveTasks(tasks);
   }, [tasks]);
 
@@ -1158,6 +1220,69 @@ function App() {
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.CUSTOM_CATEGORIES, customCategories);
   }, [customCategories]);
+
+  // Shared Milestone/Task handlers — used by both the Goals and Projects views
+  // so there is exactly one wiring of the domain logic.
+  function handleAddTask(data: Omit<Task, "id" | "createdAt" | "completed">) {
+    setTasks((current) => [...current, createTask(data)]);
+  }
+
+  function handleToggleTask(taskId: string) {
+    setTasks((current) => current.map((task) =>
+      task.id === taskId ? toggleTaskCompletion(task) : task,
+    ));
+  }
+
+  function handleEditTask(taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) {
+    setTasks((current) => current.map((task) =>
+      task.id === taskId ? updateTask(task, data) : task,
+    ));
+  }
+
+  function handleDeleteTask(taskId: string) {
+    setTasks((current) => deleteTask(current, taskId));
+  }
+
+  function handleAddMilestone(data: Omit<Milestone, "id" | "completed">) {
+    setMilestones((current) => [...current, createMilestone(data)]);
+  }
+
+  function handleEditMilestone(milestoneId: string, data: Omit<Milestone, "id" | "completed">) {
+    setMilestones((current) => current.map((milestone) =>
+      milestone.id === milestoneId ? updateMilestone(milestone, data) : milestone,
+    ));
+  }
+
+  function handleDeleteMilestone(milestoneId: string) {
+    const milestone = milestones.find((item) => item.id === milestoneId);
+    if (milestone) {
+      setTasks((current) => detachTasksFromDeletedMilestone(current, milestone));
+    }
+    setMilestones((current) => deleteMilestone(current, milestoneId));
+  }
+
+  function handleToggleMilestone(milestoneId: string) {
+    setMilestones((current) => current.map((milestone) =>
+      milestone.id === milestoneId ? toggleMilestone(milestone) : milestone,
+    ));
+  }
+
+  function handleOnboardingComplete(createdHabit?: Habit) {
+    if (createdHabit) {
+      setHabits((current) => [...current, createdHabit]);
+    }
+  }
+
+  function handleOnboardingNavigateToToday() {
+    setAppSettings((current) => ({ ...current, onboardingCompleted: true }));
+    setShowOnboarding(false);
+    setView("Today");
+  }
+
+  function handleOnboardingSkip() {
+    setAppSettings((current) => ({ ...current, onboardingCompleted: true }));
+    setShowOnboarding(false);
+  }
 
   useEffect(() => {
     // Check for intelligent notifications every 5 minutes
@@ -1329,8 +1454,9 @@ function App() {
           "3": "Timer",
           "4": "Programs",
           "5": "goals",
-          "6": "History",
-          "7": "Analytics",
+          "6": "Projects",
+          "7": "History",
+          "8": "Analytics",
           ",": "Settings",
         };
         const nextView = navigationKeys[event.key];
@@ -1591,17 +1717,24 @@ function App() {
 
   function toggleHabit(id: number, dateKey?: string) {
     const targetDateKey = dateKey ?? selectedDateKey;
-    const updatedHabits: Habit[] = habits.map((habit): Habit => {
-      if (habit.id !== id) return habit;
+    const habit = habits.find((h) => h.id === id);
+    const isCurrentlyComplete = habit?.completedDates.includes(targetDateKey) ?? false;
 
-      const isDoneOnTargetDate = habit.completedDates.includes(targetDateKey);
-      const completedDates = isDoneOnTargetDate
-        ? habit.completedDates.filter((date) => date !== targetDateKey)
-        : [...habit.completedDates, targetDateKey];
+    const updatedHabits: Habit[] = habits.map((h): Habit => {
+      if (h.id !== id) return h;
 
-      return { ...habit, completedDates };
+      const completedDates = isCurrentlyComplete
+        ? h.completedDates.filter((date) => date !== targetDateKey)
+        : [...h.completedDates, targetDateKey];
+
+      return { ...h, completedDates };
     });
     setHabits(updatedHabits);
+
+    // Play habit complete sound only when marking complete (not unmarking)
+    if (!isCurrentlyComplete) {
+      playSfx("habitComplete");
+    }
   }
 
   function requestHabitDeletion(habit: Habit) {
@@ -1733,6 +1866,13 @@ function App() {
     taskId?: string,
     habitId?: number,
   ) {
+    // Resolve the Project behind the logged session through its Task or Milestone.
+    const linkedTask = taskId ? tasks.find((task) => task.id === taskId) : undefined;
+    const linkedMilestone = milestoneId
+      ? milestones.find((milestone) => milestone.id === milestoneId)
+      : undefined;
+    const projectId = linkedTask?.projectId ?? linkedMilestone?.projectId;
+
     const newRecord: FocusSessionRecord = {
       id: Date.now(),
       timestamp: Date.now(),
@@ -1743,6 +1883,7 @@ function App() {
       goalId,
       milestoneId,
       taskId,
+      projectId,
     };
     setFocusSessions((prev) => [...prev, newRecord]);
   }
@@ -2383,13 +2524,22 @@ function App() {
             <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <button
+            className={`sidebar-item ${view === "Projects" ? "active" : ""}`}
+            onClick={() => navigateToView("Projects")}
+            aria-current={view === "Projects" ? "page" : undefined}
+          >
+            <Folder size={18} />
+            <span>Projects</span>
+            <span className="sidebar-shortcut">{shortcutKey}6</span>
+          </button>
+          <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
             onClick={() => navigateToView("History")}
             aria-current={view === "History" ? "page" : undefined}
           >
             <HistoryIcon size={18} />
             <span>History</span>
-            <span className="sidebar-shortcut">{shortcutKey}6</span>
+            <span className="sidebar-shortcut">{shortcutKey}7</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -2398,7 +2548,7 @@ function App() {
           >
             <BarChart3 size={18} />
             <span>Analytics</span>
-            <span className="sidebar-shortcut">{shortcutKey}7</span>
+            <span className="sidebar-shortcut">{shortcutKey}8</span>
           </button>
           </div>
           <div className="sidebar-spacer" />
@@ -2696,7 +2846,7 @@ function App() {
                       <div key={category} style={styles.categoryManagerRow}>
                         {editingCustomCategory === category ? (
                           <input
-                            style={{ ...styles.input, minWidth: 0, padding: "7px 10px" }}
+                            style={{ ...styles.input, minWidth: 0 }}
                             value={customCategoryDraft}
                             onChange={(event) => setCustomCategoryDraft(event.target.value)}
                             aria-label={`Rename ${category}`}
@@ -2955,7 +3105,6 @@ function App() {
               onQuickAdjustStepChange={(minutes) =>
                 setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: minutes }))
               }
-              soundAlerts={appSettings.soundAlerts}
               goals={goals}
               milestones={milestones}
               tasks={tasks}
@@ -3047,12 +3196,8 @@ function App() {
               dayResetHour={appSettings.dayResetHour}
               milestones={milestones}
               onAddGoal={(data) => setGoals((current) => [...current, createGoal(data)])}
-              onAddTask={(data) => setTasks((current) => [...current, createTask(data)])}
-              onToggleTask={(taskId) =>
-                setTasks((current) => current.map((task) =>
-                  task.id === taskId ? toggleTaskCompletion(task) : task,
-                ))
-              }
+              onAddTask={handleAddTask}
+              onToggleTask={handleToggleTask}
               onToggleGoalArchive={(goalId) =>
                 setGoals((current) => current.map((goal) =>
                   goal.id === goalId
@@ -3085,38 +3230,73 @@ function App() {
                   task.goalId !== goalId && !(task.milestoneId && deletedMilestoneIds.has(task.milestoneId)),
                 ));
                 setMilestones((current) => current.filter((milestone) => milestone.goalId !== goalId));
+                setProjects((current) => detachGoalFromProjects(current, goalId));
                 setHabits((current) => current.map((habit) =>
                   habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
                 ));
+              }}              onEditTask={handleEditTask}
+              onDeleteTask={handleDeleteTask}
+              onAddMilestone={handleAddMilestone}
+              onEditMilestone={handleEditMilestone}
+              onDeleteMilestone={handleDeleteMilestone}
+              onToggleMilestone={(_goalId, milestoneId) => handleToggleMilestone(milestoneId)}
+              projects={projects}
+              onOpenProject={(projectId) => {
+                setSelectedProjectId(projectId);
+                navigateToView("Projects");
               }}
-              onEditTask={(taskId, data) =>
-                setTasks((current) => current.map((task) =>
-                  task.id === taskId ? updateTask(task, data) : task,
+            />
+          </div>
+
+          <div
+            style={{
+              display: view === "Projects" ? "flex" : "none",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <Projects
+              projects={projects}
+              goals={goals}
+              milestones={milestones}
+              tasks={tasks}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onAddProject={(data) => setProjects((current) => [...current, createProject(data)])}
+              onEditProject={(projectId, data) =>
+                setProjects((current) => current.map((project) =>
+                  project.id === projectId ? updateProject(project, data) : project,
                 ))
               }
-              onDeleteTask={(taskId) =>
-                setTasks((current) => deleteTask(current, taskId))
-              }
-              onAddMilestone={(data) => setMilestones((current) => [...current, createMilestone(data)])}
-              onEditMilestone={(milestoneId, data) =>
-                setMilestones((current) => current.map((milestone) =>
-                  milestone.id === milestoneId ? updateMilestone(milestone, data) : milestone,
+              onEditProjectStatus={(projectId, status) =>
+                setProjects((current) => current.map((project) =>
+                  project.id === projectId ? updateProjectStatus(project, status) : project,
                 ))
               }
-              onDeleteMilestone={(milestoneId) => {
-                const milestone = milestones.find((item) => item.id === milestoneId);
-                if (milestone) {
-                  setTasks((current) => detachTasksFromDeletedMilestone(current, milestone));
-                }
-                setMilestones((current) => deleteMilestone(current, milestoneId));
+              onDeleteProject={(projectId) => {
+                const project = projects.find((item) => item.id === projectId);
+                if (!project) return;
+                // Milestones and Tasks are detached (kept), never deleted with the Project.
+                setMilestones((current) => detachMilestonesFromDeletedProject(current, project));
+                setTasks((current) => detachTasksFromDeletedProject(current, project));
+                setFocusSessions((current) => disassociateProjectFocusSessions(
+                  current,
+                  projectId,
+                  new Set<string>(),
+                  new Set<string>(),
+                ));
+                setProjects((current) => deleteProject(current, projectId));
+                setSelectedProjectId((current) => (current === projectId ? null : current));
               }}
-              onToggleMilestone={(goalId, milestoneId) =>
-                setMilestones((current) => current.map((milestone) =>
-                  milestone.goalId === goalId && milestone.id === milestoneId
-                    ? toggleMilestone(milestone)
-                    : milestone,
-                ))
-              }
+              onAddMilestone={handleAddMilestone}
+              onEditMilestone={handleEditMilestone}
+              onDeleteMilestone={handleDeleteMilestone}
+              onToggleMilestone={handleToggleMilestone}
+              onAddTask={handleAddTask}
+              onEditTask={handleEditTask}
+              onDeleteTask={handleDeleteTask}
+              onToggleTask={handleToggleTask}
             />
           </div>
 
@@ -3319,17 +3499,80 @@ function App() {
                     )}
                   </div>
                 </div>
+              </section>
+
+              <section style={styles.settingsCard} aria-labelledby="sound-effects-title">
+                <h2 id="sound-effects-title" style={styles.settingsCardTitle}>
+                  <Bell size={17} />
+                  Sound Effects
+                </h2>
                 <div style={styles.settingsRow}>
                   <div>
-                    <span style={styles.settingsLabel}>Sound Alerts</span>
-                    <span style={styles.settingsDescription}>Play chime on timer completion.</span>
+                    <span style={styles.settingsLabel}>Sound Effects</span>
+                    <span style={styles.settingsDescription}>Play subtle sounds for timers, habits, and other actions.</span>
                   </div>
                   <SettingsSwitch
-                    label="Play chime on timer completion"
+                    label="Play subtle sounds for timers, habits, and other actions"
                     checked={appSettings.soundAlerts}
                     onChange={() => setAppSettings((current) => ({ ...current, soundAlerts: !current.soundAlerts }))}
                   />
                 </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <label htmlFor="sfx-volume" style={styles.settingsLabel}>Master Volume</label>
+                    <span style={styles.settingsDescription}>Adjust the overall volume of sound effects.</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 150 }}>
+                    <input
+                      className="ui-range"
+                      type="range"
+                      id="sfx-volume"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={appSettings.sfxVolume}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setAppSettings((current) => ({ ...current, sfxVolume: value }));
+                      }}
+                      disabled={!appSettings.soundAlerts}
+                      aria-label="Master SFX volume"
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ ...styles.settingsLabel, minWidth: 40, textAlign: "right" }}>
+                      {appSettings.sfxVolume}%
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <h3 style={styles.settingsSubheading}>Individual Sounds</h3>
+                </div>
+                {([
+                  ["start", "Timer Start"],
+                  ["pauseResume", "Pause/Resume"],
+                  ["habitComplete", "Habit Complete"],
+                  ["pomodoroTransition", "Pomodoro Transition"],
+                  ["timerComplete", "Timer Complete"],
+                ] as const).map(([sfxKey, label]) => {
+                  const enabled = appSettings.sfxEnabled[sfxKey];
+                  return (
+                    <div key={sfxKey} style={styles.settingsRow}>
+                      <span style={{ ...styles.settingsLabel, opacity: appSettings.soundAlerts ? 1 : 0.5 }}>{label}</span>
+                      <SettingsSwitch
+                        label={label}
+                        checked={enabled}
+                        disabled={!appSettings.soundAlerts}
+                        onChange={() => setAppSettings((current) => ({
+                          ...current,
+                          sfxEnabled: {
+                            ...current.sfxEnabled,
+                            [sfxKey]: !current.sfxEnabled[sfxKey],
+                          },
+                        }))}
+                      />
+                    </div>
+                  );
+                })}
               </section>
 
               <section style={styles.settingsCard} aria-labelledby="intelligent-notifications-title">
@@ -3410,6 +3653,23 @@ function App() {
                     <Keyboard size={15} />
                     Keyboard Shortcuts
                     <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{shortcutKey}K</span>
+                  </button>
+                </div>
+                <div style={styles.settingsRow}>
+                  <div>
+                    <span style={styles.settingsLabel}>Replay Introduction</span>
+                    <span style={styles.settingsDescription}>Start the onboarding flow again to see the introduction.</span>
+                  </div>
+                  <button
+                    type="button"
+                    style={styles.settingsActionButton}
+                    onClick={() => {
+                      setAppSettings((current) => ({ ...current, onboardingCompleted: false }));
+                      setShowOnboarding(true);
+                    }}
+                  >
+                    <RotateCcw size={15} />
+                    Restart
                   </button>
                 </div>
               </section>
@@ -3693,6 +3953,14 @@ function App() {
 
       {showKeyboardShortcuts && (
         <KeyboardShortcutsModal onClose={() => setShowKeyboardShortcuts(false)} shortcutKey={shortcutKey} />
+      )}
+
+      {showOnboarding && (
+        <Onboarding
+          onComplete={handleOnboardingComplete}
+          onSkip={handleOnboardingSkip}
+          onNavigateToToday={handleOnboardingNavigateToToday}
+        />
       )}
     </div>
   );
