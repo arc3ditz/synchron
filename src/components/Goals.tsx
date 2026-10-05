@@ -5,7 +5,7 @@ import { CARD_SURFACE } from "../theme";
 import type { FocusSessionRecord, Goal, Habit, Milestone, Project, Task } from "../types";
 import { filterTasksByMilestone } from "../domain/tasks";
 import { calculateProjectProgress } from "../domain/projects";
-import { calculateGoalProgress } from "../domain/goals";
+import { calculateGoalProgress, selectGoalWork } from "../domain/goals";
 import { calculateStreak, formatFullDate } from "../utils/dates";
 import StreakBadge from "./StreakBadge";
 
@@ -31,6 +31,7 @@ type GoalsProps = {
   onToggleMilestone: (goalId: string, milestoneId: string) => void;
   projects?: Project[];
   onOpenProject: (projectId: string) => void;
+  onAddProject: (data: Omit<Project, "id" | "createdAt" | "status">) => void;
 };
 
 type PendingDeletion = {
@@ -608,6 +609,7 @@ export default function Goals({
   onDeleteMilestone,
   onToggleMilestone,
   onOpenProject,
+  onAddProject,
 }: GoalsProps) {
   const [showForm, setShowForm] = useState(false);
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
@@ -640,6 +642,8 @@ export default function Goals({
   const [taskEditProjectId, setTaskEditProjectId] = useState("");
   const [milestoneProjectId, setMilestoneProjectId] = useState("");
   const [milestoneEditProjectId, setMilestoneEditProjectId] = useState("");
+  const [projectGoalId, setProjectGoalId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("");
 
   const activeGoals = goals.filter((goal) => goal.status !== "archived");
   const archivedGoals = goals.filter((goal) => goal.status === "archived");
@@ -778,6 +782,19 @@ export default function Goals({
       projectId: taskEditProjectId || undefined,
     });
     setEditingTaskId(null);
+  }
+
+  function handleProjectSubmit(event: FormEvent<HTMLFormElement>, goalId: string) {
+    event.preventDefault();
+    const trimmedName = projectName.trim();
+    if (!trimmedName) return;
+
+    onAddProject({
+      name: trimmedName,
+      goalId,
+    });
+    setProjectName("");
+    setProjectGoalId(null);
   }
 
   function handleMilestoneSubmit(event: FormEvent<HTMLFormElement>, goalId: string) {
@@ -998,13 +1015,12 @@ export default function Goals({
         {activeGoals.length === 0 ? (
           <div style={styles.empty}>No active goals. Create one to get started.</div>
         ) : activeGoals.map((goal) => {
-          const linkedHabits = habits.filter((habit) => habit.goalId === goal.id);
-          const goalProjects = projects.filter((project) => project.goalId === goal.id);
-          const goalMilestones = milestones.filter((milestone) => milestone.goalId === goal.id);
+          const goalWork = selectGoalWork(goal, { projects, milestones, tasks, habits });
+          const linkedHabits = goalWork.habits;
+          const goalProjects = goalWork.projects;
+          const goalMilestones = goalWork.milestones;
           const goalMilestoneIds = new Set(goalMilestones.map((milestone) => milestone.id));
-          const goalTaskIds = new Set(tasks
-            .filter((task) => task.goalId === goal.id || (task.milestoneId && goalMilestoneIds.has(task.milestoneId)))
-            .map((task) => task.id));
+          const goalTaskIds = new Set(goalWork.tasks.map((task) => task.id));
           const totalFocusMinutes = focusSessions
             .filter((session) =>
               session.goalId === goal.id ||
@@ -1142,42 +1158,70 @@ export default function Goals({
               </p>
               <p style={{ ...styles.meta, marginTop: 6 }}>Total Focus: {focusTimeLabel}</p>
 
-              {goalProjects.length > 0 && (
-                <section style={styles.linkedHabits} aria-label={`Projects for "${goal.title}"`}>
-                  <h3 style={styles.linkedHabitsTitle}>Projects</h3>
-                  {goalProjects.map((project) => {
-                    const projectProgress = calculateProjectProgress(project, milestones, tasks);
-                    return (
-                      <div key={project.id} style={styles.linkedHabitRow}>
-                        <button
-                          type="button"
-                          style={styles.projectOpenButton}
-                          onClick={() => onOpenProject(project.id)}
-                          aria-label={`Open project "${project.name}"`}
-                        >
-                          {project.name}
-                        </button>
-                        <span style={styles.projectRowMeta}>
-                          <span style={styles.status}>{project.status}</span>
-                          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                            {projectProgress.percent}%
-                          </span>
-                          <span style={styles.projectProgressTrack}>
-                            <span
-                              style={{
-                                display: "block",
-                                height: "100%",
-                                width: `${projectProgress.percent}%`,
-                                background: "var(--color-accent)",
-                              }}
-                            />
-                          </span>
+              <section style={styles.linkedHabits} aria-label={`Projects for "${goal.title}"`}>
+                <h3 style={styles.linkedHabitsTitle}>Projects</h3>
+                {goalProjects.map((project) => {
+                  const projectProgress = calculateProjectProgress(project, milestones, tasks);
+                  return (
+                    <div key={project.id} style={styles.linkedHabitRow}>
+                      <button
+                        type="button"
+                        style={styles.projectOpenButton}
+                        onClick={() => onOpenProject(project.id)}
+                        aria-label={`Open project "${project.name}"`}
+                      >
+                        {project.name}
+                      </button>
+                      <span style={styles.projectRowMeta}>
+                        <span style={styles.status}>{project.status}</span>
+                        <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                          {projectProgress.percent}%
                         </span>
-                      </div>
-                    );
-                  })}
-                </section>
-              )}
+                        <span style={styles.projectProgressTrack}>
+                          <span
+                            style={{
+                              display: "block",
+                              height: "100%",
+                              width: `${projectProgress.percent}%`,
+                              background: "var(--color-accent)",
+                            }}
+                          />
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {projectGoalId === goal.id ? (
+                  <form style={styles.milestoneForm} onSubmit={(event) => handleProjectSubmit(event, goal.id)}>
+                    <input
+                      autoFocus
+                      required
+                      maxLength={120}
+                      style={styles.compactInput}
+                      value={projectName}
+                      onChange={(event) => setProjectName(event.target.value)}
+                      placeholder="Project name"
+                      aria-label={`Project name for "${goal.title}"`}
+                    />
+                    <div style={styles.formActions}>
+                      <button type="button" style={styles.secondaryButton} onClick={() => setProjectGoalId(null)}>
+                        Cancel
+                      </button>
+                      <button type="submit" style={styles.submitButton}>Add Project</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    style={styles.addMilestoneButton}
+                    onClick={() => setProjectGoalId(goal.id)}
+                  >
+                    <Plus size={14} />
+                    Add Project
+                  </button>
+                )}
+              </section>
 
               <section style={styles.linkedHabits} aria-label={`Habits linked to "${goal.title}"`}>
                 <h3 style={styles.linkedHabitsTitle}>Linked Habits</h3>
@@ -1343,10 +1387,10 @@ export default function Goals({
               <section style={styles.tasksSection} aria-label={`Tasks for "${goal.title}"`}>
                 <h3 style={styles.tasksTitle}>Tasks</h3>
                 
-                {/* Tasks not linked to any milestone */}
+                {/* Tasks not linked to any milestone (direct or via the Goal's Projects) */}
                 {(() => {
-                  const unlinkedTasks = tasks.filter(
-                    (task) => task.goalId === goal.id && !task.milestoneId,
+                  const unlinkedTasks = goalWork.tasks.filter(
+                    (task) => !task.milestoneId,
                   );
                   
                   if (unlinkedTasks.length > 0) {
@@ -1377,7 +1421,7 @@ export default function Goals({
                   );
                 })}
 
-                {tasks.filter((task) => task.goalId === goal.id).length === 0 && (
+                {goalWork.tasks.length === 0 && (
                   <p style={{ ...styles.meta, marginTop: 0 }}>No tasks yet</p>
                 )}
               </section>

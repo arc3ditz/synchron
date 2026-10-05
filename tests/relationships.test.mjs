@@ -152,3 +152,56 @@ test("deleting a Goal detaches linked Habits without deleting them", () => {
   assert.equal(result[1], habits[1]);
   assert.equal(result[2], habits[2]);
 });
+
+test("Task under a Milestone in a Project resolves Project and Goal through it", () => {
+  const goals = [
+    { id: "goal-a", title: "A", status: "active", createdAt: "2025-01-01" },
+    { id: "goal-b", title: "B", status: "active", createdAt: "2025-01-01" },
+  ];
+  const projects = [
+    { id: "project-1", goalId: "goal-b", name: "P", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", projectId: "project-1", title: "M", completed: false },
+  ];
+  const tasks = [
+    // Stale contradictory Goal from before the Milestone joined the Project.
+    { id: "t-1", goalId: "goal-a", milestoneId: "m-1", title: "Stale goal", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    // Independent Task with its own Goal must remain unchanged.
+    { id: "t-2", goalId: "goal-a", title: "Independent", completed: false, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const result = normalizeRelationships(goals, projects, milestones, tasks);
+
+  assert.equal(result.tasks[0].projectId, "project-1");
+  assert.equal(result.tasks[0].goalId, "goal-b");
+  assert.equal(result.tasks[0].milestoneId, "m-1");
+  assert.equal(result.tasks[1], tasks[1]);
+});
+
+test("Task under an independent Milestone with a Goal preserves that Goal", () => {
+  const goals = [{ id: "goal-a", title: "A", status: "active", createdAt: "2025-01-01" }];
+  const milestones = [{ id: "m-1", goalId: "goal-a", title: "M", completed: false }];
+  const tasks = [
+    { id: "t-1", milestoneId: "m-1", title: "Via milestone", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-2", title: "Fully independent", completed: false, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const result = normalizeRelationships(goals, [], milestones, tasks);
+
+  assert.equal(result.tasks[0].goalId, "goal-a");
+  assert.equal(result.tasks[0].projectId, undefined);
+  assert.equal(result.tasks[1], tasks[1]);
+});
+
+test("alignTask resolves a contradictory Task Goal through its Milestone", () => {
+  const milestones = [{ id: "m-1", goalId: "goal-b", projectId: "project-1", title: "M", completed: false }];
+  const projects = [{ id: "project-1", goalId: "goal-b", name: "P", status: "active", createdAt: "2025-01-01" }];
+  const contradictory = { id: "t-1", goalId: "goal-a", projectId: "project-1", milestoneId: "m-1", title: "T", completed: false, priority: "medium", createdAt: "2025-01-01" };
+
+  const aligned = alignTask(contradictory, milestones, projects);
+
+  assert.equal(aligned.goalId, "goal-b");
+  assert.equal(aligned.projectId, "project-1");
+  assert.equal(aligned.milestoneId, "m-1");
+});

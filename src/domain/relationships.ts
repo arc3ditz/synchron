@@ -65,9 +65,13 @@ export function normalizeRelationships(
     }
 
     if (milestone) {
-      // A Task under a Milestone must match that Milestone's Project when both exist.
-      if (projectId !== undefined && projectId !== milestone.projectId) {
+      // A Task under a Milestone resolves its Project/Goal through that
+      // Milestone, so it can never contradict the Milestone's hierarchy.
+      if (milestone.projectId !== undefined) {
         projectId = milestone.projectId;
+      }
+      if (milestone.goalId !== undefined) {
+        goalId = milestone.goalId;
       }
     } else if (projectId !== undefined && !projectIds.has(projectId)) {
       projectId = undefined;
@@ -121,19 +125,25 @@ export function alignMilestone(milestone: Milestone, projects: Project[]): Miles
 
 /**
  * Align a single Task with the Milestone/Project hierarchy: a Task inside a
- * Milestone must not point at a different Project than that Milestone.
- * Independent Tasks are left alone.
+ * Milestone resolves its Project/Goal through that Milestone and can never
+ * contradict it. Independent Tasks are left alone.
  */
 export function alignTask(task: Task, milestones: Milestone[], projects: Project[]): Task {
   let milestoneId = task.milestoneId;
   let projectId = task.projectId;
+  let goalId = task.goalId;
 
   if (milestoneId !== undefined) {
     const milestone = milestones.find((candidate) => candidate.id === milestoneId);
     if (!milestone) {
       milestoneId = undefined;
-    } else if (projectId !== undefined && projectId !== milestone.projectId) {
-      projectId = milestone.projectId;
+    } else {
+      if (milestone.projectId !== undefined) {
+        projectId = milestone.projectId;
+      }
+      if (milestone.goalId !== undefined) {
+        goalId = milestone.goalId;
+      }
     }
   }
 
@@ -143,11 +153,12 @@ export function alignTask(task: Task, milestones: Milestone[], projects: Project
 
   if (
     milestoneId === task.milestoneId &&
-    projectId === task.projectId
+    projectId === task.projectId &&
+    goalId === task.goalId
   ) {
     return task;
   }
-  return { ...task, milestoneId, projectId };
+  return { ...task, milestoneId, projectId, goalId };
 }
 
 /**

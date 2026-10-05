@@ -4,6 +4,7 @@ import {
   calculateGoalProgress,
   detachTasksFromDeletedMilestone,
   disassociateGoalFocusSessions,
+  selectGoalWork,
 } from "../src/domain/goals.ts";
 import { getTodayKey, shiftDateKey } from "../src/utils/dates.ts";
 
@@ -192,4 +193,109 @@ test("Goal progress includes Milestones reached only through a Project", () => {
 
   assert.equal(progress.total, 1);
   assert.equal(progress.completed, 0);
+});
+
+test("selectGoalWork exposes a Goal's Projects, Milestones, Tasks, and Habits", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+    { id: "project-2", name: "Independent", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", projectId: "project-1", title: "Via project", completed: false },
+    { id: "m-2", goalId: goal.id, title: "Direct", completed: false },
+    { id: "m-3", projectId: "project-2", title: "Other project", completed: false },
+  ];
+  const tasks = [
+    { id: "t-1", projectId: "project-1", title: "Via project only", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-2", goalId: goal.id, title: "Direct", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-3", projectId: "project-2", title: "Other project", completed: false, priority: "medium", createdAt: "2025-01-01" },
+  ];
+  const habits = [
+    { id: 1, name: "Linked", goalId: goal.id, priority: "Optional", type: "Daily", completedDates: [] },
+    { id: 2, name: "Other", priority: "Optional", type: "Daily", completedDates: [] },
+  ];
+
+  const work = selectGoalWork(goal, { projects, milestones, tasks, habits });
+
+  assert.deepEqual(work.projects.map((p) => p.id), ["project-1"]);
+  assert.deepEqual(work.milestones.map((m) => m.id).sort(), ["m-1", "m-2"]);
+  assert.deepEqual(work.tasks.map((t) => t.id).sort(), ["t-1", "t-2"]);
+  assert.deepEqual(work.habits.map((h) => h.id), [1]);
+});
+
+test("selectGoalWork agrees with calculateGoalProgress membership", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", goalId: goal.id, projectId: "project-1", title: "Both", completed: true },
+  ];
+  const tasks = [
+    { id: "t-1", goalId: goal.id, projectId: "project-1", milestoneId: "m-1", title: "All links", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const work = selectGoalWork(goal, { projects, milestones, tasks });
+  const progress = calculateGoalProgress(goal, milestones, tasks, undefined, undefined, undefined, projects);
+
+  assert.equal(work.milestones.length + work.tasks.length, progress.total);
+  assert.equal(
+    work.milestones.filter((m) => m.completed).length + work.tasks.filter((t) => t.completed).length,
+    progress.completed,
+  );
+});
+
+test("selectGoalWork follows the full Task to Milestone to Project to Goal chain", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    // No direct goalId: reachable only through the Goal's Project.
+    { id: "m-1", projectId: "project-1", title: "Via project", completed: true },
+  ];
+  const tasks = [
+    // No direct goalId or projectId: reachable only through the Milestone chain.
+    { id: "t-1", milestoneId: "m-1", title: "Via milestone chain", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const work = selectGoalWork(goal, { projects, milestones, tasks });
+  const progress = calculateGoalProgress(goal, milestones, tasks, undefined, undefined, undefined, projects);
+
+  assert.deepEqual(work.milestones.map((m) => m.id), ["m-1"]);
+  assert.deepEqual(work.tasks.map((t) => t.id), ["t-1"]);
+  assert.equal(progress.total, 2);
+  assert.equal(progress.completed, 2);
+});
+
+test("selectGoalWork counts multi-path entities once", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", goalId: goal.id, projectId: "project-1", title: "Both", completed: false },
+  ];
+  const tasks = [
+    { id: "t-1", goalId: goal.id, projectId: "project-1", milestoneId: "m-1", title: "All links", completed: false, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const work = selectGoalWork(goal, { projects, milestones, tasks });
+
+  assert.equal(work.milestones.length, 1);
+  assert.equal(work.tasks.length, 1);
+});
+
+test("selectGoalWork treats missing Projects and Habits as empty", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const milestones = [{ id: "m-1", goalId: goal.id, title: "Direct", completed: false }];
+  const tasks = [{ id: "t-1", goalId: goal.id, title: "Direct", completed: false, priority: "medium", createdAt: "2025-01-01" }];
+
+  const work = selectGoalWork(goal, { milestones, tasks });
+
+  assert.deepEqual(work.projects, []);
+  assert.deepEqual(work.habits, []);
+  assert.equal(work.milestones.length, 1);
+  assert.equal(work.tasks.length, 1);
 });

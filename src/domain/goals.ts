@@ -70,6 +70,59 @@ export function disassociateGoalFocusSessions(
   });
 }
 
+export interface GoalWork {
+  projects: Project[];
+  milestones: Milestone[];
+  tasks: Task[];
+  habits: Habit[];
+}
+
+/**
+ * The Goal is the top-level organizational container. This selector exposes
+ * everything belonging to a Goal — its Projects, Milestones, Tasks, and
+ * Habits — using one membership definition shared with progress calculation
+ * so the Goal detail view can never disagree with the progress bar:
+ * direct links plus work reached through the Goal's Projects, deduplicated.
+ */
+export function selectGoalWork(
+  goal: Goal,
+  input: { projects?: Project[]; milestones: Milestone[]; tasks: Task[]; habits?: Habit[] },
+): GoalWork {
+  const goalProjectIds = new Set(
+    (input.projects ?? []).filter((project) => project.goalId === goal.id).map((project) => project.id),
+  );
+
+  // Milestones linked directly to the Goal or indirectly through its Projects.
+  const goalMilestonesById = new Map<string, Milestone>();
+  for (const milestone of input.milestones) {
+    const belongsToGoal = milestone.goalId === goal.id;
+    const belongsToGoalProject = milestone.projectId !== undefined && goalProjectIds.has(milestone.projectId);
+    if (belongsToGoal || belongsToGoalProject) {
+      goalMilestonesById.set(milestone.id, milestone);
+    }
+  }
+  const goalMilestones = [...goalMilestonesById.values()];
+  const milestoneIds = new Set(goalMilestones.map((m) => m.id));
+
+  // Tasks linked directly to the Goal, to one of its Milestones, or to one of its Projects.
+  const goalTasksById = new Map<string, Task>();
+  for (const task of input.tasks) {
+    const belongsToGoal = task.goalId === goal.id;
+    const belongsToGoalMilestone = task.milestoneId !== undefined && milestoneIds.has(task.milestoneId);
+    const belongsToGoalProject = task.projectId !== undefined && goalProjectIds.has(task.projectId);
+    if (belongsToGoal || belongsToGoalMilestone || belongsToGoalProject) {
+      goalTasksById.set(task.id, task);
+    }
+  }
+
+  return {
+    projects: (input.projects ?? []).filter((project) => project.goalId === goal.id),
+    milestones: goalMilestones,
+    tasks: [...goalTasksById.values()],
+    habits: (input.habits ?? []).filter((habit) => habit.goalId === goal.id),
+  };
+}
+
 export function calculateGoalProgress(
   goal: Goal,
   milestones: Milestone[],
@@ -89,33 +142,10 @@ export function calculateGoalProgress(
   milestoneSegmentWidth: number;
   habitSegmentWidth: number;
 } {
-  const goalProjectIds = new Set(
-    (projects ?? []).filter((project) => project.goalId === goal.id).map((project) => project.id),
+  const { milestones: goalMilestones, tasks: goalTasks } = selectGoalWork(
+    goal,
+    { projects, milestones, tasks },
   );
-
-  // Milestones linked directly to the Goal or indirectly through its Projects.
-  const goalMilestonesById = new Map<string, Milestone>();
-  for (const milestone of milestones) {
-    const belongsToGoal = milestone.goalId === goal.id;
-    const belongsToGoalProject = milestone.projectId !== undefined && goalProjectIds.has(milestone.projectId);
-    if (belongsToGoal || belongsToGoalProject) {
-      goalMilestonesById.set(milestone.id, milestone);
-    }
-  }
-  const goalMilestones = [...goalMilestonesById.values()];
-  const milestoneIds = new Set(goalMilestones.map((m) => m.id));
-
-  // Tasks linked directly to the Goal, to one of its Milestones, or to one of its Projects.
-  const goalTasksById = new Map<string, Task>();
-  for (const task of tasks) {
-    const belongsToGoal = task.goalId === goal.id;
-    const belongsToGoalMilestone = task.milestoneId !== undefined && milestoneIds.has(task.milestoneId);
-    const belongsToGoalProject = task.projectId !== undefined && goalProjectIds.has(task.projectId);
-    if (belongsToGoal || belongsToGoalMilestone || belongsToGoalProject) {
-      goalTasksById.set(task.id, task);
-    }
-  }
-  const goalTasks = [...goalTasksById.values()];
   
   const completedMilestones = goalMilestones.filter((m) => m.completed).length;
   const completedTasks = goalTasks.filter((t) => t.completed).length;

@@ -14,6 +14,8 @@ import {
   updateProject,
   updateProjectStatus,
 } from "../src/domain/projects.ts";
+import { selectGoalWork } from "../src/domain/goals.ts";
+import { alignProject } from "../src/domain/relationships.ts";
 
 const baseProject = {
   name: "Ship landing page",
@@ -202,4 +204,51 @@ test("filter helpers scope Projects, Milestones, and Tasks to a Project", () => 
   assert.deepEqual(filterProjectsByGoal(projects, "goal-missing"), []);
   assert.deepEqual(filterMilestonesByProject(milestones, projects[0].id), [milestones[0]]);
   assert.deepEqual(filterTasksByProject(tasks, projects[0].id), [tasks[0]]);
+});
+
+test("deleting a project clears the deleted reference from Tasks under its Milestones", () => {
+  const project = createProject({ ...baseProject, goalId: "goal-1" });
+  const milestones = [
+    { id: "m-1", projectId: project.id, title: "Belongs to project", completed: false },
+  ];
+  const tasks = [
+    // No direct Project link: reachable only through the deleted Project's Milestone.
+    { id: "t-1", milestoneId: "m-1", title: "Via milestone only", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    // Both direct and indirect links to the deleted Project.
+    { id: "t-2", projectId: project.id, milestoneId: "m-1", title: "Direct and via milestone", completed: true, priority: "medium", createdAt: "2025-01-01" },
+    // Direct Project Task without a Milestone (existing behavior preserved).
+    { id: "t-3", projectId: project.id, title: "Direct only", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-4", projectId: "other-project", title: "Untouched", completed: false, priority: "low", createdAt: "2025-01-01" },
+  ];
+
+  const detachedMilestones = detachMilestonesFromDeletedProject(milestones, project);
+  const detachedTasks = detachTasksFromDeletedProject(tasks, project, milestones);
+
+  // Nothing is deleted; Milestones survive with projectId cleared.
+  assert.equal(detachedMilestones.length, 1);
+  assert.equal(detachedMilestones[0].projectId, undefined);
+  assert.equal(detachedTasks.length, 4);
+  // No Task keeps a reference to the deleted Project.
+  for (const task of detachedTasks) {
+    assert.notEqual(task.projectId, project.id);
+  }
+  assert.equal(detachedTasks[0].milestoneId, "m-1");
+  assert.equal(detachedTasks[1].projectId, undefined);
+  assert.equal(detachedTasks[1].milestoneId, "m-1");
+  assert.equal(detachedTasks[2].projectId, undefined);
+  assert.equal(detachedTasks[3], tasks[3]);
+});
+
+test("a Project created from a Goal receives that Goal's goalId through the shared creation path", () => {
+  const goal = { id: "goal-1", title: "Get Fit", status: "active", createdAt: "2025-01-01" };
+
+  // Same composition as App.handleAddProject: existing creation logic only.
+  const project = alignProject(createProject({ name: "Run a 5K", goalId: goal.id }), [goal]);
+
+  assert.equal(project.goalId, goal.id);
+  assert.equal(project.name, "Run a 5K");
+
+  // The new Project immediately belongs to the Goal's work set.
+  const work = selectGoalWork(goal, { projects: [project], milestones: [], tasks: [] });
+  assert.deepEqual(work.projects.map((p) => p.id), [project.id]);
 });

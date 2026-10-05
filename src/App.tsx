@@ -12,7 +12,6 @@ import {
   Archive,
   ArchiveRestore,
   Snowflake,
-  Folder,
   Settings,
   Target,
   Clock3,
@@ -1172,6 +1171,10 @@ function App() {
 
   // Shared Milestone/Task handlers — used by both the Goals and Projects views
   // so there is exactly one wiring of the domain logic.
+  function handleAddProject(data: Omit<Project, "id" | "createdAt" | "status">) {
+    setProjects((current) => [...current, alignProject(createProject(data), goals)]);
+  }
+
   function handleAddTask(data: Omit<Task, "id" | "createdAt" | "completed">) {
     setTasks((current) => [...current, alignTask(createTask(data), milestones, projects)]);
   }
@@ -1397,10 +1400,9 @@ function App() {
           "1": "Today",
           "2": "Habits",
           "3": "Timer",
-          "4": "Projects",
-          "5": "goals",
-          "6": "History",
-          "7": "Analytics",
+          "4": "goals",
+          "5": "History",
+          "6": "Analytics",
           ",": "Settings",
         };
         const nextView = navigationKeys[event.key];
@@ -2202,22 +2204,13 @@ function App() {
               <span className="sidebar-shortcut">{shortcutKey}3</span>
             </button>
             <button
-              className={`sidebar-item ${view === "Projects" ? "active" : ""}`}
-              onClick={() => navigateToView("Projects")}
-              aria-current={view === "Projects" ? "page" : undefined}
-            >
-              <Folder size={18} />
-              <span>Projects</span>
-              <span className="sidebar-shortcut">{shortcutKey}4</span>
-            </button>
-            <button
               className={`sidebar-item ${view === "goals" ? "active" : ""}`}
               onClick={() => navigateToView("goals")}
               aria-current={view === "goals" ? "page" : undefined}
             >
               <Target size={18} />
               <span>Goals</span>
-              <span className="sidebar-shortcut">{shortcutKey}5</span>
+              <span className="sidebar-shortcut">{shortcutKey}4</span>
             </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
@@ -2226,7 +2219,7 @@ function App() {
           >
             <HistoryIcon size={18} />
             <span>History</span>
-            <span className="sidebar-shortcut">{shortcutKey}6</span>
+            <span className="sidebar-shortcut">{shortcutKey}5</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -2235,7 +2228,7 @@ function App() {
           >
             <BarChart3 size={18} />
             <span>Analytics</span>
-            <span className="sidebar-shortcut">{shortcutKey}7</span>
+            <span className="sidebar-shortcut">{shortcutKey}6</span>
           </button>
           </div>
           <div className="sidebar-spacer" />
@@ -2865,6 +2858,7 @@ function App() {
                 setSelectedProjectId(projectId);
                 navigateToView("Projects");
               }}
+              onAddProject={handleAddProject}
             />
           </div>
 
@@ -2883,7 +2877,7 @@ function App() {
               tasks={tasks}
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
-              onAddProject={(data) => setProjects((current) => [...current, alignProject(createProject(data), goals)])}
+              onAddProject={handleAddProject}
               onEditProject={(projectId, data) => {
                 const existing = projects.find((project) => project.id === projectId);
                 if (!existing) return;
@@ -2909,7 +2903,7 @@ function App() {
                 if (!project) return;
                 // Milestones and Tasks are detached (kept), never deleted with the Project.
                 setMilestones((current) => detachMilestonesFromDeletedProject(current, project));
-                setTasks((current) => detachTasksFromDeletedProject(current, project));
+                setTasks((current) => detachTasksFromDeletedProject(current, project, milestones));
                 setFocusSessions((current) => disassociateProjectFocusSessions(
                   current,
                   projectId,

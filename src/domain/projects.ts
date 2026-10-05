@@ -30,10 +30,21 @@ export function detachMilestonesFromDeletedProject(milestones: Milestone[], proj
     : milestone);
 }
 
-export function detachTasksFromDeletedProject(tasks: Task[], project: Project): Task[] {
-  return tasks.map((task) => task.projectId === project.id
-    ? { ...task, goalId: task.goalId ?? project.goalId, projectId: undefined }
-    : task);
+export function detachTasksFromDeletedProject(tasks: Task[], project: Project, milestones: Milestone[] = []): Task[] {
+  const projectMilestoneIds = new Set(
+    milestones.filter((milestone) => milestone.projectId === project.id).map((milestone) => milestone.id),
+  );
+  return tasks.map((task) => {
+    const directlyAttached = task.projectId === project.id;
+    const viaDeletedMilestone = task.milestoneId !== undefined && projectMilestoneIds.has(task.milestoneId);
+    if (!directlyAttached && !viaDeletedMilestone) return task;
+    // Only the deleted Project reference is cleared; a Task pointing at a
+    // different surviving Project keeps that relationship.
+    const projectId = directlyAttached ? undefined : task.projectId;
+    const goalId = task.goalId ?? project.goalId;
+    if (projectId === task.projectId && goalId === task.goalId) return task;
+    return { ...task, projectId, goalId };
+  });
 }
 
 export function disassociateProjectFocusSessions(

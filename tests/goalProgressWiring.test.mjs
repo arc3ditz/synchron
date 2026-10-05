@@ -35,3 +35,40 @@ test("Today and Goals use the same single progress calculation", () => {
   assert.ok(goalsSource.includes("from \"../domain/goals\""));
   assert.ok(todaySource.includes("from \"../domain/goals\""));
 });
+
+test("Goal detail view lets a Project be added inside its Goal", () => {
+  assert.ok(
+    goalsSource.includes("onAddProject"),
+    "Goals.tsx must accept an onAddProject handler",
+  );
+  assert.ok(
+    goalsSource.includes("Add Project"),
+    "Goal cards must offer project creation scoped to the Goal",
+  );
+});
+
+test("App wires the same add-project handler to Goals and Projects", () => {
+  const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
+  assert.ok(
+    appSource.includes("function handleAddProject("),
+    "App must define one shared handleAddProject",
+  );
+  assert.ok(
+    appSource.includes("onAddProject={handleAddProject}"),
+    "App must pass the shared handler to the views",
+  );
+});
+
+test("Projects is no longer a top-level sidebar item but stays reachable from Goals", () => {
+  const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
+  assert.ok(
+    !appSource.includes("<span>Projects</span>"),
+    "Sidebar must not list Projects as top-level navigation",
+  );
+  for (const label of ["Today", "My Habits", "Timer", "Goals", "History", "Analytics", "Settings"]) {
+    assert.ok(appSource.includes(`<span>${label}</span>`), `Sidebar must keep ${label}`);
+  }
+  // The Projects view itself is preserved for Goal-scoped access.
+  assert.ok(appSource.includes('navigateToView("Projects")'), "Goal open-project navigation must remain");
+  assert.ok(!appSource.includes('"4": "Projects"'), "No keyboard shortcut may target a top-level Projects view");
+});
