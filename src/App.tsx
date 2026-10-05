@@ -90,7 +90,14 @@ import {
   disassociateProjectFocusSessions,
 } from "./domain/projects";
 import { createTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
-import { normalizeRelationships } from "./domain/relationships";
+import {
+  alignMilestone,
+  alignProject,
+  alignTask,
+  detachHabitsFromDeletedGoal,
+  normalizeRelationships,
+  propagateProjectGoalChange,
+} from "./domain/relationships";
 import {
   getTodayKey,
   formatDateDisplay,
@@ -1166,7 +1173,7 @@ function App() {
   // Shared Milestone/Task handlers — used by both the Goals and Projects views
   // so there is exactly one wiring of the domain logic.
   function handleAddTask(data: Omit<Task, "id" | "createdAt" | "completed">) {
-    setTasks((current) => [...current, createTask(data)]);
+    setTasks((current) => [...current, alignTask(createTask(data), milestones, projects)]);
   }
 
   function handleToggleTask(taskId: string) {
@@ -1177,7 +1184,7 @@ function App() {
 
   function handleEditTask(taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) {
     setTasks((current) => current.map((task) =>
-      task.id === taskId ? updateTask(task, data) : task,
+      task.id === taskId ? alignTask(updateTask(task, data), milestones, projects) : task,
     ));
   }
 
@@ -1186,12 +1193,12 @@ function App() {
   }
 
   function handleAddMilestone(data: Omit<Milestone, "id" | "completed">) {
-    setMilestones((current) => [...current, createMilestone(data)]);
+    setMilestones((current) => [...current, alignMilestone(createMilestone(data), projects)]);
   }
 
   function handleEditMilestone(milestoneId: string, data: Omit<Milestone, "id" | "completed">) {
     setMilestones((current) => current.map((milestone) =>
-      milestone.id === milestoneId ? updateMilestone(milestone, data) : milestone,
+      milestone.id === milestoneId ? alignMilestone(updateMilestone(milestone, data), projects) : milestone,
     ));
   }
 
@@ -2846,9 +2853,7 @@ function App() {
                 ));
                 setMilestones((current) => current.filter((milestone) => milestone.goalId !== goalId));
                 setProjects((current) => detachGoalFromProjects(current, goalId));
-                setHabits((current) => current.map((habit) =>
-                  habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
-                ));
+                setHabits((current) => detachHabitsFromDeletedGoal(current, goalId));
               }}              onEditTask={handleEditTask}
               onDeleteTask={handleDeleteTask}
               onAddMilestone={handleAddMilestone}
@@ -2878,12 +2883,22 @@ function App() {
               tasks={tasks}
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
-              onAddProject={(data) => setProjects((current) => [...current, createProject(data)])}
-              onEditProject={(projectId, data) =>
+              onAddProject={(data) => setProjects((current) => [...current, alignProject(createProject(data), goals)])}
+              onEditProject={(projectId, data) => {
+                const existing = projects.find((project) => project.id === projectId);
+                if (!existing) return;
+                const updatedProject = alignProject(updateProject(existing, data), goals);
                 setProjects((current) => current.map((project) =>
-                  project.id === projectId ? updateProject(project, data) : project,
-                ))
-              }
+                  project.id === projectId ? updatedProject : project,
+                ));
+                // Keep child relationships consistent immediately when the
+                // Project's Goal changes; never wait for a reload.
+                if (updatedProject.goalId !== existing.goalId) {
+                  const propagated = propagateProjectGoalChange(milestones, tasks, updatedProject);
+                  setMilestones(propagated.milestones);
+                  setTasks(propagated.tasks);
+                }
+              }}
               onEditProjectStatus={(projectId, status) =>
                 setProjects((current) => current.map((project) =>
                   project.id === projectId ? updateProjectStatus(project, status) : project,

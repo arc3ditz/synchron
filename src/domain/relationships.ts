@@ -1,4 +1,4 @@
-import type { Goal, Milestone, Project, Task } from "../types";
+import type { Goal, Habit, Milestone, Project, Task } from "../types";
 
 export interface NormalizedRelationships {
   projects: Project[];
@@ -92,4 +92,105 @@ export function normalizeRelationships(
     milestones: normalizedMilestones,
     tasks: normalizedTasks,
   };
+}
+
+/**
+ * Align a single Project with existing Goals. Detaches a Goal reference that
+ * no longer exists; never deletes anything.
+ */
+export function alignProject(project: Project, goals: Goal[]): Project {
+  if (project.goalId !== undefined && !goals.some((goal) => goal.id === project.goalId)) {
+    return { ...project, goalId: undefined };
+  }
+  return project;
+}
+
+/**
+ * Align a single Milestone with its Project: a Milestone inside a Project must
+ * resolve to that Project's Goal. Independent Milestones are left alone.
+ */
+export function alignMilestone(milestone: Milestone, projects: Project[]): Milestone {
+  if (milestone.projectId === undefined) return milestone;
+  const project = projects.find((candidate) => candidate.id === milestone.projectId);
+  if (!project) {
+    return { ...milestone, projectId: undefined };
+  }
+  if (milestone.goalId === project.goalId) return milestone;
+  return { ...milestone, goalId: project.goalId };
+}
+
+/**
+ * Align a single Task with the Milestone/Project hierarchy: a Task inside a
+ * Milestone must not point at a different Project than that Milestone.
+ * Independent Tasks are left alone.
+ */
+export function alignTask(task: Task, milestones: Milestone[], projects: Project[]): Task {
+  let milestoneId = task.milestoneId;
+  let projectId = task.projectId;
+
+  if (milestoneId !== undefined) {
+    const milestone = milestones.find((candidate) => candidate.id === milestoneId);
+    if (!milestone) {
+      milestoneId = undefined;
+    } else if (projectId !== undefined && projectId !== milestone.projectId) {
+      projectId = milestone.projectId;
+    }
+  }
+
+  if (projectId !== undefined && !projects.some((project) => project.id === projectId)) {
+    projectId = undefined;
+  }
+
+  if (
+    milestoneId === task.milestoneId &&
+    projectId === task.projectId
+  ) {
+    return task;
+  }
+  return { ...task, milestoneId, projectId };
+}
+
+/**
+ * Keep child relationships consistent immediately after a Project's Goal
+ * changes. Milestones of the Project and Tasks of the Project (or of its
+ * Milestones) resolve to the Project's new Goal — or are cleared when the
+ * Project becomes independent. No entity is deleted and no new relationship
+ * is fabricated beyond the inherited Goal resolution.
+ */
+export function propagateProjectGoalChange(
+  milestones: Milestone[],
+  tasks: Task[],
+  project: Project,
+): { milestones: Milestone[]; tasks: Task[] } {
+  const projectMilestoneIds = new Set(
+    milestones.filter((milestone) => milestone.projectId === project.id).map((milestone) => milestone.id),
+  );
+
+  const nextMilestones = milestones.map((milestone) => {
+    if (milestone.projectId !== project.id) return milestone;
+    if (milestone.goalId === project.goalId) return milestone;
+    return { ...milestone, goalId: project.goalId };
+  });
+
+  const nextTasks = tasks.map((task) => {
+    const belongsToProject = task.projectId === project.id;
+    const belongsToProjectMilestone = task.milestoneId !== undefined &&
+      projectMilestoneIds.has(task.milestoneId);
+    if (!belongsToProject && !belongsToProjectMilestone) return task;
+    const projectId = belongsToProjectMilestone ? project.id : task.projectId;
+    if (task.goalId === project.goalId && projectId === task.projectId) return task;
+    return { ...task, projectId, goalId: project.goalId };
+  });
+
+  return { milestones: nextMilestones, tasks: nextTasks };
+}
+
+/**
+ * Detach Habits linked to a deleted Goal without deleting the Habits.
+ * Unrelated Habits are returned untouched.
+ */
+export function detachHabitsFromDeletedGoal(habits: Habit[], goalId: string): Habit[] {
+  return habits.map((habit) =>
+    habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
+  );
 }

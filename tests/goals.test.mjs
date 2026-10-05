@@ -163,3 +163,33 @@ test("Independent tasks and milestones still contribute only when directly linke
   assert.equal(progress.completed, 0);
   assert.equal(progress.percent, 0);
 });
+
+test("Goal progress includes Tasks reached only through a Project", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+  ];
+  const tasks = [
+    { id: "t-1", projectId: "project-1", title: "Only via project", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const progress = calculateGoalProgress(goal, [], tasks, undefined, undefined, undefined, projects);
+
+  assert.equal(progress.total, 1);
+  assert.equal(progress.completed, 1);
+});
+
+test("Goal progress includes Milestones reached only through a Project", () => {
+  const goal = { id: "goal-1", title: "Goal", status: "active", createdAt: "2025-01-01" };
+  const projects = [
+    { id: "project-1", goalId: goal.id, name: "P1", status: "active", createdAt: "2025-01-01" },
+  ];
+  const milestones = [
+    { id: "m-1", projectId: "project-1", title: "Only via project", completed: false },
+  ];
+
+  const progress = calculateGoalProgress(goal, milestones, [], undefined, undefined, undefined, projects);
+
+  assert.equal(progress.total, 1);
+  assert.equal(progress.completed, 0);
+});
