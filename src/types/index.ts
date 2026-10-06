@@ -41,6 +41,7 @@ export interface Habit {
   frequencyType?: FrequencyType;
   customDays?: string[];
   completedDates: string[]; // "YYYY-MM-DD" local calendar days this habit was completed
+  streakFreezeDates?: string[]; // "YYYY-MM-DD" local calendar days with individual streak freeze
   isArchived?: boolean; // if true, habit is archived and hidden from active list
   category?: string; // optional Title Case label, e.g. "School"
   scheduledTime?: string; // "HH:MM" format for time blocking

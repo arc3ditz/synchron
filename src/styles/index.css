@@ -147,15 +147,15 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #f5f3ed;
-  --color-surface: #fffdf8;
-  --color-surface-raised: #f1eee6;
-  --color-surface-inset: #ece9e1;
-  --color-surface-completed: #eeece5;
-  --color-surface-toggle: #e5e1d7;
-  --color-surface-nav: rgba(255, 253, 248, 0.97);
-  --color-border: #ddd8cc;
-  --color-border-strong: #d1cbbf;
+  --color-bg: #faf9f6;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f5f3ed;
+  --color-surface-inset: #ebe8e2;
+  --color-surface-completed: #f2efe9;
+  --color-surface-toggle: #e8e4dc;
+  --color-surface-nav: #f2efe9;
+  --color-border: #e0dbd2;
+  --color-border-strong: #d4cfc5;
   --color-text-primary: #201f1b;
   --color-text-body: #39372f;
   --color-text-secondary: #625f56;
@@ -188,11 +188,11 @@
   --bg-unscheduled: rgba(113, 109, 99, 0.12);
   --overlay-dim: rgba(32, 31, 27, 0.48);
   --overlay-soft: rgba(32, 31, 27, 0.24);
-  --shadow-strong: rgba(32, 31, 27, 0.24);
-  --shadow-medium: rgba(32, 31, 27, 0.16);
-  --shadow-soft: rgba(32, 31, 27, 0.1);
-  --shadow-card: 0 1px 2px rgba(32, 31, 27, 0.08);
-  --shadow-popover: 0 8px 24px rgba(32, 31, 27, 0.16);
+  --shadow-strong: rgba(32, 31, 27, 0.12);
+  --shadow-medium: rgba(32, 31, 27, 0.08);
+  --shadow-soft: rgba(32, 31, 27, 0.05);
+  --shadow-card: 0 1px 2px rgba(32, 31, 27, 0.06);
+  --shadow-popover: 0 8px 24px rgba(32, 31, 27, 0.1);
   --card-surface-bg: var(--color-surface);
   --card-surface-border: var(--color-border);
   --checkbox-border: #777267;

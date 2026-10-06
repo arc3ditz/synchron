@@ -22,6 +22,8 @@ import {
   Grid2X2,
   List,
   RotateCcw,
+  Volume2,
+  Info,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
@@ -543,6 +545,25 @@ const styles: Record<string, CSSProperties> = {
     transition: "background 0.15s ease, color 0.15s ease",
     flexShrink: 0,
   },
+  freezeButton: {
+    background: "transparent",
+    border: "1px solid transparent",
+    borderRadius: 8,
+    width: 28,
+    height: 28,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    padding: 6,
+    transition: "background 0.15s ease, color 0.15s ease",
+    flexShrink: 0,
+  },
+  freezeButtonActive: {
+    background: "var(--accent-wash-soft)",
+    color: "var(--color-accent)",
+  },
   streakFreezeToggle: {
     display: "flex",
     alignItems: "center",
@@ -727,30 +748,47 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
   },
   settingsPage: {
-    maxWidth: 760,
+    maxWidth: 840,
     width: "100%",
+  },
+  settingsSection: {
+    marginBottom: "var(--space-8)",
+  },
+  settingsSectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-2)",
+    margin: "0 0 var(--space-4)",
+    color: "var(--text-primary)",
+    fontSize: "var(--type-lg)",
+    fontWeight: "var(--font-semibold)",
   },
   settingsCard: {
     display: "flex",
     flexDirection: "column",
-    gap: "var(--space-4)",
-    marginBottom: "var(--space-3)",
-    padding: "var(--space-5)",
-    border: "none",
-    borderBottom: "1px solid var(--border-color)",
-    borderRadius: 0,
-    background: "transparent",
+    gap: "var(--space-5)",
+    padding: "var(--space-6)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-lg)",
+    background: "var(--bg-surface)",
   },
   settingsCardTitle: {
     display: "flex",
     alignItems: "center",
     gap: "var(--space-2)",
-    margin: 0,
+    margin: "0 0 var(--space-3)",
     color: "var(--text-primary)",
     fontSize: "var(--type-base)",
     fontWeight: "var(--font-semibold)",
   },
   settingsRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "var(--space-4)",
+    flexWrap: "wrap",
+  },
+  settingsRowCompact: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -763,7 +801,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: "var(--font-medium)",
   },
   settingsSubheading: {
-    margin: "8px 0 0",
+    margin: "var(--space-4) 0 var(--space-2)",
     color: "var(--text-primary)",
     fontSize: 13,
     fontWeight: 600,
@@ -776,7 +814,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
   },
   settingsSelect: {
-    minWidth: 190,
+    minWidth: 180,
   },
   settingsSegment: {
     display: "inline-flex",
@@ -819,6 +857,59 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-body)",
     fontSize: 13,
     cursor: "pointer",
+  },
+  shortcutsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: "var(--space-4)",
+  },
+  shortcutsGroup: {
+    padding: "var(--space-4)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    background: "var(--bg-inset)",
+  },
+  shortcutsGroupTitle: {
+    margin: "0 0 var(--space-3)",
+    color: "var(--text-body)",
+    fontSize: 12,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  shortcutItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "6px 0",
+    borderBottom: "1px solid var(--border-color)",
+  },
+  shortcutItemLast: {
+    borderBottom: "none",
+  },
+  shortcutDescription: {
+    color: "var(--text-secondary)",
+    fontSize: 13,
+  },
+  shortcutKeys: {
+    display: "flex",
+    gap: 4,
+    alignItems: "center",
+  },
+  shortcutKey: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 24,
+    height: 24,
+    padding: "0 6px",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: 4,
+    color: "var(--text-primary)",
+    fontSize: 11,
+    fontWeight: 500,
+    fontFamily: "ui-monospace, monospace",
   },
 };
 
@@ -992,6 +1083,9 @@ function App() {
             : [],
           completedDates: Array.isArray(item.completedDates)
             ? item.completedDates
+            : [],
+          streakFreezeDates: Array.isArray(item.streakFreezeDates)
+            ? item.streakFreezeDates
             : [],
           isArchived: item.isArchived === true,
           category: category || undefined,
@@ -1661,6 +1755,23 @@ function App() {
     }
   }
 
+  function toggleHabitFreeze(id: number) {
+    const todayKey = getTodayKey(appSettings.dayResetHour);
+    const habit = habits.find((h) => h.id === id);
+    const isCurrentlyFrozen = habit?.streakFreezeDates?.includes(todayKey) ?? false;
+
+    const updatedHabits: Habit[] = habits.map((h): Habit => {
+      if (h.id !== id) return h;
+
+      const streakFreezeDates = isCurrentlyFrozen
+        ? (h.streakFreezeDates ?? []).filter((date) => date !== todayKey)
+        : [...(h.streakFreezeDates ?? []), todayKey];
+
+      return { ...h, streakFreezeDates };
+    });
+    setHabits(updatedHabits);
+  }
+
   function requestHabitDeletion(habit: Habit) {
     setHabitPendingDeletion(habit);
   }
@@ -1897,6 +2008,8 @@ function App() {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
     const isEditing = editingId === habit.id;
+    const todayKey = getTodayKey(appSettings.dayResetHour);
+    const isFrozen = habit.streakFreezeDates?.includes(todayKey) ?? false;
 
     const rowColorStyle = completed ? styles.itemCompletedColors : styles.itemColors;
     const archivedStyle = isArchived ? { opacity: 0.6 } : {};
@@ -2056,6 +2169,17 @@ function App() {
           )}
           <div className="habit-icon-group">
             <button
+              style={{
+                ...styles.freezeButton,
+                ...(isFrozen ? styles.freezeButtonActive : {}),
+              }}
+              onClick={() => toggleHabitFreeze(habit.id)}
+              aria-label={isFrozen ? `Unfreeze "${habit.name}"` : `Freeze "${habit.name}"`}
+              title={isFrozen ? "Unfreeze - Remove streak protection for today" : "Freeze - Protect streak for today"}
+            >
+              <Snowflake size={14} />
+            </button>
+            <button
               style={styles.iconButton}
               onClick={() => startEdit(habit)}
               aria-label={`Edit "${habit.name}"`}
@@ -2100,6 +2224,8 @@ function App() {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
     const progress = doneOnSelectedDate ? 100 : 0;
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
+    const todayKey = getTodayKey(appSettings.dayResetHour);
+    const isFrozen = habit.streakFreezeDates?.includes(todayKey) ?? false;
 
     return (
       <li
@@ -2150,6 +2276,17 @@ function App() {
             {isArchived ? "Archived" : !isScheduled ? "Off Day" : doneOnSelectedDate ? "✓ Done" : "Mark Complete"}
           </button>
           <div className="habit-icon-group">
+            <button
+              style={{
+                ...styles.freezeButton,
+                ...(isFrozen ? styles.freezeButtonActive : {}),
+              }}
+              onClick={() => toggleHabitFreeze(habit.id)}
+              aria-label={isFrozen ? `Unfreeze "${habit.name}"` : `Freeze "${habit.name}"`}
+              title={isFrozen ? "Unfreeze - Remove streak protection for today" : "Freeze - Protect streak for today"}
+            >
+              <Snowflake size={14} />
+            </button>
             <button style={styles.iconButton} onClick={() => startEdit(habit)} aria-label={`Edit "${habit.name}"`}>
               <Pencil size={14} />
             </button>
@@ -2934,367 +3071,448 @@ function App() {
           >
             <div style={styles.settingsPage}>
               <h1 style={styles.h1}>Settings</h1>
-              <p style={styles.subtitle}>Manage your app preferences and defaults.</p>
+              <p style={styles.subtitle}>Customize your Synchron experience.</p>
 
-              <section style={styles.settingsCard} aria-labelledby="general-settings-title">
-                <h2 id="general-settings-title" style={styles.settingsCardTitle}>
-                  <CalendarDays size={17} />
+              {/* General Section */}
+              <section style={styles.settingsSection} aria-labelledby="general-section-title">
+                <h2 id="general-section-title" style={styles.settingsSectionHeader}>
+                  <CalendarDays size={20} />
                   General
                 </h2>
-                <div className="settings-row" style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Appearance</span>
-                    <span style={styles.settingsDescription}>Choose your preferred color theme.</span>
+                <div style={styles.settingsCard}>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Appearance</span>
+                      <span style={styles.settingsDescription}>Choose your preferred color theme.</span>
+                    </div>
+                    <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance theme">
+                      {(["light", "dark"] as Theme[]).map((theme) => (
+                        <button
+                          key={theme}
+                          type="button"
+                          className="settings-segment-button"
+                          onClick={() => setAppSettings((current) => ({ ...current, theme }))}
+                          aria-pressed={appSettings.theme === theme}
+                        >
+                          {theme === "dark" ? "Dark" : "Light"}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance theme">
-                    {(["light", "dark"] as Theme[]).map((theme) => (
-                      <button
-                        key={theme}
-                        type="button"
-                        className="settings-segment-button"
-                        onClick={() => setAppSettings((current) => ({ ...current, theme }))}
-                        aria-pressed={appSettings.theme === theme}
-                      >
-                        {theme === "dark" ? "Dark" : "Light"}
-                      </button>
-                    ))}
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Default View Mode</span>
+                      <span style={styles.settingsDescription}>Choose how habits are displayed by default.</span>
+                    </div>
+                    <div
+                      className="settings-segment"
+                      style={{ ...styles.settingsSegment, ...styles.settingsViewSegment }}
+                      role="group"
+                      aria-label="Default view mode"
+                    >
+                      {(["grid", "list"] as const).map((viewMode) => (
+                        <button
+                          key={viewMode}
+                          type="button"
+                          className="settings-segment-button settings-view-button"
+                          onClick={() => changeHabitViewMode(viewMode)}
+                          aria-pressed={appSettings.viewMode === viewMode}
+                          aria-label={`${viewMode === "grid" ? "Grid" : "List"} view`}
+                          title={`${viewMode === "grid" ? "Grid" : "List"} view`}
+                        >
+                          {viewMode === "grid" ? <Grid2X2 size={17} aria-hidden="true" /> : <List size={17} aria-hidden="true" />}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Default View Mode</span>
-                    <span style={styles.settingsDescription}>Choose how habits are displayed by default.</span>
-                  </div>
-                  <div
-                    className="settings-segment"
-                    style={{ ...styles.settingsSegment, ...styles.settingsViewSegment }}
-                    role="group"
-                    aria-label="Default view mode"
-                  >
-                    {(["grid", "list"] as const).map((viewMode) => (
-                      <button
-                        key={viewMode}
-                        type="button"
-                        className="settings-segment-button settings-view-button"
-                        onClick={() => changeHabitViewMode(viewMode)}
-                        aria-pressed={appSettings.viewMode === viewMode}
-                        aria-label={`${viewMode === "grid" ? "Grid" : "List"} view`}
-                        title={`${viewMode === "grid" ? "Grid" : "List"} view`}
-                      >
-                        {viewMode === "grid" ? <Grid2X2 size={17} aria-hidden="true" /> : <List size={17} aria-hidden="true" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <label htmlFor="day-reset-time" style={styles.settingsLabel}>Day Reset Time</label>
-                    <span style={styles.settingsDescription}>Choose when a new habit day begins.</span>
-                  </div>
-                  <select
-                    className="ui-select"
-                    id="day-reset-time"
-                    style={styles.settingsSelect}
-                    value={appSettings.dayResetHour}
-                    onChange={(event) => {
-                      const dayResetHour = Number(event.target.value);
-                      setAppSettings((current) => ({ ...current, dayResetHour }));
-                      setSelectedDateKey(getTodayKey(dayResetHour));
-                    }}
-                  >
-                    <option value={0}>12:00 AM</option>
-                    <option value={1}>1:00 AM</option>
-                    <option value={2}>2:00 AM</option>
-                    <option value={3}>3:00 AM</option>
-                  </select>
-                </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Start of Week</span>
-                    <span style={styles.settingsDescription}>Used by calendar grids and weekly summaries.</span>
-                  </div>
-                  <div style={styles.settingsSegment} role="group" aria-label="Start of week">
-                    {(["Sunday", "Monday"] as WeekStart[]).map((weekStart) => (
-                      <button
-                        key={weekStart}
-                        type="button"
-                        className="settings-segment-button"
-                        onClick={() => setAppSettings((current) => ({ ...current, weekStart }))}
-                        aria-pressed={appSettings.weekStart === weekStart}
-                      >
-                        {weekStart}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              <section style={styles.settingsCard} aria-labelledby="today-task-settings-title">
-                <h2 id="today-task-settings-title" style={styles.settingsCardTitle}>
-                  <ListChecks size={17} />
-                  Today &amp; Task Settings
-                </h2>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Show Mandatory Habits in Important Items</span>
-                    <span style={styles.settingsDescription}>Include pending mandatory habits in today&apos;s important items.</span>
-                  </div>
-                  <SettingsSwitch
-                    label="Show Mandatory Habits in Important Items"
-                    checked={appSettings.showMandatoryHabitsInImportantItems ?? false}
-                    onChange={() => setAppSettings((current) => ({
-                      ...current,
-                      showMandatoryHabitsInImportantItems: !(current.showMandatoryHabitsInImportantItems ?? false),
-                    }))}
-                  />
-                </div>
-              </section>
-
-              <section style={styles.settingsCard} aria-labelledby="focus-defaults-title">
-                <h2 id="focus-defaults-title" style={styles.settingsCardTitle}>
-                  <Clock3 size={17} />
-                  Focus Timer Defaults
-                </h2>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Default Focus Duration</span>
-                    <span style={styles.settingsDescription}>Applied to the Timer and Pomodoro focus duration.</span>
-                  </div>
-                  <div style={styles.settingsSegment} role="group" aria-label="Default focus duration">
-                    {FOCUS_DURATION_PRESETS.map((minutes) => (
-                      <button
-                        key={minutes}
-                        type="button"
-                        className="settings-segment-button"
-                        onClick={() => setAppSettings((current) => ({ ...current, defaultFocusDuration: minutes }))}
-                        aria-pressed={appSettings.defaultFocusDuration === minutes}
-                      >
-                        {minutes}m
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Quick Adjust Step</span>
-                    <span style={styles.settingsDescription}>Choose the time added or removed by the timer controls.</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <label htmlFor="day-reset-time" style={styles.settingsLabel}>Day Reset Time</label>
+                      <span style={styles.settingsDescription}>Choose when a new habit day begins.</span>
+                    </div>
                     <select
                       className="ui-select"
-                      style={{ ...styles.settingsSelect, minWidth: 120 }}
-                      value={[1, 5, 10].includes(appSettings.quickAdjustStepMinutes) ? appSettings.quickAdjustStepMinutes : "custom"}
+                      id="day-reset-time"
+                      style={styles.settingsSelect}
+                      value={appSettings.dayResetHour}
                       onChange={(event) => {
-                        if (event.target.value !== "custom") {
-                          setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: Number(event.target.value) }));
-                        } else if ([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) {
-                          setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: 2 }));
-                        }
+                        const dayResetHour = Number(event.target.value);
+                        setAppSettings((current) => ({ ...current, dayResetHour }));
+                        setSelectedDateKey(getTodayKey(dayResetHour));
                       }}
-                      aria-label="Quick adjust step size"
                     >
-                      <option value={1}>1 Minute</option>
-                      <option value={5}>5 Minutes</option>
-                      <option value={10}>10 Minutes</option>
-                      <option value="custom">Custom</option>
+                      <option value={0}>12:00 AM</option>
+                      <option value={1}>1:00 AM</option>
+                      <option value={2}>2:00 AM</option>
+                      <option value={3}>3:00 AM</option>
                     </select>
-                    {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
-                      <input
-                        className="ui-input ui-numeric"
-                        type="number"
-                        min={1}
-                        max={180}
-                        style={{ ...styles.settingsSelect, minWidth: 76, width: 76 }}
-                        value={appSettings.quickAdjustStepMinutes}
+                  </div>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Start of Week</span>
+                      <span style={styles.settingsDescription}>Used by calendar grids and weekly summaries.</span>
+                    </div>
+                    <div style={styles.settingsSegment} role="group" aria-label="Start of week">
+                      {(["Sunday", "Monday"] as WeekStart[]).map((weekStart) => (
+                        <button
+                          key={weekStart}
+                          type="button"
+                          className="settings-segment-button"
+                          onClick={() => setAppSettings((current) => ({ ...current, weekStart }))}
+                          aria-pressed={appSettings.weekStart === weekStart}
+                        >
+                          {weekStart}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Today & Habits Section */}
+              <section style={styles.settingsSection} aria-labelledby="today-habits-section-title">
+                <h2 id="today-habits-section-title" style={styles.settingsSectionHeader}>
+                  <ListChecks size={20} />
+                  Today &amp; Habits
+                </h2>
+                <div style={styles.settingsCard}>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Show Mandatory Habits in Important Items</span>
+                      <span style={styles.settingsDescription}>Include pending mandatory habits in today&apos;s important items.</span>
+                    </div>
+                    <SettingsSwitch
+                      label="Show Mandatory Habits in Important Items"
+                      checked={appSettings.showMandatoryHabitsInImportantItems ?? false}
+                      onChange={() => setAppSettings((current) => ({
+                        ...current,
+                        showMandatoryHabitsInImportantItems: !(current.showMandatoryHabitsInImportantItems ?? false),
+                      }))}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Focus & Timer Section */}
+              <section style={styles.settingsSection} aria-labelledby="focus-timer-section-title">
+                <h2 id="focus-timer-section-title" style={styles.settingsSectionHeader}>
+                  <Clock3 size={20} />
+                  Focus &amp; Timer
+                </h2>
+                <div style={styles.settingsCard}>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Default Focus Duration</span>
+                      <span style={styles.settingsDescription}>Applied to the Timer and Pomodoro focus duration.</span>
+                    </div>
+                    <div style={styles.settingsSegment} role="group" aria-label="Default focus duration">
+                      {FOCUS_DURATION_PRESETS.map((minutes) => (
+                        <button
+                          key={minutes}
+                          type="button"
+                          className="settings-segment-button"
+                          onClick={() => setAppSettings((current) => ({ ...current, defaultFocusDuration: minutes }))}
+                          aria-pressed={appSettings.defaultFocusDuration === minutes}
+                        >
+                          {minutes}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Quick Adjust Step</span>
+                      <span style={styles.settingsDescription}>Choose the time added or removed by the timer controls.</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <select
+                        className="ui-select"
+                        style={{ ...styles.settingsSelect, minWidth: 120 }}
+                        value={[1, 5, 10].includes(appSettings.quickAdjustStepMinutes) ? appSettings.quickAdjustStepMinutes : "custom"}
                         onChange={(event) => {
-                          const value = Number(event.target.value);
-                          if (Number.isFinite(value) && value >= 1) {
-                            setAppSettings((current) => ({
-                              ...current,
-                              quickAdjustStepMinutes: Math.min(180, Math.round(value)),
-                            }));
+                          if (event.target.value !== "custom") {
+                            setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: Number(event.target.value) }));
+                          } else if ([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) {
+                            setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: 2 }));
                           }
                         }}
-                        aria-label="Custom quick adjust step in minutes"
-                      />
-                    )}
-                    {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
-                      <span style={styles.durationLabel}>Minutes</span>
-                    )}
+                        aria-label="Quick adjust step size"
+                      >
+                        <option value={1}>1 Minute</option>
+                        <option value={5}>5 Minutes</option>
+                        <option value={10}>10 Minutes</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                      {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
+                        <input
+                          className="ui-input ui-numeric"
+                          type="number"
+                          min={1}
+                          max={180}
+                          style={{ ...styles.settingsSelect, minWidth: 76, width: 76 }}
+                          value={appSettings.quickAdjustStepMinutes}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            if (Number.isFinite(value) && value >= 1) {
+                              setAppSettings((current) => ({
+                                ...current,
+                                quickAdjustStepMinutes: Math.min(180, Math.round(value)),
+                              }));
+                            }
+                          }}
+                          aria-label="Custom quick adjust step in minutes"
+                        />
+                      )}
+                      {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
+                        <span style={styles.durationLabel}>Minutes</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </section>
 
-              <section style={styles.settingsCard} aria-labelledby="sound-effects-title">
-                <h2 id="sound-effects-title" style={styles.settingsCardTitle}>
-                  <Bell size={17} />
-                  Sound Effects
+              {/* Notifications Section */}
+              <section style={styles.settingsSection} aria-labelledby="notifications-section-title">
+                <h2 id="notifications-section-title" style={styles.settingsSectionHeader}>
+                  <Bell size={20} />
+                  Notifications
                 </h2>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Sound Effects</span>
-                    <span style={styles.settingsDescription}>Play subtle sounds for timers, habits, and other actions.</span>
-                  </div>
-                  <SettingsSwitch
-                    label="Play subtle sounds for timers, habits, and other actions"
-                    checked={appSettings.soundAlerts}
-                    onChange={() => setAppSettings((current) => ({ ...current, soundAlerts: !current.soundAlerts }))}
-                  />
-                </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <label htmlFor="sfx-volume" style={styles.settingsLabel}>Master Volume</label>
-                    <span style={styles.settingsDescription}>Adjust the overall volume of sound effects.</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 150 }}>
-                    <input
-                      className="ui-range"
-                      type="range"
-                      id="sfx-volume"
-                      min={0}
-                      max={100}
-                      step={5}
-                      value={appSettings.sfxVolume}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        setAppSettings((current) => ({ ...current, sfxVolume: value }));
-                      }}
-                      disabled={!appSettings.soundAlerts}
-                      aria-label="Master SFX volume"
-                      style={{ flex: 1 }}
+                <div style={styles.settingsCard}>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Enable Intelligent Notifications</span>
+                      <span style={styles.settingsDescription}>Allow Synchron to send useful reminders based on your activity.</span>
+                    </div>
+                    <SettingsSwitch
+                      label="Enable Intelligent Notifications"
+                      checked={appSettings.enableIntelligentNotifications}
+                      onChange={() => setAppSettings((current) => ({
+                        ...current,
+                        enableIntelligentNotifications: !current.enableIntelligentNotifications,
+                      }))}
                     />
-                    <span style={{ ...styles.settingsLabel, minWidth: 40, textAlign: "right" }}>
-                      {appSettings.sfxVolume}%
-                    </span>
                   </div>
-                </div>
-                <div>
-                  <h3 style={styles.settingsSubheading}>Individual Sounds</h3>
-                </div>
-                {([
-                  ["start", "Timer Start"],
-                  ["pauseResume", "Pause/Resume"],
-                  ["habitComplete", "Habit Complete"],
-                  ["pomodoroTransition", "Pomodoro Transition"],
-                  ["timerComplete", "Timer Complete"],
-                ] as const).map(([sfxKey, label]) => {
-                  const enabled = appSettings.sfxEnabled[sfxKey];
-                  return (
-                    <div key={sfxKey} style={styles.settingsRow}>
-                      <span style={{ ...styles.settingsLabel, opacity: appSettings.soundAlerts ? 1 : 0.5 }}>{label}</span>
-                      <SettingsSwitch
-                        label={label}
-                        checked={enabled}
-                        disabled={!appSettings.soundAlerts}
-                        onChange={() => setAppSettings((current) => ({
-                          ...current,
-                          sfxEnabled: {
-                            ...current.sfxEnabled,
-                            [sfxKey]: !current.sfxEnabled[sfxKey],
-                          },
-                        }))}
-                      />
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <label htmlFor="notification-frequency" style={styles.settingsLabel}>Notification Frequency</label>
+                      <span style={styles.settingsDescription}>Minimum time between proactive notifications.</span>
                     </div>
-                  );
-                })}
+                    <select
+                      className="ui-select"
+                      id="notification-frequency"
+                      style={styles.settingsSelect}
+                      value={appSettings.notificationFrequency}
+                      onChange={(event) => setAppSettings((current) => ({
+                        ...current,
+                        notificationFrequency: event.target.value as NotificationFrequency,
+                      }))}
+                    >
+                      <option value="conservative">Conservative</option>
+                      <option value="balanced">Balanced</option>
+                      <option value="frequent">Frequent</option>
+                    </select>
+                  </div>
+                  <div>
+                    <h3 style={styles.settingsSubheading}>Allow Intelligent Notifications For:</h3>
+                  </div>
+                  {([
+                    ["habitReminders", "Habit Timing Reminders"],
+                    ["incompleteHabitReminders", "Incomplete Habit Focus Suggestions"],
+                  ] as const).map(([setting, label]) => {
+                    const enabled = appSettings[setting];
+                    return (
+                      <div key={setting} style={styles.settingsRowCompact}>
+                        <span style={{ ...styles.settingsLabel, opacity: appSettings.enableIntelligentNotifications ? 1 : 0.5 }}>{label}</span>
+                        <SettingsSwitch
+                          label={label}
+                          checked={enabled}
+                          disabled={!appSettings.enableIntelligentNotifications}
+                          onChange={() => setAppSettings((current) => ({ ...current, [setting]: !current[setting] }))}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
 
-              <section style={styles.settingsCard} aria-labelledby="intelligent-notifications-title">
-                <h2 id="intelligent-notifications-title" style={styles.settingsCardTitle}>
-                  <Bell size={17} />
-                  Intelligent Notifications
+              {/* Sound Section */}
+              <section style={styles.settingsSection} aria-labelledby="sound-section-title">
+                <h2 id="sound-section-title" style={styles.settingsSectionHeader}>
+                  <Volume2 size={20} />
+                  Sound
                 </h2>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Enable Intelligent Notifications</span>
-                    <span style={styles.settingsDescription}>Allow Synchron to send useful reminders based on your activity.</span>
-                  </div>
-                  <SettingsSwitch
-                    label="Enable Intelligent Notifications"
-                    checked={appSettings.enableIntelligentNotifications}
-                    onChange={() => setAppSettings((current) => ({
-                      ...current,
-                      enableIntelligentNotifications: !current.enableIntelligentNotifications,
-                    }))}
-                  />
-                </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <label htmlFor="notification-frequency" style={styles.settingsLabel}>Notification Frequency</label>
-                    <span style={styles.settingsDescription}>Minimum time between proactive notifications.</span>
-                  </div>
-                  <select
-                    className="ui-select"
-                    id="notification-frequency"
-                    style={styles.settingsSelect}
-                    value={appSettings.notificationFrequency}
-                    onChange={(event) => setAppSettings((current) => ({
-                      ...current,
-                      notificationFrequency: event.target.value as NotificationFrequency,
-                    }))}
-                  >
-                    <option value="conservative">Conservative</option>
-                    <option value="balanced">Balanced</option>
-                    <option value="frequent">Frequent</option>
-                  </select>
-                </div>
-                <div>
-                  <h3 style={styles.settingsSubheading}>Allow Intelligent Notifications For:</h3>
-                </div>
-                {([
-                  ["habitReminders", "Habit Timing Reminders"],
-                  ["incompleteHabitReminders", "Incomplete Habit Focus Suggestions"],
-                ] as const).map(([setting, label]) => {
-                  const enabled = appSettings[setting];
-                  return (
-                    <div key={setting} style={styles.settingsRow}>
-                      <span style={{ ...styles.settingsLabel, opacity: appSettings.enableIntelligentNotifications ? 1 : 0.5 }}>{label}</span>
-                      <SettingsSwitch
-                        label={label}
-                        checked={enabled}
-                        disabled={!appSettings.enableIntelligentNotifications}
-                        onChange={() => setAppSettings((current) => ({ ...current, [setting]: !current[setting] }))}
-                      />
+                <div style={styles.settingsCard}>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Sound Effects</span>
+                      <span style={styles.settingsDescription}>Play subtle sounds for timers, habits, and other actions.</span>
                     </div>
-                  );
-                })}
+                    <SettingsSwitch
+                      label="Play subtle sounds for timers, habits, and other actions"
+                      checked={appSettings.soundAlerts}
+                      onChange={() => setAppSettings((current) => ({ ...current, soundAlerts: !current.soundAlerts }))}
+                    />
+                  </div>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <label htmlFor="sfx-volume" style={styles.settingsLabel}>Master Volume</label>
+                      <span style={styles.settingsDescription}>Adjust the overall volume of sound effects.</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 150 }}>
+                      <input
+                        className="ui-range"
+                        type="range"
+                        id="sfx-volume"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={appSettings.sfxVolume}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setAppSettings((current) => ({ ...current, sfxVolume: value }));
+                        }}
+                        disabled={!appSettings.soundAlerts}
+                        aria-label="Master SFX volume"
+                        style={{ flex: 1 }}
+                      />
+                      <span style={{ ...styles.settingsLabel, minWidth: 40, textAlign: "right" }}>
+                        {appSettings.sfxVolume}%
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 style={styles.settingsSubheading}>Individual Sounds</h3>
+                  </div>
+                  {([
+                    ["start", "Timer Start"],
+                    ["pauseResume", "Pause/Resume"],
+                    ["habitComplete", "Habit Complete"],
+                    ["pomodoroTransition", "Pomodoro Transition"],
+                    ["timerComplete", "Timer Complete"],
+                  ] as const).map(([sfxKey, label]) => {
+                    const enabled = appSettings.sfxEnabled[sfxKey];
+                    return (
+                      <div key={sfxKey} style={styles.settingsRowCompact}>
+                        <span style={{ ...styles.settingsLabel, opacity: appSettings.soundAlerts ? 1 : 0.5 }}>{label}</span>
+                        <SettingsSwitch
+                          label={label}
+                          checked={enabled}
+                          disabled={!appSettings.soundAlerts}
+                          onChange={() => setAppSettings((current) => ({
+                            ...current,
+                            sfxEnabled: {
+                              ...current.sfxEnabled,
+                              [sfxKey]: !current.sfxEnabled[sfxKey],
+                            },
+                          }))}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
 
-              <section style={styles.settingsCard} aria-labelledby="about-system-title">
-                <h2 id="about-system-title" style={styles.settingsCardTitle}>About &amp; System Info</h2>
-                <div style={styles.settingsAboutRow}>
-                  <div>
-                    <span style={styles.settingsAppName}>Synchron</span>
-                    <span style={styles.settingsVersion}>
-                      {appVersion ? `v${appVersion}` : "Version unavailable"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    style={styles.settingsActionButton}
-                    onClick={openKeyboardShortcuts}
-                  >
-                    <Keyboard size={15} />
-                    Keyboard Shortcuts
-                    <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{shortcutKey}K</span>
-                  </button>
+              {/* Keyboard Shortcuts Section */}
+              <section style={styles.settingsSection} aria-labelledby="shortcuts-section-title">
+                <h2 id="shortcuts-section-title" style={styles.settingsSectionHeader}>
+                  <Keyboard size={20} />
+                  Keyboard Shortcuts
+                </h2>
+                <div className="shortcuts-grid" style={styles.shortcutsGrid}>
+                  {[
+                    {
+                      title: "Navigation",
+                      shortcuts: [
+                        { keys: `${shortcutKey}1`, description: "Go to Today" },
+                        { keys: `${shortcutKey}2`, description: "Go to My Habits" },
+                        { keys: `${shortcutKey}3`, description: "Go to Timer" },
+                        { keys: `${shortcutKey}4`, description: "Go to Goals" },
+                        { keys: `${shortcutKey}5`, description: "Go to History" },
+                        { keys: `${shortcutKey}6`, description: "Go to Analytics" },
+                        { keys: `${shortcutKey},`, description: "Go to Settings" },
+                        { keys: `${shortcutKey}K`, description: "Show Keyboard Shortcuts" },
+                      ],
+                    },
+                    {
+                      title: "My Habits",
+                      shortcuts: [
+                        { keys: "G", description: "Switch to Grid View" },
+                        { keys: "L", description: "Switch to List View" },
+                        { keys: "N", description: "Focus New Habit" },
+                        { keys: "E", description: "Edit the focused Habit" },
+                      ],
+                    },
+                    {
+                      title: "Timer",
+                      shortcuts: [
+                        { keys: "Space", description: "Start or pause the timer" },
+                      ],
+                    },
+                    {
+                      title: "General",
+                      shortcuts: [
+                        { keys: "Esc", description: "Close a modal, editor, or popover" },
+                        { keys: `${shortcutKey} Enter`, description: "Save the active Habit edit" },
+                      ],
+                    },
+                  ].map((group, groupIndex) => (
+                    <div key={groupIndex} style={styles.shortcutsGroup}>
+                      <h3 style={styles.shortcutsGroupTitle}>{group.title}</h3>
+                      {group.shortcuts.map((shortcut, shortcutIndex) => (
+                        <div
+                          key={shortcutIndex}
+                          style={{
+                            ...styles.shortcutItem,
+                            ...(shortcutIndex === group.shortcuts.length - 1 ? styles.shortcutItemLast : {}),
+                          }}
+                        >
+                          <span style={styles.shortcutDescription}>{shortcut.description}</span>
+                          <div style={styles.shortcutKeys}>
+                            {shortcut.keys.split(" ").map((key, keyIndex) => (
+                              <span key={keyIndex} style={styles.shortcutKey}>
+                                {key}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
-                <div style={styles.settingsRow}>
-                  <div>
-                    <span style={styles.settingsLabel}>Replay Introduction</span>
-                    <span style={styles.settingsDescription}>Start the onboarding flow again to see the introduction.</span>
+              </section>
+
+              {/* About Section */}
+              <section style={styles.settingsSection} aria-labelledby="about-section-title">
+                <h2 id="about-section-title" style={styles.settingsSectionHeader}>
+                  <Info size={20} />
+                  About
+                </h2>
+                <div style={styles.settingsCard}>
+                  <div style={styles.settingsAboutRow}>
+                    <div>
+                      <span style={styles.settingsAppName}>Synchron</span>
+                      <span style={styles.settingsVersion}>
+                        {appVersion ? `v${appVersion}` : "Version unavailable"}
+                      </span>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    style={styles.settingsActionButton}
-                    onClick={() => {
-                      setAppSettings((current) => ({ ...current, onboardingCompleted: false }));
-                      setShowOnboarding(true);
-                    }}
-                  >
-                    <RotateCcw size={15} />
-                    Restart
-                  </button>
+                  <div style={styles.settingsRow}>
+                    <div>
+                      <span style={styles.settingsLabel}>Replay Introduction</span>
+                      <span style={styles.settingsDescription}>Start the onboarding flow again to see the introduction.</span>
+                    </div>
+                    <button
+                      type="button"
+                      style={styles.settingsActionButton}
+                      onClick={() => {
+                        setAppSettings((current) => ({ ...current, onboardingCompleted: false }));
+                        setShowOnboarding(true);
+                      }}
+                    >
+                      <RotateCcw size={15} />
+                      Restart
+                    </button>
+                  </div>
                 </div>
               </section>
             </div>

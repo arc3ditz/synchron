@@ -139,16 +139,17 @@ export function isHabitScheduledOnDate(
 /**
  * Calculate streak for a habit
  * @param habit - The habit object
- * @param streakFreeze - Whether streak freeze is enabled
+ * @param streakFreeze - Whether global streak freeze is enabled
  * @param dayResetHour - The hour at which the day resets (0-23)
  * @returns The current streak count
  */
 export function calculateStreak(
-  habit: { completedDates: string[]; frequencyType?: FrequencyType; customDays?: string[] },
+  habit: { completedDates: string[]; frequencyType?: FrequencyType; customDays?: string[]; streakFreezeDates?: string[] },
   streakFreeze = false,
   dayResetHour = 0,
 ): number {
   const dateSet = new Set(habit.completedDates);
+  const freezeSet = new Set(habit.streakFreezeDates ?? []);
   const todayKey = getTodayKey(dayResetHour);
 
   if (getFrequencyType(habit) === "custom" && (habit.customDays?.length ?? 0) === 0) {
@@ -169,7 +170,9 @@ export function calculateStreak(
       cursor = shiftDateKey(cursor, -1);
       continue;
     }
-    if (!dateSet.has(cursor)) break;
+    // A day counts for the streak if it's completed OR frozen (but not future)
+    const isFrozen = freezeSet.has(cursor) && cursor <= todayKey;
+    if (!dateSet.has(cursor) && !isFrozen) break;
     streak++;
     cursor = shiftDateKey(cursor, -1);
   }
