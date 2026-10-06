@@ -22,6 +22,8 @@ export interface HabitOccurrence {
   habit: Habit;
   dateKey: string;
   completed: boolean;
+  /** True when the scheduled day is protected by a streak freeze (global or individual) without being completed. */
+  protected?: boolean;
 }
 
 export interface TaskOccurrence {
@@ -45,6 +47,8 @@ export interface AnalyticsQueryParams {
   weekStart: WeekStart;
   dayResetHour: number;
   now?: Date;
+  /** Global streak freeze. When true, every uncompleted scheduled habit day is treated as protected. */
+  streakFreeze?: boolean;
 }
 
 export function queryAnalyticsData({
@@ -55,6 +59,7 @@ export function queryAnalyticsData({
   weekStart,
   dayResetHour,
   now = new Date(),
+  streakFreeze = false,
 }: AnalyticsQueryParams): AnalyticsDataset {
   const endDateKey = getHabitDateKey(now, dayResetHour);
   const today = parseAnalyticsDateKey(endDateKey);
@@ -105,9 +110,13 @@ export function queryAnalyticsData({
     if (firstDate > lastDate) continue;
 
     const completedDates = new Set((habit.completedDates ?? []).map(readLocalDateKey).filter(isDateKey));
+    const individualFreezeDates = new Set((habit.streakFreezeDates ?? []).filter(isDateKey));
     for (let dateKey = firstDate; dateKey <= lastDate; dateKey = shiftDateKey(dateKey, 1)) {
       if (isHabitScheduledOnDate(habit, dateKey)) {
-        habitOccurrences.push({ habit, dateKey, completed: completedDates.has(dateKey) });
+        const completed = completedDates.has(dateKey);
+        const individuallyFrozen = individualFreezeDates.has(dateKey);
+        const protectedDay = !completed && (streakFreeze || individuallyFrozen);
+        habitOccurrences.push({ habit, dateKey, completed, protected: protectedDay });
       }
     }
   }
@@ -246,9 +255,20 @@ export interface ActionableInsight {
   description: string;
 }
 
+function isOccurrenceProtected(occurrence: HabitOccurrence): boolean {
+  if (occurrence.protected === true) return true;
+  if (occurrence.protected === false) return false;
+  // Fallback for datasets constructed without the protected flag:
+  // derive individual protection from the habit's own freeze dates.
+  if (occurrence.completed) return false;
+  const freezeDates = (occurrence.habit as Habit).streakFreezeDates;
+  return Array.isArray(freezeDates) && freezeDates.includes(occurrence.dateKey);
+}
+
 export function getHabitPerformanceDiagnostics(dataset: AnalyticsDataset): HabitPerformanceDiagnostics {
   const counts = new Map<number, { habit: Habit; expected: number; completed: number }>();
   for (const occurrence of dataset.habitOccurrences) {
+    if (isOccurrenceProtected(occurrence)) continue;
     const current = counts.get(occurrence.habit.id) ?? { habit: occurrence.habit, expected: 0, completed: 0 };
     current.expected++;
     if (occurrence.completed) current.completed++;
@@ -327,6 +347,7 @@ export function getWeekdayFrictionMetrics(dataset: AnalyticsDataset): WeekdayFri
   }])) as Record<Weekday, WeekdayMetric>;
 
   for (const occurrence of dataset.habitOccurrences) {
+    if (isOccurrenceProtected(occurrence)) continue;
     const metric = metrics[getWeekday(occurrence.dateKey)];
     if (occurrence.completed) metric.completed++;
     else metric.missed++;
@@ -363,16 +384,32 @@ export function getWeekdayFrictionMetrics(dataset: AnalyticsDataset): WeekdayFri
 export function getHabitPeriodStreak(
   dataset: AnalyticsDataset,
   habit: Habit,
+  streakFreeze = false,
 ): number {
   const occurrences = dataset.habitOccurrences.filter((item) => item.habit.id === habit.id);
-  const byDate = new Map(occurrences.map((item) => [item.dateKey, item.completed]));
+  // Global freeze semantics mirror calculateStreak's global branch: the streak
+  // never breaks, so the period streak is the count of true completions in range.
+  // Protected days are not fake completions and must not inflate this count.
+  if (streakFreeze) {
+    let completedCount = 0;
+    for (const occurrence of occurrences) {
+      if (occurrence.completed && occurrence.dateKey <= dataset.range.endDateKey) completedCount++;
+    }
+    return completedCount;
+  }
+  const completedByDate = new Map(occurrences.map((item) => [item.dateKey, item.completed]));
+  const protectedByDate = new Map(
+    occurrences.map((item) => [item.dateKey, isOccurrenceProtected(item) && !item.completed]),
+  );
   let cursor = dataset.range.endDateKey;
-  if (byDate.has(cursor) && !byDate.get(cursor)) cursor = shiftDateKey(cursor, -1);
+  if (completedByDate.has(cursor) && !completedByDate.get(cursor)) cursor = shiftDateKey(cursor, -1);
 
   let streak = 0;
   while (cursor >= dataset.range.startDateKey) {
-    if (byDate.has(cursor)) {
-      if (!byDate.get(cursor)) break;
+    if (completedByDate.has(cursor)) {
+      const completed = completedByDate.get(cursor);
+      const isProtected = protectedByDate.get(cursor) === true && cursor <= dataset.range.endDateKey;
+      if (!completed && !isProtected) break;
       streak++;
     }
     cursor = shiftDateKey(cursor, -1);

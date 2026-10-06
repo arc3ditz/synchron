@@ -491,6 +491,7 @@ function Analytics({
   tasks,
   goals,
   focusSessions,
+  streakFreeze,
   dayResetHour,
   weekStart,
 }: AnalyticsProps) {
@@ -503,7 +504,8 @@ function Analytics({
       horizon: timeHorizon,
       weekStart,
       dayResetHour,
-    }), [habits, tasks, focusSessions, timeHorizon, weekStart, dayResetHour]);
+      streakFreeze,
+    }), [habits, tasks, focusSessions, timeHorizon, weekStart, dayResetHour, streakFreeze]);
 
   const actionableInsights = useMemo(
     () => generateActionableInsights(dataset, goals),
@@ -553,12 +555,12 @@ function Analytics({
         ...habit,
         totalMinutes: habitMinutes.get(habit.id) ?? 0,
         completionCount: habitCompletions.get(habit.id) ?? 0,
-        streak: getHabitPeriodStreak(dataset, habit),
+        streak: getHabitPeriodStreak(dataset, habit, streakFreeze),
       }))
       .filter((habit) => habit.totalMinutes > 0)
       .sort((a, b) => b.totalMinutes - a.totalMinutes)
       .slice(0, 5);
-  }, [dataset]);
+  }, [dataset, streakFreeze]);
 
   const heatmapData = useMemo(
     () => getFocusHeatmapData(dataset, weekStart, dayResetHour),
