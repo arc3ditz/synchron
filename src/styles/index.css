@@ -107,6 +107,13 @@
   --focus-outline: 2px solid var(--color-focus-ring);
   --focus-outline-offset: 2px;
   --transition-standard: 160ms ease;
+  /* Universal form-control standard. Canonical reference: the Tasks page
+     Priority/Goal/Project/Milestone controls. */
+  --control-padding: 10px 14px;
+  --control-radius: 8px;
+  --control-font-size: 14px;
+  --control-line-height: 1.5;
+  --control-min-height: 42px;
   --void: var(--bg-primary);
   --surface: var(--bg-surface);
   --surface-raised: var(--bg-raised);
@@ -128,9 +135,9 @@
   --card-surface-bg: rgba(255, 255, 255, 0.05);
   --card-surface-border: rgba(255, 255, 255, 0.1);
   --checkbox-border: var(--border-strong);
-  --checkbox-checked-bg: linear-gradient(135deg, var(--color-accent-soft), var(--color-accent));
+  --checkbox-checked-bg: var(--color-accent);
   --checkbox-checked-border: var(--color-accent);
-  --checkbox-checked-shadow: 0 0 10px rgba(var(--accent-rgb), 0.4);
+  --checkbox-checked-shadow: none;
   --priority-high-text: #fca5a5;
   --priority-high-bg: rgba(220, 38, 38, 0.14);
   --priority-high-border: rgba(248, 113, 113, 0.34);
@@ -360,18 +367,39 @@ input[type="radio"] {
 
 .ui-input,
 .ui-select {
-  min-height: 36px;
-  padding: 10px 14px;
+  min-height: var(--control-min-height);
+  padding: var(--control-padding);
   border: 1px solid var(--color-border-strong);
-  border-radius: 8px;
+  border-radius: var(--control-radius);
   background: var(--color-surface-inset);
   color: var(--color-text-primary);
-  font-size: var(--type-sm);
+  font-size: var(--control-font-size);
+  line-height: var(--control-line-height);
+  vertical-align: middle;
   transition:
     color var(--transition-standard),
     background-color var(--transition-standard),
     border-color var(--transition-standard),
     opacity var(--transition-standard);
+}
+
+/* Universal form-control standard: every standard text-like input and every
+   dropdown/select renders with the same computed dimensions as the canonical
+   Tasks Priority/Goal/Project/Milestone controls (same height, vertical and
+   horizontal padding, border radius, font size, line height, alignment).
+   Dimensional properties use !important so legacy inline one-off values
+   converge on one size. Colors, borders, backgrounds, and widths are
+   untouched to preserve themes, responsive layouts, and behavior. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+select,
+textarea {
+  box-sizing: border-box !important;
+  min-height: var(--control-min-height) !important;
+  padding: var(--control-padding) !important;
+  border-radius: var(--control-radius) !important;
+  font-size: var(--control-font-size) !important;
+  line-height: var(--control-line-height) !important;
+  vertical-align: middle !important;
 }
 
 .ui-input::placeholder {

@@ -115,7 +115,7 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-inset)",
     border: "1px solid var(--border-strong)",
     borderRadius: 8,
-    padding: "10px 12px",
+    padding: "10px 14px",
     color: "var(--text-body)",
     fontSize: 14,
     outline: "none",
@@ -321,7 +321,7 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
         {step === "focus" && (
           <>
             <div style={styles.header}>
-              <h1 style={styles.title}>What do you want to improve?</h1>
+              <h1 style={styles.title}>What Do You Want to Improve?</h1>
               <p style={styles.description}>
                 Choose a focus area to personalize your experience.
               </p>
@@ -379,7 +379,7 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
         {step === "habit" && (
           <>
             <div style={styles.header}>
-              <h1 style={styles.title}>Let's build your first habit</h1>
+              <h1 style={styles.title}>Let's Build Your First Habit</h1>
               <p style={styles.description}>
                 Create a habit to start tracking your progress.
               </p>
@@ -480,7 +480,7 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
               <div style={styles.readyIcon}>
                 <CalendarDays size={32} />
               </div>
-              <h1 style={styles.title}>You're ready to begin</h1>
+              <h1 style={styles.title}>You're Ready to Begin</h1>
               <p style={styles.description}>
                 Complete your habit from Today to start building momentum.
               </p>

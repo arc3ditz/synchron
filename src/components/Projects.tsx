@@ -128,12 +128,12 @@ const styles: Record<string, CSSProperties> = {
   compactInput: {
     width: "100%",
     minWidth: 0,
-    padding: "7px 9px",
+    padding: "10px 14px",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 7,
+    borderRadius: 8,
     background: "var(--card-surface-bg)",
     color: "var(--text-primary)",
-    fontSize: 12,
+    fontSize: 14,
   },
   formActions: {
     display: "flex",
@@ -219,8 +219,8 @@ const styles: Record<string, CSSProperties> = {
   statusSelect: {
     width: "auto",
     minWidth: 108,
-    padding: "5px 8px",
-    fontSize: 12,
+    padding: "10px 14px",
+    fontSize: 14,
     cursor: "pointer",
   },
   status: {
@@ -751,10 +751,10 @@ export default function Projects({
         }
         aria-label={`Status for "${project.name}"`}
       >
-        <option value="planned">planned</option>
-        <option value="active">active</option>
-        <option value="completed">completed</option>
-        <option value="archived">archived</option>
+        <option value="planned">Planned</option>
+        <option value="active">Active</option>
+        <option value="completed">Completed</option>
+        <option value="archived">Archived</option>
       </select>
     );
   }
@@ -781,7 +781,7 @@ export default function Projects({
               style={styles.iconButton}
               onClick={() => setItemToDelete({ type: "project", id: project.id, title: project.name })}
               aria-label={`Delete "${project.name}"`}
-              title="Delete project"
+              title="Delete Project"
             >
               <Trash2 size={15} />
             </button>
@@ -790,7 +790,7 @@ export default function Projects({
 
         {project.description && <p style={styles.description}>{project.description}</p>}
         <p style={styles.meta}>
-          {linkedGoal ? `Goal: ${linkedGoal.title}` : "No goal"}
+          {linkedGoal ? `Goal: ${linkedGoal.title}` : "No Goal"}
           {project.startDate && <> · Start: {formatFullDate(project.startDate)}</>}
           {project.targetDate && <> · Target: {formatFullDate(project.targetDate)}</>}
         </p>
@@ -843,14 +843,14 @@ export default function Projects({
                       style={styles.compactInput}
                       value={milestoneEditTitle}
                       onChange={(event) => setMilestoneEditTitle(event.target.value)}
-                      aria-label="Milestone title"
+                      aria-label="Milestone Title"
                     />
                     <input
                       type="date"
                       style={styles.compactInput}
                       value={milestoneEditTargetDate}
                       onChange={(event) => setMilestoneEditTargetDate(event.target.value)}
-                      aria-label="Milestone target date"
+                      aria-label="Milestone Target Date"
                     />
                     <div style={styles.formActions}>
                       <button
@@ -902,7 +902,7 @@ export default function Projects({
                           setMilestoneEditTargetDate(milestone.targetDate ?? "");
                         }}
                         aria-label={`Edit "${milestone.title}"`}
-                        title="Edit milestone"
+                        title="Edit Milestone"
                       >
                         <Pencil size={14} />
                       </button>
@@ -913,7 +913,7 @@ export default function Projects({
                           setItemToDelete({ type: "milestone", id: milestone.id, title: milestone.title })
                         }
                         aria-label={`Delete "${milestone.title}"`}
-                        title="Delete milestone"
+                        title="Delete Milestone"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -934,15 +934,15 @@ export default function Projects({
               style={styles.compactInput}
               value={milestoneTitle}
               onChange={(event) => setMilestoneTitle(event.target.value)}
-              placeholder="Milestone title"
-              aria-label="Milestone title"
+              placeholder="Milestone Title"
+              aria-label="Milestone Title"
             />
             <input
               type="date"
               style={styles.compactInput}
               value={milestoneTargetDate}
               onChange={(event) => setMilestoneTargetDate(event.target.value)}
-              aria-label="Milestone target date"
+              aria-label="Milestone Target Date"
             />
             <div style={styles.formActions}>
               <button
@@ -979,16 +979,16 @@ export default function Projects({
               style={styles.compactInput}
               value={taskEditTitle}
               onChange={(event) => setTaskEditTitle(event.target.value)}
-              aria-label="Task title"
+              aria-label="Task Title"
             />
             {projectMilestones.length > 0 && (
               <select
                 style={styles.compactInput}
                 value={taskEditMilestoneId}
                 onChange={(event) => setTaskEditMilestoneId(event.target.value)}
-                aria-label="Link to milestone (optional)"
+                aria-label="Link to Milestone (Optional)"
               >
-                <option value="">No milestone (general task)</option>
+                <option value="">No Milestone (General Task)</option>
                 {projectMilestones.map((milestone) => (
                   <option key={milestone.id} value={milestone.id}>
                     {milestone.title}
@@ -1002,7 +1002,7 @@ export default function Projects({
                 style={styles.compactInput}
                 value={taskEditDueDate}
                 onChange={(event) => setTaskEditDueDate(event.target.value)}
-                aria-label="Task due date"
+                aria-label="Task Due Date"
               />
               <input
                 type="number"
@@ -1012,13 +1012,13 @@ export default function Projects({
                 value={taskEditEstimatedMinutes}
                 onChange={(event) => setTaskEditEstimatedMinutes(event.target.value)}
                 placeholder="Minutes"
-                aria-label="Estimated minutes"
+                aria-label="Estimated Minutes"
               />
               <select
                 style={styles.compactInput}
                 value={taskEditPriority}
                 onChange={(event) => setTaskEditPriority(event.target.value as Task["priority"])}
-                aria-label="Task priority"
+                aria-label="Task Priority"
               >
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -1083,7 +1083,7 @@ export default function Projects({
                 setTaskEditMilestoneId(task.milestoneId ?? "");
               }}
               aria-label={`Edit "${task.title}"`}
-              title="Edit task"
+              title="Edit Task"
             >
               <Pencil size={14} />
             </button>
@@ -1092,7 +1092,7 @@ export default function Projects({
               style={styles.iconButton}
               onClick={() => setItemToDelete({ type: "task", id: task.id, title: task.title })}
               aria-label={`Delete "${task.title}"`}
-              title="Delete task"
+              title="Delete Task"
             >
               <Trash2 size={14} />
             </button>
@@ -1129,17 +1129,17 @@ export default function Projects({
               style={styles.compactInput}
               value={taskTitle}
               onChange={(event) => setTaskTitle(event.target.value)}
-              placeholder="Task title"
-              aria-label="Task title"
+              placeholder="Task Title"
+              aria-label="Task Title"
             />
             {projectMilestones.length > 0 && (
               <select
                 style={styles.compactInput}
                 value={taskMilestoneId}
                 onChange={(event) => setTaskMilestoneId(event.target.value)}
-                aria-label="Link to milestone (optional)"
+                aria-label="Link to Milestone (Optional)"
               >
-                <option value="">No milestone (general task)</option>
+                <option value="">No Milestone (General Task)</option>
                 {projectMilestones.map((milestone) => (
                   <option key={milestone.id} value={milestone.id}>
                     {milestone.title}
@@ -1153,7 +1153,7 @@ export default function Projects({
                 style={styles.compactInput}
                 value={taskDueDate}
                 onChange={(event) => setTaskDueDate(event.target.value)}
-                aria-label="Task due date"
+                aria-label="Task Due Date"
               />
               <input
                 type="number"
@@ -1163,13 +1163,13 @@ export default function Projects({
                 value={taskEstimatedMinutes}
                 onChange={(event) => setTaskEstimatedMinutes(event.target.value)}
                 placeholder="Minutes"
-                aria-label="Estimated minutes"
+                aria-label="Estimated Minutes"
               />
               <select
                 style={styles.compactInput}
                 value={taskPriority}
                 onChange={(event) => setTaskPriority(event.target.value as Task["priority"])}
-                aria-label="Task priority"
+                aria-label="Task Priority"
               >
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -1218,7 +1218,7 @@ export default function Projects({
                 style={styles.iconButton}
                 onClick={() => beginProjectEdit(project)}
                 aria-label={`Edit "${project.name}"`}
-                title="Edit project"
+                title="Edit Project"
               >
                 <Pencil size={15} />
               </button>
@@ -1227,7 +1227,7 @@ export default function Projects({
                 style={styles.iconButton}
                 onClick={() => setItemToDelete({ type: "project", id: project.id, title: project.name })}
                 aria-label={`Delete "${project.name}"`}
-                title="Delete project"
+                title="Delete Project"
               >
                 <Trash2 size={15} />
               </button>
@@ -1245,31 +1245,31 @@ export default function Projects({
                 style={styles.compactInput}
                 value={projectEditName}
                 onChange={(event) => setProjectEditName(event.target.value)}
-                aria-label="Project name"
+                aria-label="Project Name"
               />
               <textarea
                 maxLength={500}
                 style={{ ...styles.compactInput, minHeight: 56, resize: "vertical" }}
                 value={projectEditDescription}
                 onChange={(event) => setProjectEditDescription(event.target.value)}
-                placeholder="Description (optional)"
-                aria-label="Project description"
+                placeholder="Description (Optional)"
+                aria-label="Project Description"
               />
               <div style={styles.projectFormRow}>
                 <label style={styles.projectLabel}>
-                  Goal (optional)
+                  Goal (Optional)
                   <select
                     style={styles.compactInput}
                     value={projectEditGoalId}
                     onChange={(event) => setProjectEditGoalId(event.target.value)}
-                    aria-label="Linked goal (optional)"
+                    aria-label="Linked Goal (Optional)"
                   >
-                    <option value="">No goal</option>
+                    <option value="">No Goal</option>
                     {goalOptions(projectEditGoalId)}
                   </select>
                 </label>
                 <label style={styles.projectLabel}>
-                  Start date
+                  Start Date
                   <input
                     type="date"
                     style={styles.compactInput}
@@ -1278,7 +1278,7 @@ export default function Projects({
                   />
                 </label>
                 <label style={styles.projectLabel}>
-                  Target date
+                  Target Date
                   <input
                     type="date"
                     style={styles.compactInput}
@@ -1302,10 +1302,10 @@ export default function Projects({
 
           {project.description && <p style={styles.description}>{project.description}</p>}
           <p style={styles.meta}>
-            {linkedGoal ? `Goal: ${linkedGoal.title}` : "No goal"}
+            {linkedGoal ? `Goal: ${linkedGoal.title}` : "No Goal"}
             {project.startDate && <> · Start: {formatFullDate(project.startDate)}</>}
             {project.targetDate && <> · Target: {formatFullDate(project.targetDate)}</>}
-            {" · "}{project.status}
+            {" · "}{project.status.charAt(0).toUpperCase() + project.status.slice(1)}
           </p>
 
           <div>
@@ -1365,7 +1365,7 @@ export default function Projects({
 
         {showProjectForm && (
           <form style={styles.form} onSubmit={handleProjectSubmit}>
-            <h2 style={styles.formTitle}>Create a project</h2>
+            <h2 style={styles.formTitle}>Create a Project</h2>
             <input
               autoFocus
               required
@@ -1373,32 +1373,32 @@ export default function Projects({
               style={styles.input}
               value={projectName}
               onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Project name"
-              aria-label="Project name"
+              placeholder="Project Name"
+              aria-label="Project Name"
             />
             <textarea
               maxLength={500}
               style={{ ...styles.input, minHeight: 72, resize: "vertical" }}
               value={projectDescription}
               onChange={(event) => setProjectDescription(event.target.value)}
-              placeholder="Description (optional)"
-              aria-label="Project description"
+              placeholder="Description (Optional)"
+              aria-label="Project Description"
             />
             <div style={styles.projectFormRow}>
               <label style={styles.projectLabel}>
-                Goal (optional)
+                Goal (Optional)
                 <select
                   style={styles.compactInput}
                   value={projectGoalId}
                   onChange={(event) => setProjectGoalId(event.target.value)}
-                  aria-label="Linked goal (optional)"
+                  aria-label="Linked Goal (Optional)"
                 >
-                  <option value="">No goal</option>
+                  <option value="">No Goal</option>
                   {goalOptions(projectGoalId)}
                 </select>
               </label>
               <label style={styles.projectLabel}>
-                Start date
+                Start Date
                 <input
                   type="date"
                   style={styles.compactInput}
@@ -1407,7 +1407,7 @@ export default function Projects({
                 />
               </label>
               <label style={styles.projectLabel}>
-                Target date
+                Target Date
                 <input
                   type="date"
                   style={styles.compactInput}
@@ -1434,7 +1434,7 @@ export default function Projects({
         </div>
 
         {archivedProjects.length > 0 && (
-          <section style={styles.archivedSection} aria-label="Archived projects">
+          <section style={styles.archivedSection} aria-label="Archived Projects">
             <button
               type="button"
               style={styles.archivedToggle}

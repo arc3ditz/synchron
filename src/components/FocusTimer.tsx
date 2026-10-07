@@ -183,10 +183,10 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 96,
     background: "var(--card-surface-bg)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-2) var(--space-3)",
+    borderRadius: 8,
+    padding: "10px 14px",
     color: "var(--text-primary)",
-    fontSize: "var(--type-base)",
+    fontSize: 14,
     fontVariantNumeric: "tabular-nums",
     outline: "none",
   },
@@ -590,6 +590,28 @@ function FocusTimer({
   function handleTaskChange(taskId: string) {
     setSelectedTaskId(taskId);
     setLastSessionTaskId(null);
+    if (!taskId) return;
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    // Selecting a Task directly must behave like the Task's "Start Focus"
+    // action: attach the exact taskId and preserve its Goal/Milestone context.
+    if (task.milestoneId) {
+      const milestone = milestones.find((item) => item.id === task.milestoneId);
+      if (task.goalId) {
+        setSelectedGoalId(task.goalId);
+      } else if (milestone?.goalId) {
+        setSelectedGoalId(milestone.goalId);
+      } else {
+        setSelectedGoalId("");
+      }
+      setSelectedMilestoneId(task.milestoneId);
+    } else if (task.goalId) {
+      setSelectedGoalId(task.goalId);
+      setSelectedMilestoneId("");
+    } else {
+      setSelectedGoalId("");
+      setSelectedMilestoneId("");
+    }
   }
 
   const activeGoalIds = new Set(goals.filter((goal) => goal.status === "active").map((goal) => goal.id));
@@ -598,7 +620,9 @@ function FocusTimer({
       (milestone) => milestone.goalId !== undefined && activeGoalIds.has(milestone.goalId) && milestone.goalId === selectedGoalId,
     )
     : [];
-  const availableTasks = filterTasksForFocusSelection(tasks, selectedGoalId, selectedMilestoneId);
+  const availableTasks = selectedGoalId || selectedMilestoneId
+    ? filterTasksForFocusSelection(tasks, selectedGoalId, selectedMilestoneId)
+    : tasks;
 
   // Currently linked Task plus its preserved Goal/Project/Milestone context.
   const selectedTask = selectedTaskId
@@ -855,9 +879,19 @@ function FocusTimer({
   useEffect(() => {
     if (!autoStartAction) return;
 
+    // handleStart closes over the current mode: commit Timer first so a stale
+    // Pomodoro closure cannot start instead.
+    if (mode !== "Timer") {
+      const modeFrameId = window.requestAnimationFrame(() => {
+        setMode("Timer");
+      });
+      return () => {
+        window.cancelAnimationFrame(modeFrameId);
+      };
+    }
+
     const durationMinutes = Math.max(1, Math.min(MAX_DURATION_MINUTES, autoStartAction.durationMinutes ?? defaultFocusDuration));
     const frameId = window.requestAnimationFrame(() => {
-      setMode("Timer");
       handleTimerDurationChange(String(durationMinutes));
       handleStart();
       onAutoStartHandled?.();
@@ -866,7 +900,7 @@ function FocusTimer({
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [autoStartAction, defaultFocusDuration, handleStart, handleTimerDurationChange, onAutoStartHandled]);
+  }, [autoStartAction, defaultFocusDuration, handleStart, handleTimerDurationChange, mode, onAutoStartHandled]);
 
   function handleFocusDurationChange(value: string) {
     const parsed = clampMinutes(value, defaultFocusDuration);
@@ -1025,7 +1059,7 @@ function FocusTimer({
                 </span>
               )}
               {lastSessionTaskId === selectedTask.id && selectedTask.completed && (
-                <span style={styles.focusContextMeta}>Task completed</span>
+                <span style={styles.focusContextMeta}>Task Completed</span>
               )}
             </div>
           )}
@@ -1117,9 +1151,9 @@ function FocusTimer({
             value={selectedGoalId}
             onChange={(event) => handleGoalChange(event.target.value)}
             disabled={isRunning}
-            aria-label="Select a goal to link this session to"
+            aria-label="Select a Goal to Link This Session to"
           >
-            <option value="">No Linked Goal</option>
+            <option value="">No Goal</option>
             {goals.filter((goal) => goal.status === 'active').map((goal) => (
               <option key={goal.id} value={goal.id}>
                 {goal.title}
@@ -1139,9 +1173,9 @@ function FocusTimer({
               value={selectedMilestoneId}
               onChange={(event) => handleMilestoneChange(event.target.value)}
               disabled={isRunning}
-              aria-label="Select a milestone to link this session to"
+              aria-label="Select a Milestone to Link This Session to"
             >
-              <option value="">No Linked Milestone</option>
+              <option value="">No Milestone</option>
               {availableMilestones.map((milestone) => (
                 <option key={milestone.id} value={milestone.id}>
                   {milestone.title}
@@ -1151,28 +1185,26 @@ function FocusTimer({
           </div>
         )}
 
-        {selectedGoalId !== "" && (
-          <div style={styles.panelSection}>
-            <label style={styles.habitSelectLabel} htmlFor="task-select">
-              Link to Task (Optional)
-            </label>
-            <select
-              id="task-select"
-              style={styles.habitSelect}
-              value={selectedTaskId}
-              onChange={(event) => handleTaskChange(event.target.value)}
-              disabled={isRunning}
-              aria-label="Select a task to link this session to"
-            >
-              <option value="">No Linked Task</option>
-              {availableTasks.filter((task) => !task.completed).map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div style={styles.panelSection}>
+          <label style={styles.habitSelectLabel} htmlFor="task-select">
+            Select Task (Optional)
+          </label>
+          <select
+            id="task-select"
+            style={styles.habitSelect}
+            value={selectedTaskId}
+            onChange={(event) => handleTaskChange(event.target.value)}
+            disabled={isRunning}
+            aria-label="Select Task"
+          >
+            <option value="">No Task</option>
+            {availableTasks.filter((task) => !task.completed).map((task) => (
+              <option key={task.id} value={task.id}>
+                {task.title}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div style={styles.panelSection}>
           <label style={styles.habitSelectLabel} htmlFor="habit-select">
@@ -1188,7 +1220,7 @@ function FocusTimer({
               )
             }
             disabled={isRunning}
-            aria-label="Select a habit to focus on"
+            aria-label="Select a Habit to Focus On"
           >
             <option value="">General Focus</option>
             {habits.map((habit) => (
@@ -1344,10 +1376,10 @@ function FocusTimer({
                   setQuickAdjustStepDraft(String(quickAdjustStepMinutes));
                 }
               }}
-              aria-label="Adjust step in minutes"
+              aria-label="Adjust Step in Minutes"
             />
           </div>
-          <div style={styles.stepPresetGrid} role="group" aria-label="Quick adjustment presets">
+          <div style={styles.stepPresetGrid} role="group" aria-label="Quick Adjustment Presets">
             {QUICK_ADJUST_PRESETS.map((minutes) => (
               <button
                 key={minutes}

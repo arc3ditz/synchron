@@ -76,23 +76,27 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     minWidth: 0,
     boxSizing: "border-box",
-    padding: "10px 14px",
+    minHeight: "var(--control-min-height)",
+    padding: "var(--control-padding)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 8,
+    borderRadius: "var(--control-radius)",
     background: "var(--card-surface-bg)",
     color: "var(--text-primary)",
-    fontSize: 14,
+    fontSize: "var(--control-font-size)",
+    lineHeight: "var(--control-line-height)",
   },
   compactInput: {
     width: "100%",
     minWidth: 0,
     boxSizing: "border-box",
-    padding: "7px 9px",
+    minHeight: "var(--control-min-height)",
+    padding: "var(--control-padding)",
     border: "1px solid var(--card-surface-border)",
-    borderRadius: 7,
+    borderRadius: "var(--control-radius)",
     background: "var(--card-surface-bg)",
     color: "var(--text-primary)",
-    fontSize: 12,
+    fontSize: "var(--control-font-size)",
+    lineHeight: "var(--control-line-height)",
   },
   addRow: {
     display: "flex",
@@ -303,6 +307,8 @@ export default function Tasks({
   const [editPriority, setEditPriority] = useState<Task["priority"]>("medium");
   const [editDueDate, setEditDueDate] = useState("");
   const [editEstimatedMinutes, setEditEstimatedMinutes] = useState("");
+  const [editScheduledTime, setEditScheduledTime] = useState("");
+  const [editDurationMinutes, setEditDurationMinutes] = useState("");
   const [editGoalId, setEditGoalId] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
   const [editMilestoneId, setEditMilestoneId] = useState("");
@@ -380,6 +386,8 @@ export default function Tasks({
     setEditPriority(task.priority);
     setEditDueDate(task.dueDate ?? "");
     setEditEstimatedMinutes(task.estimatedMinutes?.toString() ?? "");
+    setEditScheduledTime(task.scheduledTime ?? "");
+    setEditDurationMinutes(task.durationMinutes?.toString() ?? "");
     setEditGoalId(task.goalId ?? "");
     setEditProjectId(task.projectId ?? "");
     setEditMilestoneId(task.milestoneId ?? "");
@@ -390,11 +398,16 @@ export default function Tasks({
     const trimmedTitle = editTitle.trim();
     if (!trimmedTitle) return;
 
+    // Same scheduling semantics as Today: duration only applies alongside a
+    // scheduled time, so clearing the time also clears the duration.
+    const scheduledTime = editScheduledTime || undefined;
     onEditTask(task.id, {
       title: trimmedTitle,
       priority: editPriority,
       dueDate: editDueDate || undefined,
       estimatedMinutes: parseMinutes(editEstimatedMinutes),
+      scheduledTime,
+      durationMinutes: scheduledTime ? parseMinutes(editDurationMinutes) : undefined,
       goalId: editGoalId || undefined,
       projectId: editProjectId || undefined,
       milestoneId: editMilestoneId || undefined,
@@ -449,16 +462,16 @@ export default function Tasks({
               style={styles.compactInput}
               value={editTitle}
               onChange={(event) => setEditTitle(event.target.value)}
-              aria-label="Task title"
+              aria-label="Task Title"
             />
             <div style={styles.formGrid}>
               <select
                 style={styles.compactInput}
                 value={editGoalId}
                 onChange={(event) => setEditGoalId(event.target.value)}
-                aria-label="Linked goal (optional)"
+                aria-label="Linked Goal (Optional)"
               >
-                <option value="">No goal</option>
+                <option value="">No Goal</option>
                 {activeGoals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -467,9 +480,9 @@ export default function Tasks({
                 style={styles.compactInput}
                 value={editProjectId}
                 onChange={(event) => setEditProjectId(event.target.value)}
-                aria-label="Linked project (optional)"
+                aria-label="Linked Project (Optional)"
               >
-                <option value="">No project</option>
+                <option value="">No Project</option>
                 {projects
                   .filter((project) =>
                     project.status !== "archived" &&
@@ -482,9 +495,9 @@ export default function Tasks({
                 style={styles.compactInput}
                 value={editMilestoneId}
                 onChange={(event) => setEditMilestoneId(event.target.value)}
-                aria-label="Linked milestone (optional)"
+                aria-label="Linked Milestone (Optional)"
               >
-                <option value="">No milestone</option>
+                <option value="">No Milestone</option>
                 {milestones
                   .filter((milestone) => {
                     if (editProjectId !== "") return milestone.projectId === editProjectId;
@@ -500,7 +513,7 @@ export default function Tasks({
                 style={styles.compactInput}
                 value={editDueDate}
                 onChange={(event) => setEditDueDate(event.target.value)}
-                aria-label="Task due date"
+                aria-label="Task Due Date"
               />
               <input
                 type="number"
@@ -510,13 +523,30 @@ export default function Tasks({
                 value={editEstimatedMinutes}
                 onChange={(event) => setEditEstimatedMinutes(event.target.value)}
                 placeholder="Minutes"
-                aria-label="Estimated minutes"
+                aria-label="Estimated Minutes"
+              />
+              <input
+                type="time"
+                style={styles.compactInput}
+                value={editScheduledTime}
+                onChange={(event) => setEditScheduledTime(event.target.value)}
+                aria-label="Scheduled Time"
+              />
+              <input
+                type="number"
+                min={1}
+                step={1}
+                style={styles.compactInput}
+                value={editDurationMinutes}
+                onChange={(event) => setEditDurationMinutes(event.target.value)}
+                placeholder="Minutes"
+                aria-label="Duration in Minutes"
               />
               <select
                 style={styles.compactInput}
                 value={editPriority}
                 onChange={(event) => setEditPriority(event.target.value as Task["priority"])}
-                aria-label="Task priority"
+                aria-label="Task Priority"
               >
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -562,7 +592,12 @@ export default function Tasks({
                   {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
                 </time>
               )}
-              {task.estimatedMinutes !== undefined && <span>{task.estimatedMinutes} min</span>}
+              {task.scheduledTime && (
+                <span>Scheduled {task.scheduledTime}</span>
+              )}
+              {(task.durationMinutes ?? task.estimatedMinutes) !== undefined && (
+                <span>{task.durationMinutes ?? task.estimatedMinutes} min</span>
+              )}
               {renderContext(task)}
             </span>
           </span>
@@ -572,7 +607,7 @@ export default function Tasks({
           style={styles.focusButton}
           onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
           aria-label={`Start focus on "${task.title}"`}
-          title="Start focus"
+          title="Start Focus"
         >
           <Play size={14} />
         </button>
@@ -581,7 +616,7 @@ export default function Tasks({
           style={styles.iconButton}
           onClick={() => beginEdit(task)}
           aria-label={`Edit "${task.title}"`}
-          title="Edit task"
+          title="Edit Task"
         >
           <Pencil size={14} />
         </button>
@@ -590,7 +625,7 @@ export default function Tasks({
           style={styles.iconButton}
           onClick={() => setPendingDeletion(task)}
           aria-label={`Delete "${task.title}"`}
-          title="Delete task"
+          title="Delete Task"
         >
           <Trash2 size={14} />
         </button>
@@ -605,7 +640,7 @@ export default function Tasks({
       </header>
       <p style={styles.subtitle}>Small steps count.</p>
 
-      <form style={styles.form} onSubmit={handleAddSubmit} aria-label="Add a task">
+      <form style={styles.form} onSubmit={handleAddSubmit} aria-label="Add a Task">
         <div style={styles.addRow}>
           <input
             required
@@ -614,7 +649,7 @@ export default function Tasks({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Add a Task"
-            aria-label="Task title"
+            aria-label="Task Title"
           />
           <button type="submit" style={styles.submitButton}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -638,13 +673,13 @@ export default function Tasks({
             </select>
           </label>
           <label style={styles.fieldLabel}>
-            Due date
+            Due Date
             <input
               type="date"
               style={styles.compactInput}
               value={dueDate}
               onChange={(event) => setDueDate(event.target.value)}
-              aria-label="Due date"
+              aria-label="Due Date"
             />
           </label>
           <label style={styles.fieldLabel}>
@@ -657,7 +692,7 @@ export default function Tasks({
               value={estimatedMinutes}
               onChange={(event) => setEstimatedMinutes(event.target.value)}
               placeholder="Minutes"
-              aria-label="Estimated minutes"
+              aria-label="Estimated Minutes"
             />
           </label>
           <label style={styles.fieldLabel}>
@@ -666,9 +701,9 @@ export default function Tasks({
               style={styles.compactInput}
               value={goalId}
               onChange={(event) => { setGoalId(event.target.value); setProjectId(""); setMilestoneId(""); }}
-              aria-label="Linked goal (optional)"
+              aria-label="Linked Goal (Optional)"
             >
-              <option value="">No goal</option>
+              <option value="">No Goal</option>
               {activeGoals.map((goal) => (
                 <option key={goal.id} value={goal.id}>{goal.title}</option>
               ))}
@@ -680,9 +715,9 @@ export default function Tasks({
               style={styles.compactInput}
               value={projectId}
               onChange={(event) => { setProjectId(event.target.value); setMilestoneId(""); }}
-              aria-label="Linked project (optional)"
+              aria-label="Linked Project (Optional)"
             >
-              <option value="">No project</option>
+              <option value="">No Project</option>
               {availableProjects.map((project) => (
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
@@ -694,9 +729,9 @@ export default function Tasks({
               style={styles.compactInput}
               value={milestoneId}
               onChange={(event) => setMilestoneId(event.target.value)}
-              aria-label="Linked milestone (optional)"
+              aria-label="Linked Milestone (Optional)"
             >
-              <option value="">No milestone</option>
+              <option value="">No Milestone</option>
               {availableMilestones.map((milestone) => (
                 <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
               ))}
@@ -705,8 +740,8 @@ export default function Tasks({
         </div>
       </form>
 
-      <div style={styles.filterRow} role="group" aria-label="Filter tasks">
-        <div style={styles.filterSegment} role="group" aria-label="Completion status">
+      <div style={styles.filterRow} role="group" aria-label="Filter Tasks">
+        <div style={styles.filterSegment} role="group" aria-label="Completion Status">
           {(["open", "completed", "all"] as StatusFilter[]).map((status) => (
             <button
               key={status}
@@ -723,9 +758,9 @@ export default function Tasks({
           style={{ ...styles.compactInput, ...styles.goalFilter }}
           value={goalFilter}
           onChange={(event) => setGoalFilter(event.target.value)}
-          aria-label="Filter by goal"
+          aria-label="Filter by Goal"
         >
-          <option value="">All goals</option>
+          <option value="">All Goals</option>
           {activeGoals.map((goal) => (
             <option key={goal.id} value={goal.id}>{goal.title}</option>
           ))}

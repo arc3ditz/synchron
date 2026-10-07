@@ -3,6 +3,7 @@
  */
 
 import type { Goal, Milestone, Task, Habit, Project } from "../types";
+import { sanitizeCompletedAt } from "../domain/completions.ts";
 
 export const STORAGE_KEYS = {
   HABITS: "habits",
@@ -125,7 +126,23 @@ export function saveMilestones(milestones: Milestone[]): void {
 }
 
 export function loadHabits(): Habit[] {
-  return loadStorageData<Habit[]>(STORAGE_KEYS.HABITS, []);
+  const parsed = loadStorageData<Habit[]>(STORAGE_KEYS.HABITS, []);
+  if (!Array.isArray(parsed)) return [];
+  // Historical records predate timestamp collection: preserve them as-is,
+  // keeping only valid timestamps for dates actually completed.
+  return parsed.map((habit) => {
+    if (!habit || typeof habit !== "object") return habit;
+    const completedDates = Array.isArray(habit.completedDates) ? habit.completedDates : [];
+    const completedAt = sanitizeCompletedAt(completedDates, habit.completedAt);
+    if (completedAt === undefined && habit.completedAt === undefined) return { ...habit, completedDates };
+    const next = { ...habit, completedDates };
+    if (completedAt !== undefined) {
+      next.completedAt = completedAt;
+    } else {
+      delete next.completedAt;
+    }
+    return next;
+  });
 }
 
 export function saveHabits(habits: Habit[]): void {

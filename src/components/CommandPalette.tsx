@@ -122,7 +122,7 @@ export default function CommandPalette({ commands, shortcutKey, onRunCommand, on
         style={styles.panel}
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label="Command Palette"
         onClick={(event) => event.stopPropagation()}
       >
         <input
@@ -130,8 +130,8 @@ export default function CommandPalette({ commands, shortcutKey, onRunCommand, on
           style={styles.input}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Type a command…"
-          aria-label="Command palette"
+          placeholder="Type a Command…"
+          aria-label="Command Palette"
           aria-expanded={filtered.length > 0}
           aria-controls={listId}
           aria-activedescendant={filtered[selected] ? `palette-${filtered[selected].id}` : undefined}
@@ -177,9 +177,9 @@ export default function CommandPalette({ commands, shortcutKey, onRunCommand, on
           </ul>
         )}
         <div style={styles.footer}>
-          <span>↑↓ navigate</span>
-          <span>Enter run</span>
-          <span>Esc close ({shortcutKey}K)</span>
+          <span>↑↓ Navigate</span>
+          <span>Enter Run</span>
+          <span>Esc Close ({shortcutKey}K)</span>
         </div>
       </div>
     </div>

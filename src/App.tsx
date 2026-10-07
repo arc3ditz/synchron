@@ -114,9 +114,17 @@ import {
   WEEKDAYS,
 } from "./utils/dates";
 import {
+  ensureNotificationActionTypesRegistered,
   getIntelligentNotification,
   sendIntelligentNotification,
+  subscribeToNativeNotificationActions,
+  type NotificationAction,
 } from "./domain/notificationLogic";
+import {
+  markHabitComplete,
+  markHabitIncomplete,
+  sanitizeCompletedAt,
+} from "./domain/completions";
 
 const DEFAULT_SETTINGS: AppSettings = {
   viewMode: "grid",
@@ -1070,6 +1078,12 @@ function App() {
       return parsed.map((item) => {
         const category =
           typeof item.category === "string" ? normalizeCategory(item.category) : "";
+        const completedDates = Array.isArray(item.completedDates)
+          ? item.completedDates
+          : [];
+        // Historical records predate timestamp collection: keep them as-is
+        // and only retain valid timestamps for dates actually completed.
+        const completedAt = sanitizeCompletedAt(completedDates, item.completedAt);
 
         return {
           id: item.id,
@@ -1087,9 +1101,8 @@ function App() {
           customDays: Array.isArray(item.customDays)
             ? item.customDays.filter((day): day is string => WEEKDAYS.includes(day))
             : [],
-          completedDates: Array.isArray(item.completedDates)
-            ? item.completedDates
-            : [],
+          completedDates,
+          ...(completedAt !== undefined ? { completedAt } : {}),
           streakFreezeDates: Array.isArray(item.streakFreezeDates)
             ? item.streakFreezeDates
             : [],
@@ -1377,8 +1390,7 @@ function App() {
     if (notificationListenerRegisteredRef.current) return;
     notificationListenerRegisteredRef.current = true;
 
-    const handleNotificationAction = (event: Event) => {
-      const detail = (event as CustomEvent<{ type?: string; habitId?: number; habitName?: string; title?: string; durationMinutes?: number }>).detail;
+    const routeFocusHabitAction = (detail: NotificationAction | undefined) => {
       if (!detail || detail.type !== "focus-habit") return;
 
       const habitId = detail.habitId;
@@ -1396,9 +1408,40 @@ function App() {
       setView("Timer");
     };
 
-    window.addEventListener("habit-tracker:notification-action", handleNotificationAction as EventListener);
+    // Browser fallback path: only the `new Notification()` onclick handler in
+    // notificationLogic dispatches this event. It is kept so Focus still
+    // starts when running outside Tauri; it is not the native macOS action.
+    const handleBrowserNotificationAction = (event: Event) => {
+      const detail = (event as CustomEvent<NotificationAction>).detail;
+      routeFocusHabitAction(detail);
+    };
+
+    window.addEventListener("habit-tracker:notification-action", handleBrowserNotificationAction as EventListener);
+
+    // Native (Tauri/macOS) path: the single supported `onAction` flow.
+    // Registration is idempotent; failures outside Tauri fall back silently.
+    let nativeUnlisten: (() => void) | null = null;
+    let nativeCancelled = false;
+    void ensureNotificationActionTypesRegistered()
+      .then(() => {
+        if (nativeCancelled) return null;
+        return subscribeToNativeNotificationActions(routeFocusHabitAction);
+      })
+      .then((unlisten) => {
+        if (nativeCancelled) {
+          unlisten?.();
+          return;
+        }
+        nativeUnlisten = unlisten ?? null;
+      })
+      .catch((error) => {
+        console.error("Failed to subscribe to native notification actions", error);
+      });
     return () => {
-      window.removeEventListener("habit-tracker:notification-action", handleNotificationAction as EventListener);
+      nativeCancelled = true;
+      nativeUnlisten?.();
+      nativeUnlisten = null;
+      window.removeEventListener("habit-tracker:notification-action", handleBrowserNotificationAction as EventListener);
       notificationListenerRegisteredRef.current = false;
     };
   }, [appSettings.defaultFocusDuration]);
@@ -1799,12 +1842,9 @@ function App() {
 
     const updatedHabits: Habit[] = habits.map((h): Habit => {
       if (h.id !== id) return h;
-
-      const completedDates = isCurrentlyComplete
-        ? h.completedDates.filter((date) => date !== targetDateKey)
-        : [...h.completedDates, targetDateKey];
-
-      return { ...h, completedDates };
+      return isCurrentlyComplete
+        ? markHabitIncomplete(h, targetDateKey)
+        : markHabitComplete(h, targetDateKey);
     });
     setHabits(updatedHabits);
 
@@ -1981,7 +2021,7 @@ function App() {
           <option value="custom">Custom Days</option>
         </select>
         {frequencyType === "custom" && (
-          <div style={styles.frequencyDays} aria-label="Custom frequency days">
+          <div style={styles.frequencyDays} aria-label="Custom Frequency Days">
             {WEEKDAYS.map((day) => {
               const selected = customDays.includes(day);
               return (
@@ -2042,8 +2082,8 @@ function App() {
             style={inputStyle}
             value={customName}
             onChange={(event) => onCustomNameChange(event.target.value)}
-            placeholder="New category name"
-            aria-label="New category name"
+            placeholder="New Category Name"
+            aria-label="New Category Name"
             autoFocus
           />
         )}
@@ -2125,7 +2165,7 @@ function App() {
                 onChange={(event) => setEditingGoalId(event.target.value)}
                 aria-label="Linked Goal"
               >
-                <option value="">No Linked Goal</option>
+                <option value="">No Goal</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -2418,7 +2458,7 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-body">
-        <nav className="sidebar" aria-label="Main navigation">
+        <nav className="sidebar" aria-label="Main Navigation">
           <div className="sidebar-primary" role="group" aria-label="Workspace">
             <button
               className={`sidebar-item ${view === "Today" ? "active" : ""}`}
@@ -2620,7 +2660,7 @@ function App() {
             )}
 
             <div className="category-section">
-              <div className="category-tabs" role="group" aria-label="Filter habits by category">
+              <div className="category-tabs" role="group" aria-label="Filter Habits by Category">
                 {categoryTabs.map((tab) => (
                   <button
                     key={tab}
@@ -2742,9 +2782,9 @@ function App() {
                     style={styles.categoryManageButton}
                     ref={categoryPopoverTriggerRef}
                     onClick={() => setHabitsPopover((current) => current === "category" ? null : "category")}
-                    aria-label="Manage custom categories"
+                    aria-label="Manage Custom Categories"
                     aria-expanded={habitsPopover === "category"}
-                    title="Manage custom categories"
+                    title="Manage Custom Categories"
                   >
                     <Settings size={16} />
                   </button>
@@ -2859,7 +2899,7 @@ function App() {
                 onChange={(event) => setNewGoalId(event.target.value)}
                 aria-label="Linked Goal"
               >
-                <option value="">No Linked Goal</option>
+                <option value="">No Goal</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -3089,8 +3129,6 @@ function App() {
               dayResetHour={appSettings.dayResetHour}
               milestones={milestones}
               onAddGoal={(data) => setGoals((current) => [...current, createGoal(data)])}
-              onAddTask={handleAddTask}
-              onToggleTask={handleToggleTask}
               onToggleGoalArchive={(goalId) =>
                 setGoals((current) => current.map((goal) =>
                   goal.id === goalId
@@ -3125,9 +3163,7 @@ function App() {
                 setMilestones((current) => current.filter((milestone) => milestone.goalId !== goalId));
                 setProjects((current) => detachGoalFromProjects(current, goalId));
                 setHabits((current) => detachHabitsFromDeletedGoal(current, goalId));
-              }}              onEditTask={handleEditTask}
-              onDeleteTask={handleDeleteTask}
-              onAddMilestone={handleAddMilestone}
+              }}              onAddMilestone={handleAddMilestone}
               onEditMilestone={handleEditMilestone}
               onDeleteMilestone={handleDeleteMilestone}
               onToggleMilestone={(_goalId, milestoneId) => handleToggleMilestone(milestoneId)}
@@ -3226,7 +3262,7 @@ function App() {
                       <span style={styles.settingsLabel}>Appearance</span>
                       <span style={styles.settingsDescription}>Choose your preferred color theme.</span>
                     </div>
-                    <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance theme">
+                    <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance Theme">
                       {(["light", "dark"] as Theme[]).map((theme) => (
                         <button
                           key={theme}
@@ -3249,7 +3285,7 @@ function App() {
                       className="settings-segment"
                       style={{ ...styles.settingsSegment, ...styles.settingsViewSegment }}
                       role="group"
-                      aria-label="Default view mode"
+                      aria-label="Default View Mode"
                     >
                       {(["grid", "list"] as const).map((viewMode) => (
                         <button
@@ -3293,7 +3329,7 @@ function App() {
                       <span style={styles.settingsLabel}>Start of Week</span>
                       <span style={styles.settingsDescription}>Used by calendar grids and weekly summaries.</span>
                     </div>
-                    <div style={styles.settingsSegment} role="group" aria-label="Start of week">
+                    <div style={styles.settingsSegment} role="group" aria-label="Start of Week">
                       {(["Sunday", "Monday"] as WeekStart[]).map((weekStart) => (
                         <button
                           key={weekStart}
@@ -3346,7 +3382,7 @@ function App() {
                       <span style={styles.settingsLabel}>Default Focus Duration</span>
                       <span style={styles.settingsDescription}>Applied to the Timer and Pomodoro focus duration.</span>
                     </div>
-                    <div style={styles.settingsSegment} role="group" aria-label="Default focus duration">
+                    <div style={styles.settingsSegment} role="group" aria-label="Default Focus Duration">
                       {FOCUS_DURATION_PRESETS.map((minutes) => (
                         <button
                           key={minutes}
@@ -3377,7 +3413,7 @@ function App() {
                             setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: 2 }));
                           }
                         }}
-                        aria-label="Quick adjust step size"
+                        aria-label="Quick Adjust Step Size"
                       >
                         <option value={1}>1 Minute</option>
                         <option value={5}>5 Minutes</option>
@@ -3401,7 +3437,7 @@ function App() {
                               }));
                             }
                           }}
-                          aria-label="Custom quick adjust step in minutes"
+                          aria-label="Custom Quick Adjust Step in Minutes"
                         />
                       )}
                       {!([1, 5, 10].includes(appSettings.quickAdjustStepMinutes)) && (
@@ -3513,7 +3549,7 @@ function App() {
                           setAppSettings((current) => ({ ...current, sfxVolume: value }));
                         }}
                         disabled={!appSettings.soundAlerts}
-                        aria-label="Master SFX volume"
+                        aria-label="Master SFX Volume"
                         style={{ flex: 1 }}
                       />
                       <span style={{ ...styles.settingsLabel, minWidth: 40, textAlign: "right" }}>

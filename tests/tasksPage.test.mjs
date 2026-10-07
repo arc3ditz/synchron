@@ -25,7 +25,7 @@ test("Tasks is a real view wired to the existing Task handlers", () => {
   assert.ok(appSource.includes("<Tasks"), "App must render the Tasks page");
   for (const handler of ["onAddTask={handleAddTask}", "onEditTask={handleEditTask}", "onDeleteTask={handleDeleteTask}", "onToggleTask={handleToggleTask}"]) {
     const occurrences = appSource.split(handler).length - 1;
-    assert.ok(occurrences >= 3, `${handler} must stay shared across Goals, Projects, and Tasks (found ${occurrences})`);
+    assert.ok(occurrences >= 2, `${handler} must stay shared across Projects and Tasks (found ${occurrences})`);
   }
 });
 

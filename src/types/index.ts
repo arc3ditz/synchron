@@ -41,6 +41,7 @@ export interface Habit {
   frequencyType?: FrequencyType;
   customDays?: string[];
   completedDates: string[]; // "YYYY-MM-DD" local calendar days this habit was completed
+  completedAt?: Record<string, number>; // optional "YYYY-MM-DD" -> epoch-ms timestamp captured when marked complete (absent on historical records; never backfilled)
   streakFreezeDates?: string[]; // "YYYY-MM-DD" local calendar days with individual streak freeze
   isArchived?: boolean; // if true, habit is archived and hidden from active list
   category?: string; // optional Title Case label, e.g. "School"
@@ -61,6 +62,7 @@ export interface HistoryHabit {
   id: number;
   name: string;
   completedDates: string[];
+  completedAt?: Record<string, number>;
   frequencyType?: "daily" | "weekdays" | "weekends" | "custom";
   customDays?: string[];
 }
@@ -83,6 +85,7 @@ export interface AnalyticsHabit {
   id: number;
   name: string;
   completedDates: string[];
+  completedAt?: Record<string, number>;
   frequencyType?: "daily" | "weekdays" | "weekends" | "custom";
   customDays?: string[];
   isArchived?: boolean;

@@ -219,7 +219,6 @@
 
 .main-content button:not(.ui-button):not(.settings-segment-button):hover {
   border-color: rgba(var(--accent-rgb), 0.52) !important;
-  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.1);
 }
 
 .main-content button:not(.ui-button):not(.settings-segment-button):active {
@@ -311,8 +310,7 @@
 }
 
 .progress-fill {
-  background: linear-gradient(90deg, var(--accent-teal-soft), var(--accent-teal)) !important;
-  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.35);
+  background: var(--accent-teal) !important;
 }
 
 .streak-pill {
@@ -404,7 +402,6 @@
 .delete-modal-confirm:hover {
   background: var(--danger-border);
   border-color: var(--danger-hover) !important;
-  box-shadow: 0 0 18px var(--danger-shadow) !important;
 }
 
 /* ---------- Category filter tabs ---------- */
@@ -464,7 +461,6 @@
   color: var(--accent-teal);
   background: rgba(var(--accent-rgb), 0.1);
   border-color: rgba(var(--accent-rgb), 0.42);
-  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.1);
 }
 
 /* ---------- Habit table ---------- */
@@ -619,7 +615,6 @@
 .date-navigator button:hover {
   border-color: var(--accent-teal) !important;
   color: var(--accent-teal) !important;
-  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.13);
   transform: translateY(-1px);
 }
 
@@ -838,7 +833,7 @@
   background: var(--accent-wash) !important;
   border-color: var(--accent-border) !important;
   color: var(--text-primary) !important;
-  box-shadow: 0 3px 12px rgba(var(--accent-rgb), 0.14) !important;
+  box-shadow: 0 3px 12px var(--shadow-soft) !important;
   transform: translateY(-1px);
 }
 

@@ -628,7 +628,7 @@ const styles: Record<string, CSSProperties> = {
   },
   goalProgressFill: {
     height: "100%",
-    background: "linear-gradient(90deg, var(--accent-teal-soft), var(--accent-teal))",
+    background: "var(--accent-teal)",
     transition: "width 0.3s ease",
   },
 };
@@ -790,7 +790,7 @@ function Today({
           className="today-focus-button"
           style={styles.focusButton}
           onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-          aria-label={`Start focus on ${task.title}`}
+          aria-label={`Start Focus on ${task.title}`}
         >
           <Play size={14} />
         </button>
@@ -851,14 +851,14 @@ function Today({
       return (
         <div style={styles.nextUp}>
           <div style={styles.nextUpInfo}>
-            <p style={styles.eyebrow}>Up next</p>
+            <p style={styles.eyebrow}>Up Next</p>
             <p style={styles.nextUpClear}>All clear for today. Nicely done.</p>
           </div>
           <div style={styles.nextUpActions}>
             <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Play size={14} />
-                <span>Focus anyway</span>
+                <span>Focus Anyway</span>
               </span>
             </button>
           </div>
@@ -884,7 +884,7 @@ function Today({
             role="checkbox"
           />
           <div style={styles.nextUpInfo}>
-            <p style={styles.eyebrow}>Up next · Task</p>
+            <p style={styles.eyebrow}>Up Next · Task</p>
             <h2 style={styles.nextUpTitle}>{task.title}</h2>
             <div style={styles.nextUpMeta}>
               <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{task.priority}</span>
@@ -901,7 +901,7 @@ function Today({
               type="button"
               style={styles.submitButton}
               onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-              aria-label={`Start focus on ${task.title}`}
+              aria-label={`Start Focus on ${task.title}`}
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Play size={14} />
@@ -927,7 +927,7 @@ function Today({
           role="checkbox"
         />
         <div style={styles.nextUpInfo}>
-          <p style={styles.eyebrow}>Up next · Habit</p>
+          <p style={styles.eyebrow}>Up Next · Habit</p>
           <h2 style={styles.nextUpTitle}>{habit.name}</h2>
           <div style={styles.nextUpMeta}>
             <span>{habit.priority}</span>
@@ -940,7 +940,7 @@ function Today({
             type="button"
             style={styles.submitButton}
             onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-            aria-label={`Start focus on ${habit.name}`}
+            aria-label={`Start Focus on ${habit.name}`}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Play size={14} />
@@ -977,7 +977,7 @@ function Today({
         <h2 style={styles.sectionTitle}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Target size={18} />
-            <span>Goals in focus</span>
+            <span>Goals in Focus</span>
           </span>
         </h2>
         <div style={styles.goalProgressList}>
@@ -1014,11 +1014,11 @@ function Today({
               goalId: block.goalId,
               title: block.title,
             })}
-            aria-label={`Start focus on ${block.title}`}
+            aria-label={`Start Focus on ${block.title}`}
           >
             <h3 style={styles.scheduleItemTitle}>{block.title}</h3>
             <div style={styles.scheduleItemMeta}>
-              <span>Focus session</span>
+              <span>Focus Session</span>
             </div>
           </button>
           <div style={styles.scheduleDuration}>
@@ -1052,7 +1052,7 @@ function Today({
           onClick={() => onStartFocus(block.kind === "task"
             ? { taskId: block.taskId, title: block.title }
             : { habitId: block.habitId, title: block.title })}
-          aria-label={`Start focus on ${block.title}`}
+          aria-label={`Start Focus on ${block.title}`}
         >
           <h3 style={{ ...styles.scheduleItemTitle, ...(completed ? styles.taskNameCompleted : {}) }}>
             {block.title}
@@ -1150,8 +1150,8 @@ function Today({
               style={{ ...styles.scheduleFormInput, flex: 1, minWidth: 0 }}
               value={quickTaskTitle}
               onChange={(event) => setQuickTaskTitle(event.target.value)}
-              placeholder="Add a task for today"
-              aria-label="Add a task for today"
+              placeholder="Add a Task for Today"
+              aria-label="Add a Task for Today"
               maxLength={120}
             />
             <button type="submit" style={styles.submitButton} disabled={!quickTaskTitle.trim()}>
@@ -1162,13 +1162,13 @@ function Today({
             <button type="button" style={styles.secondaryButton} onClick={onNavigateToHabits}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Plus size={14} />
-                <span>New habit</span>
+                <span>New Habit</span>
               </span>
             </button>
             <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Play size={14} />
-                <span>Start focus</span>
+                <span>Start Focus</span>
               </span>
             </button>
             <button type="button" style={styles.textButton} onClick={onNavigateToGoals}>
@@ -1217,7 +1217,7 @@ function Today({
       {timelineBlocks.length > 0 && (
         <div style={styles.scheduleSection}>
           <div style={styles.scheduleHeader}>
-            <h2 style={styles.sectionTitle}>Scheduled today</h2>
+            <h2 style={styles.sectionTitle}>Scheduled Today</h2>
             <span style={styles.scheduleTimeSummary}>
               {formatDuration(totalPlannedMinutes)} planned
             </span>
@@ -1240,8 +1240,8 @@ function Today({
             style={{ ...styles.scheduleFormInput, flex: 1, minWidth: 0 }}
             value={quickTaskTitle}
             onChange={(event) => setQuickTaskTitle(event.target.value)}
-            placeholder="Add a task for today"
-            aria-label="Add a task for today"
+            placeholder="Add a Task for Today"
+            aria-label="Add a Task for Today"
             maxLength={120}
           />
           <button type="submit" style={styles.submitButton} disabled={!quickTaskTitle.trim()}>
@@ -1314,7 +1314,7 @@ function Today({
                   className="today-focus-button"
                   style={styles.focusButton}
                   onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-                  aria-label={`Start focus on ${habit.name}`}
+                  aria-label={`Start Focus on ${habit.name}`}
                 >
                   <Play size={14} />
                 </button>
@@ -1399,11 +1399,11 @@ function Today({
                   style={styles.scheduleFormInput}
                   value={scheduleTime}
                   onChange={(e) => setScheduleTime(e.target.value)}
-                  aria-label="Schedule time"
+                  aria-label="Scheduled Time"
                 />
               </div>
               <div style={styles.scheduleFormItem}>
-                <label style={styles.scheduleFormLabel}>Duration (minutes)</label>
+                <label style={styles.scheduleFormLabel}>Duration (Minutes)</label>
                 <input
                   type="number"
                   min={1}
@@ -1412,7 +1412,7 @@ function Today({
                   value={scheduleDuration}
                   onChange={(e) => setScheduleDuration(e.target.value)}
                   placeholder="30"
-                  aria-label="Duration in minutes"
+                  aria-label="Duration in Minutes"
                 />
               </div>
               <div style={styles.scheduleFormActions}>

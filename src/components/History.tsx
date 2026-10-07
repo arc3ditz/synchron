@@ -409,7 +409,7 @@ function History({
               event.target.value === "" ? "" : Number(event.target.value),
             )
           }
-          aria-label="Select a Habit to view history"
+          aria-label="Select a Habit to View History"
         >
           <option value="">Select a Habit</option>
           {habits.map((habit) => (
@@ -438,7 +438,7 @@ function History({
             <button
               style={styles.monthButton}
               onClick={() => moveMonth(-1)}
-              aria-label="Previous month"
+              aria-label="Previous Month"
             >
               <ChevronLeft size={16} />
             </button>
@@ -446,14 +446,14 @@ function History({
             <button
               style={styles.monthButton}
               onClick={() => moveMonth(1)}
-              aria-label="Next month"
+              aria-label="Next Month"
             >
               <ChevronRight size={16} />
             </button>
             <button
               style={styles.todayButton}
               onClick={jumpToToday}
-              aria-label="Jump to today"
+              aria-label="Jump to Today"
             >
               Today
             </button>

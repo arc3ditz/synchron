@@ -5,7 +5,7 @@
 
 import type { AppSettings, Habit } from "../types";
 import { getTodayKey, isHabitScheduledOnDate } from "../utils/dates";
-import { sendNotification } from "@tauri-apps/plugin-notification";
+import { onAction, registerActionTypes, sendNotification } from "@tauri-apps/plugin-notification";
 
 export type NotificationType = "timing" | "incomplete" | "availability";
 type IntelligentNotificationSettings = Pick<
@@ -31,6 +31,108 @@ export interface IntelligentNotification {
   habitId?: number;
   habitName?: string;
   action?: NotificationAction;
+}
+
+/**
+ * Native (Tauri/macOS) notification action wiring.
+ *
+ * The Tauri notification plugin exposes a single supported flow:
+ * `registerActionTypes()` declares the buttons the OS may render, and
+ * `onAction()` delivers the native tap/action event back to the app.
+ * The habit context travels in the notification `extra` payload so the
+ * action handler can route it to the existing Focus behavior.
+ */
+export const SYNCHRON_NOTIFICATION_ACTION_TYPE_ID = "synchron-focus";
+export const SYNCHRON_FOCUS_ACTION_ID = "focus-habit";
+
+let notificationActionTypesRegistered = false;
+let notificationActionTypesPromise: Promise<boolean> | null = null;
+
+export function notificationActionToExtra(action: NotificationAction): Record<string, unknown> {
+  return {
+    type: action.type,
+    habitId: action.habitId,
+    habitName: action.habitName,
+    title: action.title,
+    durationMinutes: action.durationMinutes,
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function notificationActionFromExtra(extra: unknown): NotificationAction | null {
+  const record = asRecord(extra);
+  if (!record || record.type !== "focus-habit") return null;
+  const action: NotificationAction = { type: "focus-habit" };
+  if (typeof record.habitId === "number") action.habitId = record.habitId;
+  if (typeof record.habitName === "string") action.habitName = record.habitName;
+  if (typeof record.title === "string") action.title = record.title;
+  if (typeof record.durationMinutes === "number") action.durationMinutes = record.durationMinutes;
+  return action;
+}
+
+/**
+ * Normalize the native `onAction` payload into a Synchron action.
+ * The plugin types the payload as notification `Options`, so the habit
+ * context is read from `extra`. The lookup also tolerates the action id
+ * arriving alongside the payload for forward compatibility.
+ */
+export function notificationActionFromNativePayload(payload: unknown): NotificationAction | null {
+  const record = asRecord(payload);
+  if (!record) return null;
+  const fromExtra = notificationActionFromExtra(record.extra);
+  if (fromExtra) return fromExtra;
+  if (record.type === "focus-habit") {
+    return notificationActionFromExtra(record);
+  }
+  return null;
+}
+
+export function ensureNotificationActionTypesRegistered(): Promise<boolean> {
+  if (notificationActionTypesRegistered) return Promise.resolve(true);
+  if (notificationActionTypesPromise) return notificationActionTypesPromise;
+  notificationActionTypesPromise = (async () => {
+    try {
+      await registerActionTypes([
+        {
+          id: SYNCHRON_NOTIFICATION_ACTION_TYPE_ID,
+          actions: [{ id: SYNCHRON_FOCUS_ACTION_ID, title: "Start Focus", foreground: true }],
+        },
+      ]);
+      notificationActionTypesRegistered = true;
+      return true;
+    } catch (error) {
+      console.error("Failed to register notification action types", error);
+      return false;
+    } finally {
+      notificationActionTypesPromise = null;
+    }
+  })();
+  return notificationActionTypesPromise;
+}
+
+/**
+ * Subscribe to native notification actions via the supported `onAction`
+ * flow. Resolves to an unlisten function; rejects/falls back silently
+ * outside Tauri so normal browser delivery is unaffected.
+ */
+export async function subscribeToNativeNotificationActions(
+  onNotificationAction: (action: NotificationAction) => void,
+): Promise<() => void> {
+  const listener = await onAction((notification) => {
+    const action = notificationActionFromNativePayload(notification);
+    if (action) onNotificationAction(action);
+  });
+  return () => listener.unregister();
+}
+
+export function resetNotificationActionRegistrationForTesting(): void {
+  notificationActionTypesRegistered = false;
+  notificationActionTypesPromise = null;
 }
 
 const NOTIFICATION_COOLDOWNS_MS: Record<AppSettings["notificationFrequency"], number> = {
@@ -282,9 +384,16 @@ export async function sendIntelligentNotification(
   // Tauri native notification for desktop (mobile-only action features not supported)
   let tauriNotificationSucceeded = false;
   try {
+    await ensureNotificationActionTypesRegistered();
     await sendNotification({
       title: notification.title,
       body: notification.body,
+      ...(action
+        ? {
+            actionTypeId: SYNCHRON_NOTIFICATION_ACTION_TYPE_ID,
+            extra: notificationActionToExtra(action),
+          }
+        : {}),
     });
     tauriNotificationSucceeded = true;
   } catch (error) {
