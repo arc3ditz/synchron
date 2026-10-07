@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ListChecks,
+  ListTodo,
   Timer as TimerIcon,
   Pencil,
   Trash2,
@@ -28,6 +29,9 @@ import {
 import { getVersion } from "@tauri-apps/api/app";
 // Lines 18–22 in App.tsx
 import FocusTimer from "./components/FocusTimer";
+import Tasks from "./components/Tasks";
+import CommandPalette from "./components/CommandPalette";
+import type { PaletteCommand } from "./domain/commandPalette";
 import History from "./components/History";
 import Analytics from "./components/Analytics";
 import Today from "./components/Today";
@@ -90,7 +94,8 @@ import {
   detachGoalFromProjects,
   disassociateProjectFocusSessions,
 } from "./domain/projects";
-import { createTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
+import { createTask, completeTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
+import { buildFocusSessionRecord } from "./domain/focusTimer";
 import {
   alignMilestone,
   alignProject,
@@ -146,6 +151,7 @@ type ShortcutContext = {
   editingId: number | null;
   navigateTo: (view: View) => void;
   openShortcuts: () => void;
+  openPalette: () => void;
   shortcutsBlocked: boolean;
   setHabitViewMode: (viewMode: "grid" | "list") => void;
   focusNewHabit: () => void;
@@ -1145,6 +1151,8 @@ function App() {
   const shortcutContextRef = useRef<ShortcutContext | null>(null);
   const timerShortcutRef = useRef<(() => boolean) | null>(null);
   const focusTimerAfterNavigationRef = useRef(false);
+  const notificationIntervalRegisteredRef = useRef(false);
+  const notificationListenerRegisteredRef = useRef(false);
   const registerTimerShortcut = useCallback((handler: (() => boolean) | null) => {
     timerShortcutRef.current = handler;
   }, []);
@@ -1161,6 +1169,8 @@ function App() {
   const [filterStatus, setFilterStatus] = useState<"All" | "Active" | "Archived" | "Completed Today" | "Incomplete Today">("All");
 
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const quickTaskFocusRef = useRef<(() => void) | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(!appSettings.onboardingCompleted);
   const [streakFreeze, setStreakFreeze] = useState(() => {
     const stored = loadStorageData<string>(STORAGE_KEYS.STREAK_FREEZE, "false");
@@ -1331,6 +1341,10 @@ function App() {
   }
 
   useEffect(() => {
+    // Prevent multiple interval registrations
+    if (notificationIntervalRegisteredRef.current) return;
+    notificationIntervalRegisteredRef.current = true;
+
     // Check for intelligent notifications every 5 minutes
     const checkNotifications = () => {
       const currentHour = new Date().getHours();
@@ -1341,7 +1355,7 @@ function App() {
         appSettings.defaultFocusDuration,
         appSettings,
       );
-      
+
       if (notification) {
         void sendIntelligentNotification(notification, appSettings);
       }
@@ -1351,13 +1365,18 @@ function App() {
     checkNotifications();
 
     const intervalId = window.setInterval(checkNotifications, 5 * 60 * 1000);
-    
+
     return () => {
       window.clearInterval(intervalId);
+      notificationIntervalRegisteredRef.current = false;
     };
   }, [habits, appSettings]);
 
   useEffect(() => {
+    // Prevent multiple listener registrations
+    if (notificationListenerRegisteredRef.current) return;
+    notificationListenerRegisteredRef.current = true;
+
     const handleNotificationAction = (event: Event) => {
       const detail = (event as CustomEvent<{ type?: string; habitId?: number; habitName?: string; title?: string; durationMinutes?: number }>).detail;
       if (!detail || detail.type !== "focus-habit") return;
@@ -1380,6 +1399,7 @@ function App() {
     window.addEventListener("habit-tracker:notification-action", handleNotificationAction as EventListener);
     return () => {
       window.removeEventListener("habit-tracker:notification-action", handleNotificationAction as EventListener);
+      notificationListenerRegisteredRef.current = false;
     };
   }, [appSettings.defaultFocusDuration]);
 
@@ -1410,7 +1430,8 @@ function App() {
       toggleTimer: timerShortcutRef.current,
       navigateTo: navigateToView,
       openShortcuts: openKeyboardShortcuts,
-      shortcutsBlocked: showKeyboardShortcuts ||
+      openPalette: openPalette,
+      shortcutsBlocked: showKeyboardShortcuts || paletteOpen ||
         focusSessionPendingDeletion !== null || habitPendingDeletion !== null ||
         categoryPendingDeletion !== null,
       setHabitViewMode: changeHabitViewMode,
@@ -1437,7 +1458,9 @@ function App() {
         if (saveButton && !saveButton.disabled) saveButton.click();
       },
       closeTransient: () => {
-        if (focusSessionPendingDeletion) {
+        if (paletteOpen) {
+          setPaletteOpen(false);
+        } else if (focusSessionPendingDeletion) {
           setFocusSessionPendingDeletion(null);
         } else if (habitPendingDeletion) {
           setHabitPendingDeletion(null);
@@ -1481,6 +1504,12 @@ function App() {
         const key = event.key.toLowerCase();
         if (key === "k") {
           event.preventDefault();
+          context.openPalette();
+          return;
+        }
+        // The shortcuts modal moved off ⌘K to make room for the palette.
+        if (event.key === "/") {
+          event.preventDefault();
           context.openShortcuts();
           return;
         }
@@ -1493,10 +1522,11 @@ function App() {
         const navigationKeys: Record<string, View> = {
           "1": "Today",
           "2": "Habits",
-          "3": "Timer",
-          "4": "goals",
-          "5": "History",
-          "6": "Analytics",
+          "3": "Tasks",
+          "4": "Timer",
+          "5": "goals",
+          "6": "History",
+          "7": "Analytics",
           ",": "Settings",
         };
         const nextView = navigationKeys[event.key];
@@ -1593,6 +1623,35 @@ function App() {
 
   function openKeyboardShortcuts() {
     setShowKeyboardShortcuts(true);
+  }
+
+  function openPalette() {
+    setPaletteOpen(true);
+  }
+
+  function startFocusSession(entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) {
+    setInitialFocusEntityId(entityId);
+    navigateToView("Timer");
+  }
+
+  function focusQuickTaskInput() {
+    navigateToView("Today");
+    // The Today view stays mounted; wait a frame so it is visible and
+    // focusable before moving focus to its quick-add input.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        quickTaskFocusRef.current?.();
+      });
+    });
+  }
+
+  function focusNewHabitInput() {
+    navigateToView("Habits");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        newHabitInputRef.current?.focus();
+      });
+    });
   }
 
   const currentCategory = categoryTabs.includes(activeCategory)
@@ -1846,25 +1905,18 @@ function App() {
     habitId?: number,
   ) {
     // Resolve the Project behind the logged session through its Task or Milestone.
-    const linkedTask = taskId ? tasks.find((task) => task.id === taskId) : undefined;
-    const linkedMilestone = milestoneId
-      ? milestones.find((milestone) => milestone.id === milestoneId)
-      : undefined;
-    const projectId = linkedTask?.projectId ?? linkedMilestone?.projectId;
-
-    const newRecord: FocusSessionRecord = {
-      id: Date.now(),
-      timestamp: Date.now(),
-      sessionType,
-      durationMinutes,
-      habitName,
-      habitId,
-      goalId,
-      milestoneId,
-      taskId,
-      projectId,
-    };
+    const newRecord: FocusSessionRecord = buildFocusSessionRecord(
+      { sessionType, durationMinutes, habitName, habitId, goalId, milestoneId, taskId },
+      { tasks, milestones },
+      { id: Date.now(), timestamp: Date.now() },
+    );
     setFocusSessions((prev) => [...prev, newRecord]);
+  }
+
+  function handleCompleteTaskFromFocus(taskId: string) {
+    setTasks((current) => current.map((task) =>
+      task.id === taskId ? completeTask(task) : task,
+    ));
   }
 
   function deleteFocusSession(id: number) {
@@ -2308,6 +2360,61 @@ function App() {
     );
   }
 
+  const paletteCommands: PaletteCommand[] = [
+    { id: "go-today", label: "Go to Today", hint: `${shortcutKey}1`, keywords: "navigate view" },
+    { id: "go-habits", label: "Go to My Habits", hint: `${shortcutKey}2`, keywords: "navigate view habits" },
+    { id: "go-tasks", label: "Go to Tasks", hint: `${shortcutKey}3`, keywords: "navigate view tasks" },
+    { id: "go-timer", label: "Go to Timer", hint: `${shortcutKey}4`, keywords: "navigate view focus timer" },
+    { id: "go-goals", label: "Go to Goals", hint: `${shortcutKey}5`, keywords: "navigate view goals" },
+    { id: "go-history", label: "Go to History", hint: `${shortcutKey}6`, keywords: "navigate view history" },
+    { id: "go-analytics", label: "Go to Analytics", hint: `${shortcutKey}7`, keywords: "navigate view analytics" },
+    { id: "open-settings", label: "Open Settings", hint: `${shortcutKey},`, keywords: "navigate preferences settings" },
+    { id: "add-task", label: "Add Task", keywords: "create new task today" },
+    { id: "add-habit", label: "Add Habit", keywords: "create new habit" },
+    { id: "start-focus", label: "Start Focus", keywords: "timer pomodoro begin focus" },
+  ];
+
+  function runPaletteCommand(commandId: string) {
+    setPaletteOpen(false);
+    switch (commandId) {
+      case "go-today":
+        navigateToView("Today");
+        break;
+      case "go-habits":
+        navigateToView("Habits");
+        break;
+      case "go-tasks":
+        navigateToView("Tasks");
+        break;
+      case "go-timer":
+        navigateToView("Timer");
+        break;
+      case "go-goals":
+        navigateToView("goals");
+        break;
+      case "go-history":
+        navigateToView("History");
+        break;
+      case "go-analytics":
+        navigateToView("Analytics");
+        break;
+      case "open-settings":
+        navigateToView("Settings");
+        break;
+      case "add-task":
+        focusQuickTaskInput();
+        break;
+      case "add-habit":
+        focusNewHabitInput();
+        break;
+      case "start-focus":
+        startFocusSession(undefined);
+        break;
+      default:
+        break;
+    }
+  }
+
   return (
     <div className="app-shell">
       <div className="app-body">
@@ -2331,6 +2438,15 @@ function App() {
             <span>My Habits</span>
             <span className="sidebar-shortcut">{shortcutKey}2</span>
           </button>
+          <button
+            className={`sidebar-item ${view === "Tasks" ? "active" : ""}`}
+            onClick={() => navigateToView("Tasks")}
+            aria-current={view === "Tasks" ? "page" : undefined}
+          >
+            <ListTodo size={18} />
+            <span>Tasks</span>
+            <span className="sidebar-shortcut">{shortcutKey}3</span>
+          </button>
 <button
               className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
               onClick={() => navigateToView("Timer")}
@@ -2338,7 +2454,7 @@ function App() {
             >
               <TimerIcon size={18} />
               <span>Timer</span>
-              <span className="sidebar-shortcut">{shortcutKey}3</span>
+              <span className="sidebar-shortcut">{shortcutKey}4</span>
             </button>
             <button
               className={`sidebar-item ${view === "goals" ? "active" : ""}`}
@@ -2347,7 +2463,7 @@ function App() {
             >
               <Target size={18} />
               <span>Goals</span>
-              <span className="sidebar-shortcut">{shortcutKey}4</span>
+              <span className="sidebar-shortcut">{shortcutKey}5</span>
             </button>
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
@@ -2356,7 +2472,7 @@ function App() {
           >
             <HistoryIcon size={18} />
             <span>History</span>
-            <span className="sidebar-shortcut">{shortcutKey}5</span>
+            <span className="sidebar-shortcut">{shortcutKey}6</span>
           </button>
           <button
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
@@ -2365,7 +2481,7 @@ function App() {
           >
             <BarChart3 size={18} />
             <span>Analytics</span>
-            <span className="sidebar-shortcut">{shortcutKey}6</span>
+            <span className="sidebar-shortcut">{shortcutKey}7</span>
           </button>
           </div>
           <div className="sidebar-spacer" />
@@ -2403,14 +2519,13 @@ function App() {
               projects={projects}
               focusSessions={focusSessions}
               onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
-              onToggleTask={(taskId) =>
-                setTasks((current) => current.map((task) =>
-                  task.id === taskId ? toggleTaskCompletion(task) : task,
-                ))
-              }
+              onToggleTask={handleToggleTask}
+              onAddTask={handleAddTask}
+              onQuickTaskFocusReady={(focus) => {
+                quickTaskFocusRef.current = focus;
+              }}
               onStartFocus={(entityId) => {
-                setInitialFocusEntityId(entityId);
-                navigateToView("Timer");
+                startFocusSession(entityId);
               }}
               onNavigateToHabits={() => navigateToView("Habits")}
               onNavigateToGoals={() => navigateToView("goals")}
@@ -2865,6 +2980,30 @@ function App() {
           </div>
 
           <div
+            style={{
+              display: view === "Tasks" ? "flex" : "none",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <Tasks
+              tasks={tasks}
+              goals={goals}
+              milestones={milestones}
+              projects={projects}
+              dayResetHour={appSettings.dayResetHour}
+              onAddTask={handleAddTask}
+              onEditTask={handleEditTask}
+              onDeleteTask={handleDeleteTask}
+              onToggleTask={handleToggleTask}
+              onStartFocus={(entityId) => {
+                startFocusSession(entityId);
+              }}
+            />
+          </div>
+
+          <div
             className="focus-view"
             style={{
               ...styles.timerCenter,
@@ -2884,6 +3023,8 @@ function App() {
               goals={goals}
               milestones={milestones}
               tasks={tasks}
+              projects={projects}
+              onCompleteTask={handleCompleteTaskFromFocus}
               allHabits={habits}
               initialEntityId={initialFocusEntityId}
               autoStartAction={notificationTimerAction}
@@ -3425,12 +3566,14 @@ function App() {
                       shortcuts: [
                         { keys: `${shortcutKey}1`, description: "Go to Today" },
                         { keys: `${shortcutKey}2`, description: "Go to My Habits" },
-                        { keys: `${shortcutKey}3`, description: "Go to Timer" },
-                        { keys: `${shortcutKey}4`, description: "Go to Goals" },
-                        { keys: `${shortcutKey}5`, description: "Go to History" },
-                        { keys: `${shortcutKey}6`, description: "Go to Analytics" },
+                        { keys: `${shortcutKey}3`, description: "Go to Tasks" },
+                        { keys: `${shortcutKey}4`, description: "Go to Timer" },
+                        { keys: `${shortcutKey}5`, description: "Go to Goals" },
+                        { keys: `${shortcutKey}6`, description: "Go to History" },
+                        { keys: `${shortcutKey}7`, description: "Go to Analytics" },
                         { keys: `${shortcutKey},`, description: "Go to Settings" },
-                        { keys: `${shortcutKey}K`, description: "Show Keyboard Shortcuts" },
+                        { keys: `${shortcutKey}K`, description: "Open Command Palette" },
+                        { keys: `${shortcutKey}/`, description: "Show Keyboard Shortcuts" },
                       ],
                     },
                     {
@@ -3629,6 +3772,15 @@ function App() {
 
       {showKeyboardShortcuts && (
         <KeyboardShortcutsModal onClose={() => setShowKeyboardShortcuts(false)} shortcutKey={shortcutKey} />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          commands={paletteCommands}
+          shortcutKey={shortcutKey}
+          onRunCommand={runPaletteCommand}
+          onClose={() => setPaletteOpen(false)}
+        />
       )}
 
       {showOnboarding && (

@@ -5,7 +5,7 @@ export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
 export type Theme = "dark" | "light";
 export type NotificationFrequency = "conservative" | "balanced" | "frequent";
-export type View = "Today" | "Habits" | "Timer" | "Projects" | "goals" | "History" | "Analytics" | "Settings";
+export type View = "Today" | "Habits" | "Tasks" | "Timer" | "Projects" | "goals" | "History" | "Analytics" | "Settings";
 
 export interface AppSettings {
   viewMode: "grid" | "list";

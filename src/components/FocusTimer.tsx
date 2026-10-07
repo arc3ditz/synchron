@@ -7,7 +7,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 
 import { CARD_SURFACE } from "../theme";
-import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Task, Habit } from "../types";
+import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Project, Task, Habit } from "../types";
 import { registerFocusTimerRunningState } from "../domain/notificationLogic";
 import { filterTasksForFocusSelection } from "../domain/tasks";
 import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
@@ -24,6 +24,8 @@ type FocusTimerProps = {
   goals: Goal[];
   milestones: Milestone[];
   tasks: Task[];
+  projects?: Project[];
+  onCompleteTask?: (taskId: string) => void;
   allHabits?: Habit[];
   initialEntityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string };
   autoStartAction?: { habitId?: number; title?: string; durationMinutes?: number } | null;
@@ -323,6 +325,44 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: "var(--font-semibold)",
     fontVariantNumeric: "tabular-nums",
   },
+  focusContext: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 4,
+    width: "100%",
+    background: "var(--bg-inset)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    padding: "var(--space-2) var(--space-3)",
+  },
+  focusContextTitle: {
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-primary)",
+    margin: 0,
+  },
+  focusContextMeta: {
+    fontSize: 12,
+    color: "var(--text-secondary)",
+  },
+  focusContextRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  },
+  completeTaskButton: {
+    background: "transparent",
+    border: "1px solid rgba(var(--accent-rgb), 0.42)",
+    borderRadius: "var(--radius-sm)",
+    padding: "4px 10px",
+    color: "var(--accent-teal)",
+    fontSize: 13,
+    fontWeight: "var(--font-medium)",
+    cursor: "pointer",
+  },
 };
 
 function getSessionTotalMs(
@@ -367,6 +407,8 @@ function FocusTimer({
   goals,
   milestones,
   tasks,
+  projects,
+  onCompleteTask,
   allHabits,
   initialEntityId,
   autoStartAction,
@@ -392,6 +434,9 @@ function FocusTimer({
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  // Task linked to the most recently logged session. Used only to offer a
+  // manual "mark complete" affordance — a Task is never completed automatically.
+  const [lastSessionTaskId, setLastSessionTaskId] = useState<string | null>(null);
   const [previousInitialEntityId, setPreviousInitialEntityId] = useState(initialEntityId);
   const [timerDurationDraft, setTimerDurationDraft] = useState<string | null>(null);
   const [focusDurationDraft, setFocusDurationDraft] = useState<string | null>(null);
@@ -400,6 +445,7 @@ function FocusTimer({
 
   if (initialEntityId !== previousInitialEntityId) {
     setPreviousInitialEntityId(initialEntityId);
+    setLastSessionTaskId(null);
     if (initialEntityId?.taskId) {
       setSelectedTaskId(initialEntityId.taskId);
       const task = tasks.find((item) => item.id === initialEntityId.taskId);
@@ -514,6 +560,9 @@ function FocusTimer({
     durationMinutes: number,
     habitName: string,
   ) {
+    if (selectedTaskId) {
+      setLastSessionTaskId(selectedTaskId);
+    }
     onSessionComplete(
       sessionType,
       durationMinutes,
@@ -529,15 +578,18 @@ function FocusTimer({
     setSelectedGoalId(goalId);
     setSelectedMilestoneId("");
     setSelectedTaskId("");
+    setLastSessionTaskId(null);
   }
 
   function handleMilestoneChange(milestoneId: string) {
     setSelectedMilestoneId(milestoneId);
     setSelectedTaskId("");
+    setLastSessionTaskId(null);
   }
 
   function handleTaskChange(taskId: string) {
     setSelectedTaskId(taskId);
+    setLastSessionTaskId(null);
   }
 
   const activeGoalIds = new Set(goals.filter((goal) => goal.status === "active").map((goal) => goal.id));
@@ -547,6 +599,32 @@ function FocusTimer({
     )
     : [];
   const availableTasks = filterTasksForFocusSelection(tasks, selectedGoalId, selectedMilestoneId);
+
+  // Currently linked Task plus its preserved Goal/Project/Milestone context.
+  const selectedTask = selectedTaskId
+    ? tasks.find((task) => task.id === selectedTaskId)
+    : undefined;
+  const selectedTaskGoal = selectedTask?.goalId
+    ? goals.find((goal) => goal.id === selectedTask.goalId)
+    : undefined;
+  const selectedTaskMilestone = selectedTask?.milestoneId
+    ? milestones.find((milestone) => milestone.id === selectedTask.milestoneId)
+    : undefined;
+  const selectedTaskProject = selectedTask?.projectId
+    ? projects?.find((project) => project.id === selectedTask.projectId)
+    : undefined;
+  const selectedTaskContextParts = [
+    selectedTaskGoal?.title,
+    selectedTaskProject?.name,
+    selectedTaskMilestone?.title,
+  ].filter((part): part is string => part !== undefined && part !== "");
+  // Post-session completion is strictly manual: the button below is the only
+  // path that completes a Task, and it renders only for the just-logged session.
+  const showTaskCompleteAffordance = onCompleteTask !== undefined &&
+    lastSessionTaskId !== null &&
+    lastSessionTaskId === selectedTaskId &&
+    selectedTask !== undefined &&
+    !selectedTask.completed;
 
   function shouldLogSession(mode: Mode, session: Session, endTimestamp: number): boolean {
     const lastLogged = lastLoggedSessionRef.current;
@@ -923,6 +1001,34 @@ function FocusTimer({
               Pomodoro
             </button>
           </div>
+          {selectedTask && (
+            <div style={styles.focusContext} aria-live="polite">
+              <p style={styles.focusContextTitle}>
+                {isRunning ? "Focusing on" : "Linked task"}: {selectedTask.title}
+              </p>
+              {selectedTaskContextParts.length > 0 && (
+                <span style={styles.focusContextMeta}>
+                  {selectedTaskContextParts.join(" › ")}
+                </span>
+              )}
+              {showTaskCompleteAffordance && (
+                <span style={styles.focusContextRow}>
+                  Session logged.
+                  <button
+                    type="button"
+                    style={styles.completeTaskButton}
+                    onClick={() => onCompleteTask?.(selectedTask.id)}
+                    aria-label={`Mark task ${selectedTask.title} complete`}
+                  >
+                    Mark complete
+                  </button>
+                </span>
+              )}
+              {lastSessionTaskId === selectedTask.id && selectedTask.completed && (
+                <span style={styles.focusContextMeta}>Task completed</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={styles.ringWrapper}>

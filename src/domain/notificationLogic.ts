@@ -279,33 +279,20 @@ export async function sendIntelligentNotification(
 
   const action = notification.action;
 
+  // Tauri native notification for desktop (mobile-only action features not supported)
+  let tauriNotificationSucceeded = false;
   try {
     await sendNotification({
       title: notification.title,
       body: notification.body,
     });
+    tauriNotificationSucceeded = true;
   } catch (error) {
-    console.error("Failed to send intelligent notification", error);
-
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "granted") {
-        try {
-          const browserNotification = new Notification(notification.title, { body: notification.body });
-          browserNotification.onclick = () => {
-            if (typeof window !== "undefined") {
-              window.focus();
-              emitNotificationAction(action);
-            }
-          };
-        } catch {
-          // Some embedded webviews reject browser notification construction
-        }
-      }
-    }
-    return;
+    console.error("Failed to send Tauri notification", error);
   }
 
-  if (typeof window !== "undefined" && "Notification" in window) {
+  // Browser notification fallback with action support (works on desktop via click)
+  if (!tauriNotificationSucceeded && typeof window !== "undefined" && "Notification" in window) {
     if (Notification.permission === "granted") {
       try {
         const browserNotification = new Notification(notification.title, { body: notification.body });
@@ -316,7 +303,7 @@ export async function sendIntelligentNotification(
           }
         };
       } catch {
-        // Some embedded webviews reject browser notification construction.
+        // Some embedded webviews reject browser notification construction
       }
     }
   }

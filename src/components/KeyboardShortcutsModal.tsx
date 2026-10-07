@@ -99,12 +99,13 @@ const shortcutGroups: ShortcutGroup[] = [
     shortcuts: [
       { keys: "⌘1", description: "Go to Today" },
       { keys: "⌘2", description: "Go to My Habits" },
-      { keys: "⌘3", description: "Go to Timer" },
-      { keys: "⌘4", description: "Go to Goals" },
-      { keys: "⌘5", description: "Go to History" },
-      { keys: "⌘6", description: "Go to Analytics" },
+      { keys: "⌘3", description: "Go to Tasks" },
+      { keys: "⌘4", description: "Go to Timer" },
+      { keys: "⌘5", description: "Go to Goals" },
+      { keys: "⌘6", description: "Go to History" },
+      { keys: "⌘7", description: "Go to Analytics" },
       { keys: "⌘,", description: "Go to Settings" },
-      { keys: "⌘K", description: "Show Keyboard Shortcuts" },
+      { keys: "⌘K", description: "Open Command Palette" },
     ],
   },
   {
@@ -125,6 +126,7 @@ const shortcutGroups: ShortcutGroup[] = [
   {
     title: "General",
     shortcuts: [
+      { keys: "⌘/", description: "Show Keyboard Shortcuts" },
       { keys: "Esc", description: "Close a modal, editor, or popover" },
       { keys: "⌘ Enter", description: "Save the active Habit edit" },
     ],

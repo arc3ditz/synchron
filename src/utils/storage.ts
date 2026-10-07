@@ -73,11 +73,16 @@ export function saveGoals(goals: Goal[]): void {
 }
 
 export function loadTasks(): Task[] {
-  const parsed = loadStorageData<(Partial<Task> & { id: string; title: string })[]>(STORAGE_KEYS.TASKS, []);
+  const parsed = loadStorageData<(Partial<Task> & { id?: unknown; title?: unknown })[]>(STORAGE_KEYS.TASKS, []);
   if (!Array.isArray(parsed)) return [];
 
-  return parsed.map((item) => {
-    return {
+  const tasks: Task[] = [];
+  for (const item of parsed) {
+    // Drop corrupt entries (missing/empty id or title) while preserving every
+    // valid stored Task byte-for-byte through the defaults below.
+    if (typeof item.id !== "string" || item.id === "") continue;
+    if (typeof item.title !== "string" || item.title.trim() === "") continue;
+    tasks.push({
       id: item.id,
       milestoneId: typeof item.milestoneId === "string" ? item.milestoneId : undefined,
       goalId: typeof item.goalId === "string" ? item.goalId : undefined,
@@ -90,8 +95,9 @@ export function loadTasks(): Task[] {
       createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
       scheduledTime: typeof item.scheduledTime === "string" ? item.scheduledTime : undefined,
       durationMinutes: typeof item.durationMinutes === "number" && item.durationMinutes > 0 ? item.durationMinutes : undefined,
-    };
-  });
+    });
+  }
+  return tasks;
 }
 
 export function saveTasks(tasks: Task[]): void {

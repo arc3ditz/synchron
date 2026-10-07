@@ -630,6 +630,7 @@ export default function Goals({
   const [taskEditDueDate, setTaskEditDueDate] = useState("");
   const [taskEditEstimatedMinutes, setTaskEditEstimatedMinutes] = useState("");
   const [taskEditPriority, setTaskEditPriority] = useState<Task["priority"]>("medium");
+  const [taskEditMilestoneId, setTaskEditMilestoneId] = useState<string>("");
   const [milestoneGoalId, setMilestoneGoalId] = useState<string | null>(null);
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [milestoneTargetDate, setMilestoneTargetDate] = useState("");
@@ -762,6 +763,7 @@ export default function Goals({
     setTaskEditEstimatedMinutes(task.estimatedMinutes?.toString() ?? "");
     setTaskEditPriority(task.priority);
     setTaskEditProjectId(task.projectId ?? "");
+    setTaskEditMilestoneId(task.milestoneId ?? "");
   }
 
   function handleTaskEditSubmit(event: FormEvent<HTMLFormElement>, task: Task) {
@@ -778,10 +780,11 @@ export default function Goals({
         : undefined,
       priority: taskEditPriority,
       goalId: task.goalId,
-      milestoneId: task.milestoneId,
+      milestoneId: taskEditMilestoneId || undefined,
       projectId: taskEditProjectId || undefined,
     });
     setEditingTaskId(null);
+    setTaskEditMilestoneId("");
   }
 
   function handleProjectSubmit(event: FormEvent<HTMLFormElement>, goalId: string) {
@@ -835,7 +838,7 @@ export default function Goals({
     setEditingMilestoneId(null);
   }
 
-  function renderTaskItem(task: Task) {
+  function renderTaskItem(task: Task, goalMilestones: Milestone[] = []) {
     return (
       <li key={task.id}>
         <div style={styles.taskRow}>
@@ -849,6 +852,21 @@ export default function Goals({
                 value={taskEditTitle}                  onChange={(event) => setTaskEditTitle(event.target.value)}
                   aria-label="Task title"
                 />
+                {goalMilestones.length > 0 && (
+                  <select
+                    style={styles.compactInput}
+                    value={taskEditMilestoneId}
+                    onChange={(event) => setTaskEditMilestoneId(event.target.value)}
+                    aria-label="Link to milestone (optional)"
+                  >
+                    <option value="">No milestone (general task)</option>
+                    {goalMilestones.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {renderProjectSelect(
                   taskEditProjectId,
                   setTaskEditProjectId,
@@ -1398,7 +1416,7 @@ export default function Goals({
                       <div style={styles.taskGroup}>
                         <h4 style={styles.taskGroupTitle}>General Tasks</h4>
                         <ul style={styles.taskList}>
-                          {unlinkedTasks.map((task) => renderTaskItem(task))}
+                          {unlinkedTasks.map((task) => renderTaskItem(task, goalMilestones))}
                         </ul>
                       </div>
                     );
@@ -1415,7 +1433,7 @@ export default function Goals({
                     <div key={milestone.id} style={styles.taskGroup}>
                       <h4 style={styles.taskGroupTitle}>{milestone.title}</h4>
                       <ul style={styles.taskList}>
-                        {milestoneTasks.map((task) => renderTaskItem(task))}
+                        {milestoneTasks.map((task) => renderTaskItem(task, goalMilestones))}
                       </ul>
                     </div>
                   );

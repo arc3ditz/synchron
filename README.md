@@ -1,75 +1,82 @@
-# React + TypeScript + Vite
+# Synchron
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Synchron is a local-first personal productivity app for habits, deep work, and long-term planning. It combines daily habit tracking with a structured planning hierarchy and a built-in focus timer, packaged as a lightweight desktop app with Tauri.
 
-Currently, two official plugins are available:
+All data stays on your machine via local storage. No account, no backend.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Core features
 
-## React Compiler
+- **Habits** — daily habits with Mandatory / Optional priority, custom frequencies (daily, weekdays, weekends, custom days), time blocking, streaks, streak freezes, archiving, and categories.
+- **Goal → Project → Milestone → Task planning** — long-term goals broken down into projects, milestones, and actionable tasks.
+- **Focus timer** — Pomodoro-style focus sessions linkable to a habit or task, with session history.
+- **Today view** — what matters now: due habits, scheduled items, and focus entry point.
+- **Analytics & History** — completion rates, streaks, and historical review.
+- **Notifications** — configurable intelligent reminders (conservative / balanced / frequent).
+- **Themes** — dark and light modes.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Planning workflow
 
 ```
-
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+Goal → Project → Milestone → Task
 ```
+
+1. **Goal** — a long-term outcome with an optional target date (e.g. "Run a marathon"). Status: `active` / `completed` / `archived`.
+2. **Project** — a scoped effort attached to a goal (e.g. "Base training block"). Has its own dates and progress.
+3. **Milestone** — a checkpoint inside a project or goal (e.g. "Run 10K without stopping").
+4. **Task** — the smallest actionable unit. Tasks (and habits) can optionally be the target of a focus session.
+
+Habits run alongside this hierarchy for recurring daily execution; tasks and milestones handle one-off progress toward goals.
+
+## Habits and Focus
+
+- Habits support frequencies, streaks, and optional scheduled time + duration for time blocking.
+- Completing habits feeds Today progress, Analytics, and streak badges.
+- The Focus timer supports configurable durations, quick-adjust steps, and sound/SFX toggles.
+- A focus session can be linked to a specific habit or task so deep-work time is attributed to the right item.
+
+## Platform requirement
+
+Synchron ships as a desktop app via [Tauri](https://tauri.app/) (v2).
+
+- **macOS (primary):** Xcode Command Line Tools + Rust stable (via `rustup`).
+- **Other platforms:** Tauri prerequisites for your OS (see the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/)).
+
+The web frontend (`npm run dev`) works in a browser for development, but native features (notifications, bundling) require the Tauri shell.
+
+## Development setup
+
+Prerequisites: Node.js (LTS), npm, Rust stable.
+
+```bash
+npm install
+```
+
+Run the frontend only (browser):
+
+```bash
+npm run dev
+```
+
+Run as a desktop app (Tauri):
+
+```bash
+npm run tauri dev
+```
+
+## Commands
+
+| Command              | Purpose                              |
+| -------------------- | ------------------------------------ |
+| `npm run dev`        | Start Vite dev server                |
+| `npm run build`      | Type-check (`tsc -b`) + production build |
+| `npm run preview`    | Preview the production build locally |
+| `npm run lint`       | Run ESLint                           |
+| `npm test`           | Run Node test suite (`tests/`)       |
+| `npm run tauri dev`  | Run desktop app in development       |
+| `npm run tauri build`| Bundle the desktop app               |
+
+## Releases
+
+Pushing a tag matching `v*` (e.g. `v0.6.1`) triggers `.github/workflows/build.yml`, which builds Tauri bundles for macOS (universal) and Windows and attaches them to a draft GitHub release.
+
+Every push and pull request runs `.github/workflows/ci.yml` (install, tests, production build).

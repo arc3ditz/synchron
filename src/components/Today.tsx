@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, History as HistoryIcon, BarChart3 } from "lucide-react";
 import { CARD_SURFACE } from "../theme";
 import StreakBadge from "./StreakBadge";
@@ -10,6 +10,9 @@ import {
   formatFullDate,
 } from "../utils/dates";
 import { calculateGoalProgress } from "../domain/goals";
+import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
+import { buildDailyTimeline, totalPlannedMinutes as sumPlannedMinutes, type TimelineBlock } from "../domain/timeline";
+import { isTaskOverdue, resolveTaskContext, selectTodayTasks, sortTodayTasks } from "../domain/tasks";
 
 type TodayProps = {
   viewMode: "grid" | "list";
@@ -21,6 +24,8 @@ type TodayProps = {
   focusSessions: FocusSessionRecord[];
   onToggleHabit: (id: number, dateKey?: string) => void;
   onToggleTask: (id: string) => void;
+  onAddTask: (data: Omit<Task, "id" | "createdAt" | "completed">) => void;
+  onQuickTaskFocusReady?: (focus: (() => void) | null) => void;
   onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
   onNavigateToHabits: () => void;
   onNavigateToGoals: () => void;
@@ -53,6 +58,57 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "var(--type-base)",
     color: "var(--text-secondary)",
     margin: "0 0 16px",
+  },
+  briefing: {
+    fontSize: "var(--type-sm)",
+    color: "var(--text-secondary)",
+    margin: "0 0 16px",
+  },
+  eyebrow: {
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-secondary)",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    margin: "0 0 var(--space-2)",
+  },
+  nextUp: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-3)",
+    padding: "var(--space-3) 0",
+    marginBottom: "var(--space-6)",
+    borderBottom: "1px solid var(--border-color)",
+  },
+  nextUpInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nextUpTitle: {
+    fontSize: "var(--type-base)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-primary)",
+    margin: "0 0 4px",
+    overflowWrap: "anywhere",
+  },
+  nextUpMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    color: "var(--text-secondary)",
+    fontSize: "var(--type-xs)",
+  },
+  nextUpActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  nextUpClear: {
+    fontSize: "var(--type-base)",
+    color: "var(--text-secondary)",
+    margin: 0,
   },
   progressSection: {
     display: "flex",
@@ -303,19 +359,25 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     margin: 0,
   },
-  emptyButton: {
+  emptyActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  textButton: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 8,
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
-    borderRadius: 8,
-    padding: "10px 16px",
-    fontSize: 14,
-    fontWeight: 500,
+    gap: 4,
+    padding: "4px 0",
+    border: "none",
+    background: "transparent",
     color: "var(--accent-teal)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-medium)",
     cursor: "pointer",
-    marginTop: 8,
   },
   focusButton: {
     display: "flex",
@@ -414,6 +476,18 @@ const styles: Record<string, CSSProperties> = {
   scheduleItemInfo: {
     flex: 1,
     minWidth: 0,
+  },
+  scheduleItemButton: {
+    flex: 1,
+    minWidth: 0,
+    display: "block",
+    padding: 0,
+    background: "transparent",
+    border: "none",
+    color: "inherit",
+    font: "inherit",
+    textAlign: "left",
+    cursor: "pointer",
   },
   scheduleItemTitle: {
     fontSize: "var(--type-base)",
@@ -517,11 +591,7 @@ const styles: Record<string, CSSProperties> = {
     paddingTop: 16,
     borderTop: "1px solid var(--border-color)",
   },
-  // High Priority Focus section
-  prioritySection: {
-    marginBottom: 32,
-  },
-  // Goal Progress Snapshot
+  // Goal context section (relevant Goals only; rendered by renderGoalProgressSnapshot)
   goalProgressSection: {
     marginBottom: 32,
   },
@@ -592,6 +662,8 @@ function Today({
   focusSessions,
   onToggleHabit,
   onToggleTask,
+  onAddTask,
+  onQuickTaskFocusReady,
   onStartFocus,
   onNavigateToHabits,
   onNavigateToGoals,
@@ -623,54 +695,34 @@ function Today({
     () => new Set(goals.filter((goal) => goal.status === "active").map((goal) => goal.id)),
     [goals],
   );
-  const activeMilestoneIds = useMemo(
-    () => new Set(milestones
-      .filter((milestone) => !milestone.completed && milestone.goalId !== undefined && activeGoalIds.has(milestone.goalId))
-      .map((milestone) => milestone.id)),
-    [milestones, activeGoalIds],
-  );
   const todayTasks = useMemo(
-    () => tasks.filter((task) => task.dueDate === todayKey || (task.milestoneId && activeMilestoneIds.has(task.milestoneId))),
-    [tasks, todayKey, activeMilestoneIds],
+    () => sortTodayTasks(selectTodayTasks(tasks, { milestones, activeGoalIds, todayKey }), todayKey),
+    [tasks, milestones, activeGoalIds, todayKey],
+  );
+  const [quickTaskTitle, setQuickTaskTitle] = useState("");
+
+  // Chronological daily timeline derived from existing scheduledTime /
+  // durationMinutes fields plus today's logged Focus sessions (day-reset
+  // aware). Rescheduling edits the underlying item; this list rebuilds.
+  const timelineBlocks = useMemo(
+    () => buildDailyTimeline({
+      habits: todayHabits,
+      tasks: todayTasks,
+      goals,
+      milestones,
+      projects,
+      focusSessions,
+      todayKey,
+      dayResetHour,
+      now: today,
+    }),
+    [todayHabits, todayTasks, goals, milestones, projects, focusSessions, todayKey, dayResetHour, today],
   );
 
-  const scheduledItems = useMemo(() => {
-    const items: Array<{ type: 'habit' | 'task'; id: string | number; title: string; time: string; duration?: number; meta?: string }> = [];
-    
-    todayHabits.forEach(habit => {
-      if (habit.scheduledTime) {
-        items.push({
-          type: 'habit',
-          id: habit.id,
-          title: habit.name,
-          time: habit.scheduledTime,
-          duration: habit.durationMinutes,
-          meta: habit.category || habit.priority,
-        });
-      }
-    });
-    
-    todayTasks.forEach(task => {
-      if (task.scheduledTime) {
-        const milestone = milestones.find((item) => item.id === task.milestoneId);
-        const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
-        items.push({
-          type: 'task',
-          id: task.id,
-          title: task.title,
-          time: task.scheduledTime,
-          duration: task.durationMinutes || task.estimatedMinutes,
-          meta: goal?.title || task.priority,
-        });
-      }
-    });
-    
-    return items.sort((a, b) => a.time.localeCompare(b.time));
-  }, [todayHabits, todayTasks, milestones, goals]);
-
-  const totalPlannedMinutes = useMemo(() => {
-    return scheduledItems.reduce((total, item) => total + (item.duration || 0), 0);
-  }, [scheduledItems]);
+  const totalPlannedMinutes = useMemo(
+    () => sumPlannedMinutes(timelineBlocks),
+    [timelineBlocks],
+  );
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -682,6 +734,69 @@ function Today({
   };
 
   const pendingTodayTasks = todayTasks.filter((task) => !task.completed);
+  const completedTodayTasks = todayTasks.filter((task) => task.completed);
+
+  const quickTaskInputRef = useRef<HTMLInputElement>(null);
+  function focusQuickTaskInput() {
+    quickTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    quickTaskInputRef.current?.focus({ preventScroll: true });
+  }
+
+  // Expose the quick-add focus so the ⌘K palette can reuse this exact input
+  // instead of building a second task-creation path.
+  useLayoutEffect(() => {
+    onQuickTaskFocusReady?.(focusQuickTaskInput);
+    return () => onQuickTaskFocusReady?.(null);
+  }, [onQuickTaskFocusReady]);
+
+  function handleQuickTaskSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedTitle = quickTaskTitle.trim();
+    if (!trimmedTitle) return;
+    onAddTask({ title: trimmedTitle, dueDate: todayKey, priority: "medium" });
+    setQuickTaskTitle("");
+  }
+
+  function renderTaskRow(task: Task, completed: boolean) {
+    const { goal, project, milestone } = resolveTaskContext(task, { goals, projects, milestones });
+    const overdue = !completed && isTaskOverdue(task, todayKey);
+    return (
+      <div key={task.id} style={styles.habitCard}>
+        <button
+          type="button"
+          style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
+          onClick={() => onToggleTask(task.id)}
+          aria-label={`${completed ? "Mark incomplete" : "Complete"} ${task.title}`}
+          aria-checked={completed}
+          role="checkbox"
+        >
+          {completed && <Check size={14} color="var(--color-accent-contrast)" />}
+        </button>
+        <div style={styles.habitInfo}>
+          <h3 style={{ ...styles.taskName, ...(completed ? styles.taskNameCompleted : {}) }}>{task.title}</h3>
+          <div style={styles.taskMeta}>
+            <span style={styles.taskPriority}>{task.priority}</span>
+            {task.dueDate && (
+              <time dateTime={task.dueDate} style={overdue ? { color: "var(--priority-high-text)", fontWeight: 600 } : undefined}>
+                {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
+              </time>
+            )}
+            {goal && <span style={styles.goalTag}>{goal.title}</span>}
+            {project && <span style={styles.milestoneTag}>{project.name}</span>}
+            {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
+          </div>
+        </div>
+        <button
+          className="today-focus-button"
+          style={styles.focusButton}
+          onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+          aria-label={`Start focus on ${task.title}`}
+        >
+          <Play size={14} />
+        </button>
+      </div>
+    );
+  }
 
   const completedHabitCount = todayHabits.filter((habit) =>
     habit.completedDates.includes(todayKey),
@@ -691,30 +806,29 @@ function Today({
   const totalCount = todayHabits.length + todayTasks.length;
   const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
+  // Day-reset aware: matches the Focus timer's own "today" definition.
   const todayFocusTime = useMemo(() => {
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(today);
-    todayEnd.setHours(23, 59, 59, 999);
-    
-    return focusSessions
-      .filter((session) => session.timestamp >= todayStart.getTime() && session.timestamp <= todayEnd.getTime())
+    return getFocusSessionsForLogicalToday(focusSessions, dayResetHour, today)
       .reduce((total, session) => total + session.durationMinutes, 0);
-  }, [focusSessions, today]);
+  }, [focusSessions, dayResetHour, today]);
 
   const bestStreak = useMemo(() => {
     return Math.max(0, ...todayHabits.map((habit) => calculateStreak(habit, streakFreeze, dayResetHour)));
   }, [todayHabits, streakFreeze, dayResetHour]);
 
-  // High Priority Focus items
-  const highPriorityTasks = useMemo(() => {
-    return todayTasks.filter((task) => !task.completed && task.priority === "high");
-  }, [todayTasks]);
-
-  const highPriorityHabits = useMemo(() => {
-    if (!showMandatoryHabitsInImportantItems) return [];
-    return todayHabits.filter((habit) => !habit.completedDates.includes(todayKey) && habit.priority === "Mandatory");
-  }, [todayHabits, todayKey, showMandatoryHabitsInImportantItems]);
+  // The single next action: most urgent pending Task (already sorted:
+  // overdue → due → priority), else the next incomplete Habit. Mandatory
+  // Habits are preferred when the user opts into them as important items.
+  const nextUpTask = pendingTodayTasks[0] ?? null;
+  const nextUpHabit = useMemo(() => {
+    if (nextUpTask) return null;
+    const incomplete = todayHabits.filter((habit) => !habit.completedDates.includes(todayKey));
+    if (incomplete.length === 0) return null;
+    if (showMandatoryHabitsInImportantItems) {
+      return incomplete.find((habit) => habit.priority === "Mandatory") ?? incomplete[0];
+    }
+    return incomplete[0];
+  }, [nextUpTask, todayHabits, todayKey, showMandatoryHabitsInImportantItems]);
 
   // Goal Progress Snapshot
   const activeGoals = useMemo(() => {
@@ -731,94 +845,143 @@ function Today({
     });
   }, [activeGoals, milestones, tasks, habits, streakFreeze, dayResetHour, projects]);
 
-  function renderHighPrioritySection() {
-    if (highPriorityTasks.length === 0 && highPriorityHabits.length === 0) return null;
+  function renderNextUp() {
+    if (!nextUpTask && !nextUpHabit) {
+      if (totalCount === 0) return null;
+      return (
+        <div style={styles.nextUp}>
+          <div style={styles.nextUpInfo}>
+            <p style={styles.eyebrow}>Up next</p>
+            <p style={styles.nextUpClear}>All clear for today. Nicely done.</p>
+          </div>
+          <div style={styles.nextUpActions}>
+            <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Play size={14} />
+                <span>Focus anyway</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      );
+    }
 
+    if (nextUpTask) {
+      const task = nextUpTask;
+      const { goal, project, milestone } = resolveTaskContext(task, { goals, projects, milestones });
+      const overdue = isTaskOverdue(task, todayKey);
+      const context = [goal?.title, project?.name, milestone?.title].filter(
+        (part): part is string => part !== undefined && part !== "",
+      );
+      return (
+        <div style={styles.nextUp}>
+          <button
+            type="button"
+            style={styles.checkbox}
+            onClick={() => onToggleTask(task.id)}
+            aria-label={`Complete ${task.title}`}
+            aria-checked={false}
+            role="checkbox"
+          />
+          <div style={styles.nextUpInfo}>
+            <p style={styles.eyebrow}>Up next · Task</p>
+            <h2 style={styles.nextUpTitle}>{task.title}</h2>
+            <div style={styles.nextUpMeta}>
+              <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{task.priority}</span>
+              {task.dueDate && (
+                <time dateTime={task.dueDate}>
+                  {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
+                </time>
+              )}
+              {context.length > 0 && <span>{context.join(" › ")}</span>}
+            </div>
+          </div>
+          <div style={styles.nextUpActions}>
+            <button
+              type="button"
+              style={styles.submitButton}
+              onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+              aria-label={`Start focus on ${task.title}`}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Play size={14} />
+                <span>Focus</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const habit = nextUpHabit;
+    if (!habit) return null;
+    const streak = calculateStreak(habit, streakFreeze, dayResetHour);
     return (
-      <div style={styles.prioritySection}>
-        <h2 style={styles.sectionTitle}>High Priority Focus</h2>
-        <div style={styles.taskList}>
-          {highPriorityHabits.map((habit) => {
-            const streak = calculateStreak(habit, streakFreeze, dayResetHour);
-            return (
-              <div key={`priority-habit-${habit.id}`} style={styles.habitCard}>
-                <button
-                  type="button"
-                  style={styles.checkbox}
-                  onClick={() => onToggleHabit(habit.id, todayKey)}
-                  aria-label={`Complete mandatory habit ${habit.name}`}
-                  aria-checked={false}
-                  role="checkbox"
-                />
-                <div style={styles.habitInfo}>
-                  <h3 style={styles.taskName}>{habit.name}</h3>
-                  <HabitMetadata habit={habit} streak={streak} />
-                </div>
-                <button
-                  className="today-focus-button"
-                  style={styles.focusButton}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onStartFocus({ habitId: habit.id, title: habit.name });
-                  }}
-                  aria-label={`Start focus on ${habit.name}`}
-                >
-                  <Play size={14} />
-                </button>
-              </div>
-            );
-          })}
-          {highPriorityTasks.map((task) => {
-            const milestone = milestones.find((item) => item.id === task.milestoneId);
-            const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
-            return (
-              <div key={`priority-task-${task.id}`} style={styles.habitCard}>
-                <button
-                  type="button"
-                  style={styles.checkbox}
-                  onClick={() => onToggleTask(task.id)}
-                  aria-label={`Complete ${task.title}`}
-                  aria-checked={false}
-                  role="checkbox"
-                />
-                <div style={styles.habitInfo}>
-                  <h3 style={styles.taskName}>{task.title}</h3>
-                  <div style={styles.taskMeta}>
-                    <span style={styles.taskPriority}>{task.priority}</span>
-                    {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
-                    {goal && <span style={styles.goalTag}>{goal.title}</span>}
-                    {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
-                  </div>
-                </div>
-                <button
-                  className="today-focus-button"
-                  style={styles.focusButton}
-                  onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-                  aria-label={`Start focus on ${task.title}`}
-                >
-                  <Play size={14} />
-                </button>
-              </div>
-            );
-          })}
+      <div style={styles.nextUp}>
+        <button
+          type="button"
+          style={styles.checkbox}
+          onClick={() => onToggleHabit(habit.id, todayKey)}
+          aria-label={`Complete habit ${habit.name}`}
+          aria-checked={false}
+          role="checkbox"
+        />
+        <div style={styles.nextUpInfo}>
+          <p style={styles.eyebrow}>Up next · Habit</p>
+          <h2 style={styles.nextUpTitle}>{habit.name}</h2>
+          <div style={styles.nextUpMeta}>
+            <span>{habit.priority}</span>
+            {habit.category && <span>{habit.category}</span>}
+            <StreakBadge streak={streak} />
+          </div>
+        </div>
+        <div style={styles.nextUpActions}>
+          <button
+            type="button"
+            style={styles.submitButton}
+            onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
+            aria-label={`Start focus on ${habit.name}`}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Play size={14} />
+              <span>Focus</span>
+            </span>
+          </button>
         </div>
       </div>
     );
   }
 
   function renderGoalProgressSnapshot() {
-    if (goalProgressData.length === 0) return null;
+    // Context, not a second Goals page: only Goals connected to today's work.
+    const relevantGoalIds = new Set<string>();
+    for (const task of todayTasks) {
+      const { goal } = resolveTaskContext(task, { goals, projects, milestones });
+      if (goal) {
+        relevantGoalIds.add(goal.id);
+      } else if (task.goalId) {
+        relevantGoalIds.add(task.goalId);
+      } else if (task.milestoneId) {
+        const milestoneGoalId = milestones.find((item) => item.id === task.milestoneId)?.goalId;
+        if (milestoneGoalId) relevantGoalIds.add(milestoneGoalId);
+      }
+    }
+    for (const habit of todayHabits) {
+      if (habit.goalId) relevantGoalIds.add(habit.goalId);
+    }
+    const relevant = goalProgressData.filter(({ goal }) => relevantGoalIds.has(goal.id));
+    if (relevant.length === 0) return null;
 
     return (
       <div style={styles.goalProgressSection}>
         <h2 style={styles.sectionTitle}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Target size={18} />
-            <span>Goal Progress Snapshot</span>
+            <span>Goals in focus</span>
           </span>
         </h2>
         <div style={styles.goalProgressList}>
-          {goalProgressData.map(({ goal, progress }) => (
+          {relevant.map(({ goal, progress }) => (
             <div key={goal.id} style={styles.goalProgressItem}>
               <div style={styles.goalProgressHeader}>
                 <span style={styles.goalProgressTitle}>{goal.title}</span>
@@ -830,6 +993,90 @@ function Today({
             </div>
           ))}
         </div>
+        <button type="button" style={styles.textButton} onClick={onNavigateToGoals}>
+          Open Goals →
+        </button>
+      </div>
+    );
+  }
+
+  function renderTimelineBlock(block: TimelineBlock) {
+    if (block.kind === "session") {
+      return (
+        <div key={block.key} style={styles.scheduleItem}>
+          <div style={styles.scheduleTimeSlot}>{block.time}</div>
+          <button
+            type="button"
+            style={styles.scheduleItemButton}
+            onClick={() => onStartFocus({
+              taskId: block.taskId,
+              habitId: block.habitId,
+              goalId: block.goalId,
+              title: block.title,
+            })}
+            aria-label={`Start focus on ${block.title}`}
+          >
+            <h3 style={styles.scheduleItemTitle}>{block.title}</h3>
+            <div style={styles.scheduleItemMeta}>
+              <span>Focus session</span>
+            </div>
+          </button>
+          <div style={styles.scheduleDuration}>
+            <Clock size={12} />
+            {formatDuration(block.durationMinutes)}
+          </div>
+        </div>
+      );
+    }
+
+    const completed = block.completed;
+    const kindLabel = block.kind === "task" ? "Task" : "Habit";
+    return (
+      <div key={block.key} style={styles.scheduleItem}>
+        <div style={styles.scheduleTimeSlot}>{block.time}</div>
+        <button
+          type="button"
+          style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
+          onClick={() => block.kind === "task"
+            ? onToggleTask(block.taskId)
+            : onToggleHabit(block.habitId, todayKey)}
+          aria-label={`${completed ? "Mark incomplete" : "Complete"} ${block.title}`}
+          aria-checked={completed}
+          role="checkbox"
+        >
+          {completed && <Check size={14} color="var(--color-accent-contrast)" />}
+        </button>
+        <button
+          type="button"
+          style={styles.scheduleItemButton}
+          onClick={() => onStartFocus(block.kind === "task"
+            ? { taskId: block.taskId, title: block.title }
+            : { habitId: block.habitId, title: block.title })}
+          aria-label={`Start focus on ${block.title}`}
+        >
+          <h3 style={{ ...styles.scheduleItemTitle, ...(completed ? styles.taskNameCompleted : {}) }}>
+            {block.title}
+          </h3>
+          <div style={styles.scheduleItemMeta}>
+            <span>{kindLabel}</span>
+            {block.meta && <span>· {block.meta}</span>}
+            {block.kind === "task" && block.overdue && <span>· Overdue</span>}
+          </div>
+        </button>
+        {block.durationMinutes !== undefined && (
+          <div style={styles.scheduleDuration}>
+            <Clock size={12} />
+            {formatDuration(block.durationMinutes)}
+          </div>
+        )}
+        <button
+          type="button"
+          style={styles.scheduleButton}
+          onClick={() => openScheduleModal(block.kind, block.kind === "task" ? block.taskId : block.habitId)}
+          aria-label={`Reschedule ${kindLabel.toLowerCase()}`}
+        >
+          <MoreVertical size={14} />
+        </button>
       </div>
     );
   }
@@ -889,31 +1136,67 @@ function Today({
           <h1 style={styles.title}>Today</h1>
           <p style={styles.date}>{formatFullDate(today)}</p>
         </div>
-        
+
         <div style={styles.emptyState}>
-          <p style={styles.emptyTitle}>No habits scheduled for today</p>
+          <p style={styles.emptyTitle}>A quiet day — plan your first win</p>
           <p style={styles.emptyText}>
-            {habits.length === 0
-              ? "Create your first habit to get started."
-              : "Enjoy your free day or check back tomorrow."}
+            Add a task for today, create a habit, or start a focus session.
           </p>
-          {habits.length === 0 && (
-            <button style={styles.emptyButton} onClick={onNavigateToHabits}>
-              <Plus size={16} />
-              Create Habit
+          <form
+            style={{ display: "flex", gap: 8, width: "100%", maxWidth: 420 }}
+            onSubmit={handleQuickTaskSubmit}
+          >
+            <input
+              style={{ ...styles.scheduleFormInput, flex: 1, minWidth: 0 }}
+              value={quickTaskTitle}
+              onChange={(event) => setQuickTaskTitle(event.target.value)}
+              placeholder="Add a task for today"
+              aria-label="Add a task for today"
+              maxLength={120}
+            />
+            <button type="submit" style={styles.submitButton} disabled={!quickTaskTitle.trim()}>
+              Add
             </button>
-          )}
+          </form>
+          <div style={styles.emptyActions}>
+            <button type="button" style={styles.secondaryButton} onClick={onNavigateToHabits}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Plus size={14} />
+                <span>New habit</span>
+              </span>
+            </button>
+            <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Play size={14} />
+                <span>Start focus</span>
+              </span>
+            </button>
+            <button type="button" style={styles.textButton} onClick={onNavigateToGoals}>
+              Create a goal →
+            </button>
+          </div>
         </div>
       </div>
     );
   }
+
+  const remainingCount = totalCount - completedCount;
+  const overdueCount = pendingTodayTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
+  const briefingParts: string[] = [];
+  if (overdueCount > 0) briefingParts.push(`${overdueCount} overdue`);
+  briefingParts.push(`${pendingTodayTasks.length} tasks open`);
+  briefingParts.push(`${todayHabits.length - completedHabitCount} habits left`);
+  if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
 
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <h1 style={styles.title}>Today</h1>
         <p style={styles.date}>{formatFullDate(today)}</p>
-        
+        {totalCount > 0 && (
+          <p style={styles.briefing}>{briefingParts.join(" · ")}</p>
+        )}
+
         <div style={styles.progressSection}>
           <span style={styles.progressText}>
             {completedCount} / {totalCount} Completed · {progressPercent}%
@@ -929,59 +1212,64 @@ function Today({
         </div>
       </div>
 
-      {renderHighPrioritySection()}
+      {renderNextUp()}
 
-      {scheduledItems.length > 0 && (
+      {timelineBlocks.length > 0 && (
         <div style={styles.scheduleSection}>
           <div style={styles.scheduleHeader}>
-            <h2 style={styles.sectionTitle}>UP NEXT / SCHEDULED TODAY</h2>
+            <h2 style={styles.sectionTitle}>Scheduled today</h2>
             <span style={styles.scheduleTimeSummary}>
               {formatDuration(totalPlannedMinutes)} planned
             </span>
           </div>
           <div style={styles.scheduleTimeline}>
-            {scheduledItems.map((item) => (
-              <div key={`${item.type}-${item.id}`} style={styles.scheduleItem}>
-                <div style={styles.scheduleTimeSlot}>{item.time}</div>
-                <div style={styles.scheduleItemInfo}>
-                  <h3 style={styles.scheduleItemTitle}>{item.title}</h3>
-                  <div style={styles.scheduleItemMeta}>
-                    <span style={{ textTransform: 'capitalize' }}>{item.type}</span>
-                    {item.meta && <span>· {item.meta}</span>}
-                  </div>
-                </div>
-                {item.duration && (
-                  <div style={styles.scheduleDuration}>
-                    <Clock size={12} />
-                    {formatDuration(item.duration)}
-                  </div>
-                )}
-                <button
-                  style={styles.scheduleButton}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartFocus(item.type === 'task'
-                      ? { taskId: item.id as string, title: item.title }
-                      : { habitId: item.id as number, title: item.title });
-                  }}
-                  aria-label={`Start focus on ${item.type}`}
-                >
-                  <Play size={14} />
-                </button>
-                <button
-                  style={styles.scheduleButton}
-                  onClick={() => openScheduleModal(item.type, item.id)}
-                  aria-label={`Schedule ${item.type}`}
-                >
-                  <MoreVertical size={14} />
-                </button>
-              </div>
-            ))}
+            {timelineBlocks.map((block) => renderTimelineBlock(block))}
           </div>
         </div>
       )}
 
       <div style={styles.section}>
+        <p style={styles.eyebrow}>Tasks · {pendingTodayTasks.length} open</p>
+        <h2 style={styles.sectionTitle}>Up Next &amp; Tasks</h2>
+        <form
+          style={{ display: "flex", gap: 8, marginBottom: "var(--space-3)" }}
+          onSubmit={handleQuickTaskSubmit}
+        >
+          <input
+            ref={quickTaskInputRef}
+            style={{ ...styles.scheduleFormInput, flex: 1, minWidth: 0 }}
+            value={quickTaskTitle}
+            onChange={(event) => setQuickTaskTitle(event.target.value)}
+            placeholder="Add a task for today"
+            aria-label="Add a task for today"
+            maxLength={120}
+          />
+          <button type="submit" style={styles.submitButton} disabled={!quickTaskTitle.trim()}>
+            Add
+          </button>
+        </form>
+        <div style={styles.taskList}>
+          {pendingTodayTasks.length === 0 && completedTodayTasks.length === 0 && (
+            <p style={styles.emptyText}>No tasks for today.</p>
+          )}
+          {pendingTodayTasks.map((task) => renderTaskRow(task, false))}
+        </div>
+        {completedTodayTasks.length > 0 && (
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <h3 style={{ ...styles.sectionTitle, fontSize: "var(--type-sm)" }}>
+              Completed ({completedTodayTasks.length})
+            </h3>
+            <div style={styles.taskList}>
+              {completedTodayTasks.map((task) => renderTaskRow(task, true))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={styles.section}>
+        <p style={styles.eyebrow}>
+          Habits · {todayHabits.length - completedHabitCount} left
+        </p>
         <h2 style={styles.sectionTitle}>Today's Habits</h2>
         <div style={viewMode === "grid" ? styles.habitGridList : styles.habitList}>
           {todayHabits.length === 0 ? (
@@ -1036,48 +1324,6 @@ function Today({
         </div>
       </div>
 
-      <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>Up Next &amp; Tasks</h2>
-        <div style={styles.taskList}>
-          {pendingTodayTasks.length === 0 && (
-            <p style={styles.emptyText}>No pending tasks for today.</p>
-          )}
-          {pendingTodayTasks.map((task) => {
-            const milestone = milestones.find((item) => item.id === task.milestoneId);
-            const goal = goals.find((item) => item.id === (task.goalId ?? milestone?.goalId));
-            return (
-              <div key={task.id} style={styles.habitCard}>
-                <button
-                  type="button"
-                  style={styles.checkbox}
-                  onClick={() => onToggleTask(task.id)}
-                  aria-label={`Complete ${task.title}`}
-                  aria-checked={false}
-                  role="checkbox"
-                />
-                <div style={styles.habitInfo}>
-                  <h3 style={styles.taskName}>{task.title}</h3>
-                  <div style={styles.taskMeta}>
-                    <span style={styles.taskPriority}>{task.priority}</span>
-                    {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
-                    {goal && <span style={styles.goalTag}>{goal.title}</span>}
-                    {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
-                  </div>
-                </div>
-                <button
-                  className="today-focus-button"
-                  style={styles.focusButton}
-                  onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-                  aria-label={`Start focus on ${task.title}`}
-                >
-                  <Play size={14} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <section style={styles.statsSection} aria-labelledby="today-summary-title">
         <h2 id="today-summary-title" style={styles.sectionTitle}>Daily Summary</h2>
         <div style={styles.statsGrid}>
@@ -1095,7 +1341,7 @@ function Today({
           </div>
           <div style={styles.statCard}>
             <span style={styles.statLabel}>Remaining Items</span>
-            <span className="ui-numeric" style={styles.statValue}>{totalCount - completedCount}</span>
+            <span className="ui-numeric" style={styles.statValue}>{remainingCount}</span>
           </div>
         </div>
       </section>
@@ -1103,13 +1349,17 @@ function Today({
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Quick Actions</h2>
         <div className="today-quick-action-list" style={styles.quickActionList}>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHabits}>
-            <ListChecks size={16} />
-            Configure Habits
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={focusQuickTaskInput}>
+            <Plus size={16} />
+            Add Task
           </button>
           <button className="today-quick-action" style={styles.quickActionButton} onClick={() => onStartFocus()}>
             <Play size={16} />
             Start Focus Session
+          </button>
+          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHabits}>
+            <ListChecks size={16} />
+            Configure Habits
           </button>
           <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToGoals}>
             <Target size={16} />
