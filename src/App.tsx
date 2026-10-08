@@ -167,6 +167,7 @@ type ShortcutContext = {
   saveActiveEdit: () => void;
   toggleTimer: (() => boolean) | null;
   closeTransient: () => boolean;
+  toggleSidebar: () => void;
 };
 
 const FREQUENCY_LABELS: Record<FrequencyType, string> = {
@@ -1150,6 +1151,10 @@ function App() {
     title?: string;
     durationMinutes?: number;
   } | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const stored = loadStorageData<boolean>("synchron-sidebar-collapsed", false);
+    return stored === true;
+  });
 
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.SETTINGS, appSettings);
@@ -1235,6 +1240,10 @@ function App() {
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.CUSTOM_CATEGORIES, customCategories);
   }, [customCategories]);
+
+  useEffect(() => {
+    saveStorageData("synchron-sidebar-collapsed", sidebarCollapsed);
+  }, [sidebarCollapsed]);
 
   // Shared Milestone/Task handlers — used by both the Goals and Projects views
   // so there is exactly one wiring of the domain logic.
@@ -1416,6 +1425,10 @@ function App() {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [habitsPopover]);
 
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((current) => !current);
+  }, []);
+
   useLayoutEffect(() => {
     shortcutContextRef.current = {
       view,
@@ -1474,6 +1487,7 @@ function App() {
         }
         return true;
       },
+      toggleSidebar,
     };
   });
 
@@ -1509,6 +1523,11 @@ function App() {
         if (event.key === "Enter" && context.editingId !== null) {
           event.preventDefault();
           context.saveActiveEdit();
+          return;
+        }
+        if (key === "b") {
+          event.preventDefault();
+          context.toggleSidebar();
           return;
         }
 
@@ -2408,12 +2427,25 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-body">
-        <nav className="sidebar" aria-label="Main Navigation">
+        <nav className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`} aria-label="Main Navigation">
+          <button
+            className="sidebar-brand"
+            onClick={toggleSidebar}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? (
+              <img src="/favicon.svg" alt="Synchron" className="sidebar-brand-logo" />
+            ) : (
+              <span className="sidebar-brand-text">Synchron</span>
+            )}
+          </button>
           <div className="sidebar-primary" role="group" aria-label="Workspace">
             <button
               className={`sidebar-item ${view === "Today" ? "active" : ""}`}
               onClick={() => navigateToView("Today")}
               aria-current={view === "Today" ? "page" : undefined}
+              title="Today"
             >
               <CalendarDays size={18} />
               <span>Today</span>
@@ -2423,6 +2455,7 @@ function App() {
             className={`sidebar-item ${view === "Habits" ? "active" : ""}`}
             onClick={() => navigateToView("Habits")}
             aria-current={view === "Habits" ? "page" : undefined}
+            title="My Habits"
           >
             <ListChecks size={18} />
             <span>My Habits</span>
@@ -2432,6 +2465,7 @@ function App() {
             className={`sidebar-item ${view === "Tasks" ? "active" : ""}`}
             onClick={() => navigateToView("Tasks")}
             aria-current={view === "Tasks" ? "page" : undefined}
+            title="Tasks"
           >
             <ListTodo size={18} />
             <span>Tasks</span>
@@ -2441,6 +2475,7 @@ function App() {
               className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
               onClick={() => navigateToView("Timer")}
               aria-current={view === "Timer" ? "page" : undefined}
+              title="Timer"
             >
               <TimerIcon size={18} />
               <span>Timer</span>
@@ -2450,6 +2485,7 @@ function App() {
               className={`sidebar-item ${view === "goals" ? "active" : ""}`}
               onClick={() => navigateToView("goals")}
               aria-current={view === "goals" ? "page" : undefined}
+              title="Goals"
             >
               <Target size={18} />
               <span>Goals</span>
@@ -2459,6 +2495,7 @@ function App() {
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
             onClick={() => navigateToView("History")}
             aria-current={view === "History" ? "page" : undefined}
+            title="History"
           >
             <HistoryIcon size={18} />
             <span>History</span>
@@ -2468,6 +2505,7 @@ function App() {
             className={`sidebar-item ${view === "Analytics" ? "active" : ""}`}
             onClick={() => navigateToView("Analytics")}
             aria-current={view === "Analytics" ? "page" : undefined}
+            title="Analytics"
           >
             <BarChart3 size={18} />
             <span>Analytics</span>
@@ -2480,6 +2518,7 @@ function App() {
               className={`sidebar-item ${view === "Settings" ? "active" : ""}`}
               onClick={() => navigateToView("Settings")}
               aria-current={view === "Settings" ? "page" : undefined}
+              title="Settings"
             >
               <Settings size={18} />
               <span>Settings</span>

@@ -640,16 +640,60 @@
     border-right: 1px solid var(--border-color);
     padding: 28px 16px;
     gap: 8px;
-    background: var(--bg-surface);
+    background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: width 0.25s ease, min-width 0.25s ease;
   }
 
-  .sidebar::before {
-    content: "Synchron";
+  .sidebar.collapsed {
+    width: 64px;
+    min-width: 64px;
+    padding: 28px 12px;
+  }
+
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    background: transparent;
+    border: none;
     color: var(--text-primary);
     font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.01em;
     padding: 0 14px 24px;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    width: auto;
+  }
+
+  .sidebar-brand:hover {
+    opacity: 0.7;
+  }
+
+  .sidebar-brand:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+
+  .sidebar-brand-text {
+    flex: 1;
+  }
+
+  .sidebar-brand-logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .sidebar.collapsed .sidebar-brand {
+    justify-content: center;
+    padding: 0 12px 24px;
+  }
+
+  .sidebar.collapsed .sidebar-brand-text {
+    display: none;
   }
 
   .sidebar-item {
@@ -670,11 +714,16 @@
 
   .sidebar-primary {
     width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   .sidebar-utility {
     padding-top: 8px;
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
   }
 
   .sidebar-item > span:not(.sidebar-shortcut) {
@@ -688,6 +737,20 @@
 
   .sidebar-item:hover .sidebar-shortcut {
     opacity: 1;
+  }
+
+  .sidebar.collapsed .sidebar-item {
+    justify-content: center;
+    padding: 12px;
+    gap: 0;
+  }
+
+  .sidebar.collapsed .sidebar-item > span:not(.sidebar-shortcut) {
+    display: none;
+  }
+
+  .sidebar.collapsed .sidebar-shortcut {
+    display: none;
   }
 
   .sidebar-spacer {

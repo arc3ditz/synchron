@@ -104,6 +104,7 @@ const shortcutGroups: ShortcutGroup[] = [
       { keys: "⌘6", description: "Go to History" },
       { keys: "⌘7", description: "Go to Analytics" },
       { keys: "⌘,", description: "Go to Settings" },
+      { keys: "⌘B", description: "Toggle Sidebar" },
       { keys: "⌘K", description: "Open Command Palette" },
     ],
   },
