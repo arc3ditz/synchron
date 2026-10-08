@@ -6,7 +6,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 
-import { CARD_SURFACE } from "../theme";
+import { FORM_CONTROL } from "../theme";
 import type { Mode, Session, FocusTimerHabit, Goal, Milestone, Project, Task, Habit } from "../types";
 import { registerFocusTimerRunningState } from "../domain/notificationLogic";
 import { filterTasksForFocusSelection } from "../domain/tasks";
@@ -104,7 +104,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   modeButtonActive: {
-    background: "var(--color-surface)",
+    background: "var(--accent-wash-soft)",
     color: "var(--color-accent)",
   },
   ringWrapper: {
@@ -178,17 +178,11 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
   },
   durationInputField: {
+    ...FORM_CONTROL,
     flex: "0 0 96px",
     width: 96,
     minWidth: 96,
-    background: "var(--card-surface-bg)",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "var(--text-primary)",
-    fontSize: 14,
     fontVariantNumeric: "tabular-nums",
-    outline: "none",
   },
   durationInputFieldDisabled: {
     opacity: 0.5,
@@ -200,9 +194,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
   },
   presetButtonActive: {
-    background: "rgba(var(--accent-rgb), 0.1)",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
-    color: "var(--accent-teal)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid transparent",
+    color: "var(--color-accent)",
   },
   controlsRow: {
     display: "flex",
@@ -213,7 +207,7 @@ const styles: Record<string, CSSProperties> = {
   primaryButton: {
     flex: 1,
     background: "var(--color-accent)",
-    border: "1px solid var(--color-accent)",
+    border: "1px solid transparent",
     borderRadius: "var(--radius-lg)",
     padding: "var(--space-3) var(--space-4)",
     fontSize: "var(--type-base)",
@@ -228,8 +222,8 @@ const styles: Record<string, CSSProperties> = {
   },
   secondaryButton: {
     flex: 1,
-    background: "var(--bg-surface)",
-    border: "1px solid var(--card-surface-border)",
+    background: "transparent",
+    border: "1px solid var(--border-color)",
     borderRadius: "var(--radius-lg)",
     padding: "var(--space-3) var(--space-4)",
     fontSize: "var(--type-base)",
@@ -250,24 +244,18 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
   },
   habitSelect: {
+    ...FORM_CONTROL,
     width: "100%",
-    background: "var(--card-surface-bg)",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "var(--text-body)",
-    fontSize: 14,
-    outline: "none",
     cursor: "pointer",
   },
   controlPanel: {
-    ...CARD_SURFACE,
-    background: "var(--color-surface)",
-    borderRadius: "var(--radius-lg)",
+    background: "transparent",
+    border: "none",
+    borderRadius: 0,
     display: "flex",
     flexDirection: "column",
     gap: "var(--space-6)",
-    padding: "var(--space-4)",
+    padding: "var(--space-4) 0",
     width: "100%",
   },
   panelSection: {
@@ -294,7 +282,7 @@ const styles: Record<string, CSSProperties> = {
   },
   presetButton: {
     background: "transparent",
-    border: "1px solid var(--card-surface-border)",
+    border: "1px solid var(--border-color)",
     borderRadius: "var(--radius-md)",
     padding: "8px 10px",
     color: "var(--text-secondary)",
@@ -355,10 +343,10 @@ const styles: Record<string, CSSProperties> = {
   },
   completeTaskButton: {
     background: "transparent",
-    border: "1px solid rgba(var(--accent-rgb), 0.42)",
+    border: "1px solid transparent",
     borderRadius: "var(--radius-sm)",
     padding: "4px 10px",
-    color: "var(--accent-teal)",
+    color: "var(--color-accent)",
     fontSize: 13,
     fontWeight: "var(--font-medium)",
     cursor: "pointer",

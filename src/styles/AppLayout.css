@@ -1,6 +1,6 @@
 .app-shell {
   min-height: 100vh;
-  background: radial-gradient(circle at 80% -20%, rgba(var(--accent-rgb), 0.08), transparent 34%), var(--bg-primary);
+  background: var(--bg-primary);
   color: var(--text-primary);
 }
 
@@ -26,7 +26,6 @@
   background: var(--bg-nav);
   border-top: 1px solid var(--border-color);
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-  backdrop-filter: blur(18px);
 }
 
 .sidebar-primary,
@@ -74,26 +73,15 @@
 
 .sidebar-item:hover {
   color: var(--text-primary);
-  border-color: var(--border-strong);
-  background: var(--bg-surface);
+  border-color: transparent;
+  background: var(--bg-raised);
 }
 
 .sidebar-item.active {
-  color: var(--accent-teal);
-  background: var(--accent-wash);
-  border-color: var(--accent-border);
+  color: var(--color-accent);
+  background: var(--accent-wash-soft);
+  border-color: var(--accent-border-soft);
   font-weight: 600;
-}
-
-.sidebar-item.active::before {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 0;
-  width: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  content: "";
 }
 
 .sidebar-item:focus-visible {
@@ -210,19 +198,21 @@
   }
 }
 
-/* ---------- Shared interactive states ---------- */
+/* ---------- Shared interactive states ----------
+   Quiet by default; hover is a subtle background shift, active is the
+   Freeze-style accent wash. No glow, no lift, no accent borders on hover. */
 
 .main-content input:not(.ui-input):hover,
 .main-content select:not(.ui-select):hover {
-  border-color: rgba(var(--accent-rgb), 0.48) !important;
+  border-color: var(--border-strong) !important;
 }
 
 .main-content button:not(.ui-button):not(.settings-segment-button):hover {
-  border-color: rgba(var(--accent-rgb), 0.52) !important;
+  border-color: inherit !important;
 }
 
 .main-content button:not(.ui-button):not(.settings-segment-button):active {
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 .settings-segment-button {
@@ -242,22 +232,22 @@
 }
 
 .settings-segment-button:hover:not(:disabled) {
-  border-color: var(--button-hover-border);
-  background: var(--button-hover-bg);
+  border-color: transparent;
+  background: var(--bg-raised);
   color: var(--text-primary);
   box-shadow: none;
 }
 
 .settings-segment-button[aria-pressed="true"] {
-  border-color: var(--accent-border-soft);
-  background: var(--accent-wash);
+  border-color: transparent;
+  background: var(--accent-wash-soft);
   color: var(--color-accent);
   font-weight: var(--font-semibold);
 }
 
 .settings-segment-button[aria-pressed="true"]:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  background: var(--accent-wash);
+  border-color: transparent;
+  background: var(--accent-wash-soft);
   color: var(--color-accent);
 }
 
@@ -290,8 +280,8 @@
 }
 
 .main-content button.milestone-checkbox:hover:not([aria-pressed="true"]) {
-  border-color: var(--accent-teal) !important;
-  background: transparent;
+  border-color: var(--border-strong) !important;
+  background: var(--bg-raised);
   box-shadow: none !important;
   transform: none;
 }
@@ -346,16 +336,15 @@
   place-items: center;
   padding: 20px;
   background: var(--overlay-dim);
-  backdrop-filter: blur(8px);
 }
 
 .delete-modal {
   width: min(100%, 420px);
   padding: 24px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: 0 24px 70px var(--shadow-strong);
+  box-shadow: var(--shadow-popover);
 }
 
 .delete-modal h2 {
@@ -443,7 +432,7 @@
 
 .category-tab {
   background: transparent;
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
@@ -455,12 +444,13 @@
 
 .category-tab:hover {
   color: var(--text-primary);
+  background: var(--bg-raised);
 }
 
 .category-tab.active {
-  color: var(--accent-teal);
-  background: rgba(var(--accent-rgb), 0.1);
-  border-color: rgba(var(--accent-rgb), 0.42);
+  color: var(--color-accent);
+  background: var(--accent-wash-soft);
+  border-color: transparent;
 }
 
 /* ---------- Habit table ---------- */
@@ -506,7 +496,7 @@
 
 .habit-row:hover {
   background: var(--bg-raised) !important;
-  border-color: var(--accent-border-soft) !important;
+  border-color: inherit !important;
   transform: none;
   box-shadow: none;
 }
@@ -529,7 +519,7 @@
 }
 
 .habit-grid-card:hover {
-  border-color: var(--border-strong);
+  border-color: var(--border-color);
   transform: none;
   box-shadow: none;
 }
@@ -585,7 +575,7 @@
 
 .habit-icon-group button:hover,
 .today-focus-button:hover {
-  background: var(--button-hover-bg) !important;
+  background: var(--bg-raised) !important;
   color: var(--text-primary) !important;
   border-radius: 8px;
 }
@@ -613,15 +603,14 @@
 /* ---------- Date navigator ---------- */
 
 .date-navigator button:hover {
-  border-color: var(--accent-teal) !important;
-  color: var(--accent-teal) !important;
-  transform: translateY(-1px);
+  border-color: var(--border-strong) !important;
+  color: var(--text-primary) !important;
+  transform: none;
 }
 
 .date-navigator button:focus-visible {
-  outline: 2px solid var(--accent-teal);
+  outline: var(--focus-outline);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.1);
 }
 
 /* ---------- Desktop: sticky full-height sidebar ---------- */
@@ -656,7 +645,7 @@
 
   .sidebar::before {
     content: "Synchron";
-    color: var(--accent-teal);
+    color: var(--text-primary);
     font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.01em;
@@ -830,21 +819,20 @@
 }
 
 .main-content button.today-quick-action:hover:not(:disabled) {
-  background: var(--accent-wash) !important;
-  border-color: var(--accent-border) !important;
+  background: var(--bg-raised) !important;
+  border-color: var(--border-color) !important;
   color: var(--text-primary) !important;
-  box-shadow: 0 3px 12px var(--shadow-soft) !important;
-  transform: translateY(-1px);
+  box-shadow: none !important;
+  transform: none;
 }
 
 .main-content button.today-quick-action:hover:not(:disabled) svg {
-  color: var(--color-accent);
+  color: var(--text-secondary);
 }
 
 .main-content button.today-quick-action:focus-visible {
   outline: var(--focus-outline);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px var(--color-focus-ring-wash);
 }
 
 @media (max-width: 640px) {
@@ -860,9 +848,9 @@
 }
 
 .timer-adjust-button:hover {
-  color: var(--accent-teal) !important;
-  border-color: var(--accent-border) !important;
-  background: var(--button-hover-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-strong) !important;
+  background: var(--bg-raised) !important;
 }
 
 .timer-adjust-button:active {

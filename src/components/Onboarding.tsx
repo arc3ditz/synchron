@@ -1,6 +1,6 @@
 import { useState, useRef, type CSSProperties } from "react";
 import { ArrowRight, ArrowLeft, Sparkles, Check, BookOpen, Dumbbell, Book, Sprout, CalendarDays } from "lucide-react";
-import { CARD_SURFACE } from "../theme";
+import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import type { Habit, Priority, FrequencyType } from "../types";
 
 type Step = "welcome" | "focus" | "habit" | "ready";
@@ -75,8 +75,8 @@ const styles: Record<string, CSSProperties> = {
     gap: "var(--space-3)",
   },
   focusCard: {
-    background: "var(--bg-inset)",
-    border: "2px solid var(--border-strong)",
+    background: "transparent",
+    border: "1px solid var(--border-color)",
     borderRadius: "var(--radius-lg)",
     padding: "var(--space-4)",
     display: "flex",
@@ -87,8 +87,8 @@ const styles: Record<string, CSSProperties> = {
     transition: "border-color var(--transition-standard), background-color var(--transition-standard)",
   },
   focusCardSelected: {
-    borderColor: "var(--color-accent)",
-    background: "rgba(var(--accent-rgb), 0.08)",
+    borderColor: "transparent",
+    background: "var(--accent-wash-soft)",
   },
   focusIcon: {
     width: 32,
@@ -100,27 +100,13 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-body)",
   },
   input: {
+    ...FORM_CONTROL,
     width: "100%",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "var(--text-primary)",
-    fontSize: 14,
-    outline: "none",
-    boxSizing: "border-box",
   },
   select: {
+    ...FORM_CONTROL,
     width: "100%",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "var(--text-body)",
-    fontSize: 14,
-    outline: "none",
     cursor: "pointer",
-    boxSizing: "border-box",
   },
   suggestions: {
     display: "flex",
@@ -129,7 +115,7 @@ const styles: Record<string, CSSProperties> = {
   },
   suggestionButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--border-color)",
     borderRadius: "var(--radius-md)",
     padding: "var(--space-2) var(--space-3)",
     color: "var(--text-secondary)",
@@ -139,7 +125,7 @@ const styles: Record<string, CSSProperties> = {
     transition: "background-color var(--transition-standard), border-color var(--transition-standard)",
   },
   suggestionButtonHover: {
-    background: "var(--bg-surface)",
+    background: "var(--bg-raised)",
     borderColor: "var(--border-color)",
   },
   actions: {
@@ -162,12 +148,12 @@ const styles: Record<string, CSSProperties> = {
   },
   primaryButton: {
     background: "var(--color-accent)",
-    border: "1px solid var(--color-accent)",
+    border: "1px solid transparent",
     color: "var(--color-accent-contrast)",
   },
   secondaryButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--border-color)",
     color: "var(--text-secondary)",
   },
   skipButton: {

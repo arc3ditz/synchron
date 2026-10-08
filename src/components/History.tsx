@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { Check, ChevronLeft, ChevronRight, History as HistoryIcon, Trash2 } from "lucide-react";
 
-import { CARD_SURFACE } from "../theme";
+import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import type { HistoryHabit, FocusSessionRecord } from "../types";
 import {
   getDateKey,
@@ -76,15 +76,9 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 20,
   },
   select: {
+    ...FORM_CONTROL,
     width: "100%",
     maxWidth: 420,
-    background: "var(--bg-surface)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "var(--text-body)",
-    fontSize: 14,
-    outline: "none",
     cursor: "pointer",
     textAlign: "center",
   },
@@ -110,15 +104,15 @@ const styles: Record<string, CSSProperties> = {
     width: 30,
     height: 30,
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid transparent",
     borderRadius: 20,
     color: "var(--text-secondary)",
     cursor: "pointer",
     padding: 0,
   },
   todayButton: {
-    background: "var(--accent-wash)",
-    border: "1px solid var(--accent-border)",
+    background: "var(--accent-wash-soft)",
+    border: "1px solid transparent",
     borderRadius: "var(--radius-md)",
     padding: "var(--space-1) var(--space-3)",
     fontSize: "var(--type-xs)",
@@ -254,7 +248,7 @@ const styles: Record<string, CSSProperties> = {
   },
   deleteFocusSessionButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid transparent",
     borderRadius: "var(--radius-md)",
     width: 28,
     height: 28,

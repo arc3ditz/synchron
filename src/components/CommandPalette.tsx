@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { filterCommands, nextSelectedIndex, type PaletteCommand } from "../domain/commandPalette";
+import { FORM_CONTROL } from "../theme";
 
 type CommandPaletteProps = {
   commands: PaletteCommand[];
@@ -26,20 +27,17 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     overflow: "hidden",
     background: "var(--bg-surface)",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid var(--border-color)",
     borderRadius: 12,
-    boxShadow: "0 24px 70px var(--shadow-strong)",
+    boxShadow: "var(--shadow-popover)",
   },
   input: {
+    ...FORM_CONTROL,
     width: "100%",
-    boxSizing: "border-box",
-    padding: "14px 16px",
-    background: "transparent",
-    border: "none",
-    borderBottom: "1px solid var(--border-color)",
-    color: "var(--text-primary)",
-    fontSize: 15,
-    outline: "none",
+    borderLeft: "none",
+    borderRight: "none",
+    borderTop: "none",
+    borderRadius: 0,
   },
   list: {
     margin: 0,

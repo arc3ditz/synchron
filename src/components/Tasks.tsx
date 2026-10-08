@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
-import { CARD_SURFACE } from "../theme";
+import { FORM_CONTROL } from "../theme";
 import type { Goal, Milestone, Project, Task } from "../types";
 import { resolveTaskContext } from "../domain/tasks";
 import { getTodayKey } from "../utils/dates";
@@ -67,36 +67,19 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
   },
   form: {
-    ...CARD_SURFACE,
     display: "grid",
     gap: "var(--space-3)",
     marginBottom: "var(--space-4)",
   },
   input: {
+    ...FORM_CONTROL,
     width: "100%",
     minWidth: 0,
-    boxSizing: "border-box",
-    minHeight: "var(--control-min-height)",
-    padding: "var(--control-padding)",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: "var(--control-radius)",
-    background: "var(--card-surface-bg)",
-    color: "var(--text-primary)",
-    fontSize: "var(--control-font-size)",
-    lineHeight: "var(--control-line-height)",
   },
   compactInput: {
+    ...FORM_CONTROL,
     width: "100%",
     minWidth: 0,
-    boxSizing: "border-box",
-    minHeight: "var(--control-min-height)",
-    padding: "var(--control-padding)",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: "var(--control-radius)",
-    background: "var(--card-surface-bg)",
-    color: "var(--text-primary)",
-    fontSize: "var(--control-font-size)",
-    lineHeight: "var(--control-line-height)",
   },
   addRow: {
     display: "flex",
@@ -112,6 +95,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 5,
     color: "var(--text-secondary)",
     fontSize: 12,
+    fontWeight: 600,
   },
   formActions: {
     display: "flex",
@@ -120,7 +104,7 @@ const styles: Record<string, CSSProperties> = {
   },
   secondaryButton: {
     padding: "8px 12px",
-    border: "1px solid var(--card-surface-border)",
+    border: "1px solid var(--border-color)",
     borderRadius: 8,
     background: "transparent",
     color: "var(--text-body)",
@@ -129,10 +113,10 @@ const styles: Record<string, CSSProperties> = {
   },
   submitButton: {
     padding: "8px 12px",
-    border: "1px solid var(--accent-border)",
+    border: "1px solid transparent",
     borderRadius: 8,
-    background: "var(--accent-teal)",
-    color: "var(--bg-primary)",
+    background: "var(--color-accent)",
+    color: "var(--color-accent-contrast)",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
@@ -147,11 +131,8 @@ const styles: Record<string, CSSProperties> = {
   },
   filterSegment: {
     display: "inline-flex",
+    alignItems: "center",
     gap: "var(--space-1)",
-    padding: "var(--space-1)",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: "var(--radius-md)",
   },
   filterButton: {
     padding: "6px 12px",
@@ -163,8 +144,9 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   filterButtonActive: {
-    background: "var(--color-surface)",
+    background: "var(--accent-wash-soft)",
     color: "var(--color-accent)",
+    fontWeight: 600,
   },
   goalFilter: {
     minWidth: 160,
@@ -246,7 +228,7 @@ const styles: Record<string, CSSProperties> = {
     width: 30,
     height: 30,
     padding: 0,
-    border: "1px solid var(--card-surface-border)",
+    border: "1px solid transparent",
     borderRadius: 7,
     background: "transparent",
     color: "var(--text-secondary)",

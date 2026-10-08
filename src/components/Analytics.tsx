@@ -10,7 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { CARD_SURFACE } from "../theme";
+import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import type { Habit, Task, Goal, TimeHorizon, FocusSessionRecord } from "../types";
 import {
   WEEKDAYS,
@@ -68,7 +68,7 @@ const styles: Record<string, CSSProperties> = {
   },
   filterButton: {
     background: "transparent",
-    border: "1px solid var(--border-strong)",
+    border: "1px solid transparent",
     borderRadius: 20,
     padding: "8px 16px",
     fontSize: 13,
@@ -78,9 +78,9 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
   filterButtonActive: {
-    background: "rgba(var(--accent-rgb), 0.1)",
-    color: "var(--accent-teal)",
-    borderColor: "rgba(var(--accent-rgb), 0.42)",
+    background: "var(--accent-wash-soft)",
+    color: "var(--color-accent)",
+    borderColor: "transparent",
   },
   grid: {
     display: "grid",
@@ -245,14 +245,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   goalInput: {
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "var(--text-primary)",
-    fontSize: 14,
+    ...FORM_CONTROL,
     width: 80,
-    outline: "none",
   },
   empty: {
     fontSize: 13,
@@ -291,7 +285,7 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     padding: 16,
     borderRadius: 12,
-    borderLeft: "4px solid",
+    borderLeft: "3px solid",
     display: "flex",
     flexDirection: "column",
     gap: 8,

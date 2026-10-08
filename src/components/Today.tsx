@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, History as HistoryIcon, BarChart3 } from "lucide-react";
-import { CARD_SURFACE } from "../theme";
+import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import StreakBadge from "./StreakBadge";
 import type { FocusSessionRecord, Goal, Habit, Milestone, Project, Task } from "../types";
 import {
@@ -226,7 +226,6 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
   habitCardCompleted: {
-    ...CARD_SURFACE,
     background: "var(--accent-wash-soft)",
     borderBottom: "1px solid var(--accent-border-soft)",
     opacity: 1,
@@ -339,7 +338,6 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--accent-teal)",
   },
   emptyState: {
-    ...CARD_SURFACE,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -347,6 +345,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 16,
     padding: "48px 24px",
     textAlign: "center",
+    background: "transparent",
+    border: "none",
   },
   emptyTitle: {
     fontSize: 16,
@@ -396,7 +396,7 @@ const styles: Record<string, CSSProperties> = {
   },
   secondaryButton: {
     padding: "8px 12px",
-    border: "1px solid var(--card-surface-border)",
+    border: "1px solid var(--border-color)",
     borderRadius: 8,
     background: "transparent",
     color: "var(--text-body)",
@@ -405,10 +405,10 @@ const styles: Record<string, CSSProperties> = {
   },
   submitButton: {
     padding: "8px 12px",
-    border: "1px solid var(--accent-border)",
+    border: "1px solid transparent",
     borderRadius: 8,
-    background: "var(--accent-teal)",
-    color: "var(--bg-primary)",
+    background: "var(--color-accent)",
+    color: "var(--color-accent-contrast)",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
@@ -428,14 +428,14 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 44,
     minWidth: 0,
     padding: "8px 12px",
-    background: "var(--accent-wash-soft)",
-    border: "1px solid var(--accent-border-soft)",
+    background: "transparent",
+    border: "1px solid var(--border-color)",
     borderRadius: 8,
-    color: "var(--text-primary)",
+    color: "var(--text-body)",
     fontSize: 13,
     textAlign: "center",
     cursor: "pointer",
-    transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard), transform var(--transition-standard)",
+    transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), transform var(--transition-standard)",
   },
   scheduleSection: {
     marginBottom: 32,
@@ -573,12 +573,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
   },
   scheduleFormInput: {
-    padding: "10px 14px",
-    border: "1px solid var(--card-surface-border)",
-    borderRadius: 8,
-    background: "var(--card-surface-bg)",
-    color: "var(--text-primary)",
-    fontSize: 14,
+    ...FORM_CONTROL,
   },
   scheduleFormActions: {
     display: "flex",
