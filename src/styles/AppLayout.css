@@ -580,6 +580,14 @@
   border-radius: 8px;
 }
 
+.main-content button.today-checkbox:hover {
+  border-color: var(--checkbox-checked-border) !important;
+}
+
+.main-content button.today-checkbox:active {
+  transform: scale(0.94);
+}
+
 .habit-row button svg {
   transition: transform 0.15s ease-in-out;
   animation: check-in 0.15s ease-in-out;
@@ -613,6 +621,11 @@
   outline-offset: 2px;
 }
 
+/* Collapse toggle is desktop-only; the mobile bottom bar stays navigation-only. */
+.sidebar-collapse {
+  display: none;
+}
+
 /* ---------- Desktop: sticky full-height sidebar ---------- */
 
 @media (min-width: 900px) {
@@ -636,64 +649,77 @@
     height: 100vh;
     height: 100dvh;
     overflow-y: auto;
+    overflow-x: hidden;
     border-top: none;
     border-right: 1px solid var(--border-color);
-    padding: 28px 16px;
+    padding: 16px 12px;
     gap: 8px;
-    background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    transition: width 0.25s ease, min-width 0.25s ease;
+    background: color-mix(in srgb, var(--bg-surface) 72%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    transition:
+      width 200ms cubic-bezier(0.32, 0.72, 0, 1),
+      min-width 200ms cubic-bezier(0.32, 0.72, 0, 1),
+      padding 200ms cubic-bezier(0.32, 0.72, 0, 1),
+      background-color var(--transition-standard);
   }
 
   .sidebar.collapsed {
     width: 64px;
     min-width: 64px;
-    padding: 28px 12px;
+    padding: 16px 12px;
   }
 
-  .sidebar-brand {
+  /* Collapse control occupies the former brand slot and is styled as a
+     quiet sidebar row so it aligns with navigation instead of reading
+     as a separate header. Reuses the existing Chevron collapse icons. */
+  .sidebar-collapse {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 0;
+    gap: 11px;
+    width: 100%;
+    min-height: 40px;
+    margin: 0 0 4px;
+    padding: 10px 14px;
+    box-sizing: border-box;
+    flex-shrink: 0;
     background: transparent;
-    border: none;
-    color: var(--text-primary);
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    padding: 0 14px 24px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
     cursor: pointer;
-    transition: opacity 0.15s ease, transform 0.15s ease;
-    width: auto;
+    transition:
+      color var(--transition-standard),
+      background-color var(--transition-standard),
+      border-color var(--transition-standard),
+      padding 200ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
-  .sidebar-brand:hover {
-    opacity: 0.7;
+  .sidebar-collapse:hover {
+    color: var(--text-primary);
+    background: var(--bg-raised);
+    border-color: transparent;
   }
 
-  .sidebar-brand:active {
+  .sidebar-collapse:active {
     transform: scale(0.98);
-    opacity: 0.9;
   }
 
-  .sidebar-brand-text {
-    flex: 1;
+  .sidebar-collapse:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: 2px;
   }
 
-  .sidebar-brand-logo {
-    width: 24px;
-    height: 24px;
+  .sidebar-collapse > svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
   }
 
-  .sidebar.collapsed .sidebar-brand {
+  .sidebar.collapsed .sidebar-collapse {
     justify-content: center;
-    padding: 0 12px 24px;
-  }
-
-  .sidebar.collapsed .sidebar-brand-text {
-    display: none;
+    padding: 10px 0;
   }
 
   .sidebar-item {
@@ -702,8 +728,16 @@
     align-items: center;
     gap: 11px;
     font-size: 13px;
-    padding: 12px 14px;
+    padding: 10px 14px;
     width: 100%;
+    min-height: 42px;
+    box-sizing: border-box;
+    transition:
+      color var(--transition-standard),
+      background-color var(--transition-standard),
+      border-color var(--transition-standard),
+      opacity var(--transition-standard),
+      padding 200ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
   .sidebar-item > svg {
@@ -712,22 +746,34 @@
     flex-shrink: 0;
   }
 
+  /* Primary takes the space between the collapse control and utility
+     and centers its items, so navigation sits vertically balanced in
+     both expanded and collapsed states. */
   .sidebar-primary {
     width: 100%;
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    gap: 4px;
+    min-height: 0;
   }
 
   .sidebar-utility {
+    width: 100%;
     padding-top: 8px;
     border-top: 1px solid var(--border-color);
     flex-shrink: 0;
   }
 
+  /* nowrap + ellipsis keeps a stable single-line height while the
+     sidebar width animates, so labels never wrap and shift the layout. */
   .sidebar-item > span:not(.sidebar-shortcut) {
     flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sidebar-shortcut {
@@ -741,7 +787,7 @@
 
   .sidebar.collapsed .sidebar-item {
     justify-content: center;
-    padding: 12px;
+    padding: 10px 0;
     gap: 0;
   }
 
@@ -753,6 +799,8 @@
     display: none;
   }
 
+  /* Spacer takes the lower half so the navigation group rests in the
+     upper-middle of the rail, where it sat before the centering change. */
   .sidebar-spacer {
     display: block;
   }

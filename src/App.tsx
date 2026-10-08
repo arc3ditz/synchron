@@ -2429,16 +2429,13 @@ function App() {
       <div className="app-body">
         <nav className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`} aria-label="Main Navigation">
           <button
-            className="sidebar-brand"
+            className="sidebar-collapse"
             onClick={toggleSidebar}
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!sidebarCollapsed}
             title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {sidebarCollapsed ? (
-              <img src="/favicon.svg" alt="Synchron" className="sidebar-brand-logo" />
-            ) : (
-              <span className="sidebar-brand-text">Synchron</span>
-            )}
+            {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
           <div className="sidebar-primary" role="group" aria-label="Workspace">
             <button

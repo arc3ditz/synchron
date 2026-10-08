@@ -40,8 +40,9 @@ type TodayProps = {
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    maxWidth: "100%",
+    maxWidth: 920,
     width: "100%",
+    margin: "0 auto",
     padding: "var(--space-4)",
     boxSizing: "border-box",
   },
@@ -170,6 +171,7 @@ const styles: Record<string, CSSProperties> = {
     border: "none",
     borderBottom: "1px solid var(--border-color)",
     borderRadius: 0,
+    transition: "background-color var(--transition-standard), border-color var(--transition-standard)",
   },
   habitCardGrid: {
     ...CARD_SURFACE,
@@ -306,36 +308,16 @@ const styles: Record<string, CSSProperties> = {
   checkboxHover: {
     borderColor: "var(--checkbox-checked-border)",
   },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: "var(--space-3)",
-  },
-  statCard: {
-    padding: "var(--space-3) var(--space-2)",
+  feedbackStrip: {
+    margin: "0 0 var(--space-6)",
+    paddingTop: "var(--space-3)",
     borderTop: "1px solid var(--border-color)",
-    background: "transparent",
   },
-  statLabel: {
-    display: "block",
-    fontSize: "var(--type-xs)",
+  feedbackLine: {
+    margin: 0,
+    fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: "var(--space-2)",
-  },
-  statValue: {
-    display: "block",
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-bold)",
-    color: "var(--text-primary)",
     fontVariantNumeric: "tabular-nums",
-  },
-  statsSection: {
-    margin: "var(--space-6) 0",
-  },
-  statValueAccent: {
-    color: "var(--accent-teal)",
   },
   emptyState: {
     display: "flex",
@@ -438,7 +420,7 @@ const styles: Record<string, CSSProperties> = {
     transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), transform var(--transition-standard)",
   },
   scheduleSection: {
-    marginBottom: 32,
+    marginBottom: "var(--space-6)",
   },
   scheduleHeader: {
     display: "flex",
@@ -588,7 +570,7 @@ const styles: Record<string, CSSProperties> = {
   },
   // Goal context section (relevant Goals only; rendered by renderGoalProgressSnapshot)
   goalProgressSection: {
-    marginBottom: 32,
+    marginBottom: "var(--space-6)",
   },
   goalProgressList: {
     display: "flex",
@@ -628,7 +610,7 @@ const styles: Record<string, CSSProperties> = {
   },
 };
 
-function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
+function HabitMetadata({ habit, streak, goalTitle }: { habit: Habit; streak: number; goalTitle?: string }) {
   return (
     <div style={styles.habitMeta}>
       <span
@@ -642,6 +624,7 @@ function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
         {habit.priority}
       </span>
       {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
+      {goalTitle && <span style={styles.goalTag}>{goalTitle}</span>}
       <StreakBadge streak={streak} />
     </div>
   );
@@ -759,6 +742,7 @@ function Today({
       <div key={task.id} style={styles.habitCard}>
         <button
           type="button"
+          className="today-checkbox"
           style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
           onClick={() => onToggleTask(task.id)}
           aria-label={`${completed ? "Mark incomplete" : "Complete"} ${task.title}`}
@@ -786,6 +770,7 @@ function Today({
           style={styles.focusButton}
           onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
           aria-label={`Start Focus on ${task.title}`}
+          title="Start Focus"
         >
           <Play size={14} />
         </button>
@@ -872,6 +857,7 @@ function Today({
         <div style={styles.nextUp}>
           <button
             type="button"
+            className="today-checkbox"
             style={styles.checkbox}
             onClick={() => onToggleTask(task.id)}
             aria-label={`Complete ${task.title}`}
@@ -915,6 +901,7 @@ function Today({
       <div style={styles.nextUp}>
         <button
           type="button"
+          className="today-checkbox"
           style={styles.checkbox}
           onClick={() => onToggleHabit(habit.id, todayKey)}
           aria-label={`Complete habit ${habit.name}`}
@@ -969,12 +956,12 @@ function Today({
 
     return (
       <div style={styles.goalProgressSection}>
-        <h2 style={styles.sectionTitle}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <Target size={18} />
-            <span>Goals in Focus</span>
+        <p style={styles.eyebrow}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Target size={14} />
+            <span>Working toward</span>
           </span>
-        </h2>
+        </p>
         <div style={styles.goalProgressList}>
           {relevant.map(({ goal, progress }) => (
             <div key={goal.id} style={styles.goalProgressItem}>
@@ -1031,6 +1018,7 @@ function Today({
         <div style={styles.scheduleTimeSlot}>{block.time}</div>
         <button
           type="button"
+          className="today-checkbox"
           style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
           onClick={() => block.kind === "task"
             ? onToggleTask(block.taskId)
@@ -1183,6 +1171,13 @@ function Today({
   briefingParts.push(`${todayHabits.length - completedHabitCount} habits left`);
   if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
 
+  // Lightweight momentum feedback: everything the old summary grid showed,
+  // as one quiet line instead of dashboard cards.
+  const momentumParts: string[] = [];
+  if (remainingCount > 0) momentumParts.push(`${remainingCount} remaining`);
+  if (bestStreak > 0) momentumParts.push(`Best streak ${bestStreak}`);
+  if (todayFocusTime > 0) momentumParts.push(`${todayFocusTime}m focused`);
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
@@ -1209,23 +1204,11 @@ function Today({
 
       {renderNextUp()}
 
-      {timelineBlocks.length > 0 && (
-        <div style={styles.scheduleSection}>
-          <div style={styles.scheduleHeader}>
-            <h2 style={styles.sectionTitle}>Scheduled Today</h2>
-            <span style={styles.scheduleTimeSummary}>
-              {formatDuration(totalPlannedMinutes)} planned
-            </span>
-          </div>
-          <div style={styles.scheduleTimeline}>
-            {timelineBlocks.map((block) => renderTimelineBlock(block))}
-          </div>
-        </div>
-      )}
+      {renderGoalProgressSnapshot()}
 
       <div style={styles.section}>
         <p style={styles.eyebrow}>Tasks · {pendingTodayTasks.length} open</p>
-        <h2 style={styles.sectionTitle}>Up Next &amp; Tasks</h2>
+        <h2 style={styles.sectionTitle}>Today&rsquo;s Tasks</h2>
         <form
           style={{ display: "flex", gap: 8, marginBottom: "var(--space-3)" }}
           onSubmit={handleQuickTaskSubmit}
@@ -1272,6 +1255,9 @@ function Today({
           ) : todayHabits.map((habit) => {
             const isCompleted = habit.completedDates.includes(todayKey);
             const streak = calculateStreak(habit, streakFreeze, dayResetHour);
+            const habitGoalTitle = habit.goalId
+              ? goals.find((goal) => goal.id === habit.goalId)?.title
+              : undefined;
             
             return (
               <div
@@ -1283,6 +1269,7 @@ function Today({
                 }}
               >
                 <button
+                  className="today-checkbox"
                   style={{
                     ...styles.checkbox,
                     ...(isCompleted ? styles.checkboxChecked : {}),
@@ -1303,13 +1290,14 @@ function Today({
                   >
                     {habit.name}
                   </h3>
-                  <HabitMetadata habit={habit} streak={streak} />
+                  <HabitMetadata habit={habit} streak={streak} goalTitle={habitGoalTitle} />
                 </div>
                 <button
                   className="today-focus-button"
                   style={styles.focusButton}
                   onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
                   aria-label={`Start Focus on ${habit.name}`}
+                  title="Start Focus"
                 >
                   <Play size={14} />
                 </button>
@@ -1319,27 +1307,26 @@ function Today({
         </div>
       </div>
 
-      <section style={styles.statsSection} aria-labelledby="today-summary-title">
-        <h2 id="today-summary-title" style={styles.sectionTitle}>Daily Summary</h2>
-        <div style={styles.statsGrid}>
-          <div style={styles.statCard}>
-            <span style={styles.statLabel}>Items Completed</span>
-            <span className="ui-numeric" style={styles.statValue}>{completedCount}</span>
+      {timelineBlocks.length > 0 && (
+        <div style={styles.scheduleSection}>
+          <div style={styles.scheduleHeader}>
+            <h2 style={styles.sectionTitle}>Scheduled Today</h2>
+            <span style={styles.scheduleTimeSummary}>
+              {formatDuration(totalPlannedMinutes)} planned
+            </span>
           </div>
-          <div style={styles.statCard}>
-            <span style={styles.statLabel}>Highest Streak</span>
-            <span className="ui-numeric" style={{ ...styles.statValue, ...styles.statValueAccent }}>{bestStreak}</span>
-          </div>
-          <div style={styles.statCard}>
-            <span style={styles.statLabel}>Today's Focus Time</span>
-            <span className="ui-numeric" style={styles.statValue}>{todayFocusTime}m</span>
-          </div>
-          <div style={styles.statCard}>
-            <span style={styles.statLabel}>Remaining Items</span>
-            <span className="ui-numeric" style={styles.statValue}>{remainingCount}</span>
+          <div style={styles.scheduleTimeline}>
+            {timelineBlocks.map((block) => renderTimelineBlock(block))}
           </div>
         </div>
-      </section>
+      )}
+
+      {momentumParts.length > 0 && (
+        <section style={styles.feedbackStrip} aria-label="Today's momentum">
+          <p style={styles.eyebrow}>Momentum</p>
+          <p style={styles.feedbackLine}>{momentumParts.join(" · ")}</p>
+        </section>
+      )}
 
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Quick Actions</h2>
@@ -1370,8 +1357,6 @@ function Today({
           </button>
         </div>
       </div>
-
-      {renderGoalProgressSnapshot()}
 
       {scheduleModalOpen && (
         <div style={styles.scheduleModal} onClick={closeScheduleModal}>
