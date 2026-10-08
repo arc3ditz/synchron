@@ -697,9 +697,17 @@ function Today({
     [todayHabits, todayTasks, goals, milestones, projects, focusSessions, todayKey, dayResetHour, today],
   );
 
-  const totalPlannedMinutes = useMemo(
-    () => sumPlannedMinutes(timelineBlocks),
+  // Completed tasks drop out of the upcoming schedule the moment they are
+  // done; they stay visible under Completed below. Habits keep their slots
+  // and logged sessions are history, so only task blocks are filtered here.
+  const upcomingTimelineBlocks = useMemo(
+    () => timelineBlocks.filter((block) => block.kind !== "task" || !block.completed),
     [timelineBlocks],
+  );
+
+  const totalPlannedMinutes = useMemo(
+    () => sumPlannedMinutes(upcomingTimelineBlocks),
+    [upcomingTimelineBlocks],
   );
 
   const formatDuration = (minutes: number) => {
@@ -1307,7 +1315,7 @@ function Today({
         </div>
       </div>
 
-      {timelineBlocks.length > 0 && (
+      {upcomingTimelineBlocks.length > 0 && (
         <div style={styles.scheduleSection}>
           <div style={styles.scheduleHeader}>
             <h2 style={styles.sectionTitle}>Scheduled Today</h2>
@@ -1316,7 +1324,7 @@ function Today({
             </span>
           </div>
           <div style={styles.scheduleTimeline}>
-            {timelineBlocks.map((block) => renderTimelineBlock(block))}
+            {upcomingTimelineBlocks.map((block) => renderTimelineBlock(block))}
           </div>
         </div>
       )}
