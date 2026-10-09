@@ -50,6 +50,28 @@ export function detachTasksFromDeletedMilestone(tasks: Task[], milestone: Milest
     : task);
 }
 
+/**
+ * Detach a deleted Goal's Milestones without deleting them. Their Project
+ * links survive (Projects outlive the Goal — see detachGoalFromProjects),
+ * so only the Goal reference is cleared.
+ */
+export function detachMilestonesFromDeletedGoal(milestones: Milestone[], goalId: string): Milestone[] {
+  return milestones.map((milestone) => milestone.goalId === goalId
+    ? { ...milestone, goalId: undefined }
+    : milestone);
+}
+
+/**
+ * Detach a deleted Goal's Tasks without deleting them. Direct Project and
+ * Milestone links survive (their parents outlive the Goal), so only the
+ * Goal reference is cleared.
+ */
+export function detachTasksFromDeletedGoal(tasks: Task[], goalId: string): Task[] {
+  return tasks.map((task) => task.goalId === goalId
+    ? { ...task, goalId: undefined }
+    : task);
+}
+
 export function disassociateGoalFocusSessions(
   sessions: FocusSessionRecord[],
   goalId: string,

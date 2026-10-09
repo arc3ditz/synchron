@@ -197,6 +197,26 @@ export function propagateProjectGoalChange(
 }
 
 /**
+ * Keep a Milestone's Tasks consistent immediately after the Milestone moves
+ * between Projects/Goals. Each child Task re-resolves its Project/Goal
+ * through the updated Milestone (see alignTask) so no stale reference
+ * survives the move and progress cannot count the Task under both the old
+ * and new parents. `milestones` must already contain the updated Milestone.
+ * No entity is deleted and no new relationship is fabricated beyond
+ * inherited resolution.
+ */
+export function propagateMilestoneMove(
+  tasks: Task[],
+  milestone: Pick<Milestone, "id" | "goalId" | "projectId">,
+  milestones: Milestone[],
+  projects: Project[],
+): Task[] {
+  return tasks.map((task) =>
+    task.milestoneId === milestone.id ? alignTask(task, milestones, projects) : task,
+  );
+}
+
+/**
  * Detach Habits linked to a deleted Goal without deleting the Habits.
  * Unrelated Habits are returned untouched.
  */

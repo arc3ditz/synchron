@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, History as HistoryIcon, BarChart3 } from "lucide-react";
 import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import StreakBadge from "./StreakBadge";
@@ -11,6 +11,10 @@ import {
 } from "../utils/dates";
 import { calculateGoalProgress } from "../domain/goals";
 import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
+import { listNextStepCandidates, nextStepKey, recommendNextStep, isTaskStaleBacklog } from "../domain/nextStep";
+import { getWelcomeBackSubtitle, getWelcomeBackTitle } from "../domain/welcomeBack";
+import { COMPLETION_CONFIRMATION_MS, getCompletionMessage } from "../domain/completionFeedback";
+import { QUICK_FOCUS_MINUTES } from "../domain/focusTimer";
 import { buildDailyTimeline, totalPlannedMinutes as sumPlannedMinutes, type TimelineBlock } from "../domain/timeline";
 import { isTaskOverdue, resolveTaskContext, selectTodayTasks, sortTodayTasks } from "../domain/tasks";
 
@@ -27,6 +31,9 @@ type TodayProps = {
   onAddTask: (data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onQuickTaskFocusReady?: (focus: (() => void) | null) => void;
   onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
+  // Low-friction start for the hero recommendation: links the item on the
+  // existing Focus Timer with a short commitment and auto-starts it.
+  onQuickFocus: (entity: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number }) => void;
   onNavigateToHabits: () => void;
   onNavigateToGoals: () => void;
   onNavigateToHistory: () => void;
@@ -36,6 +43,9 @@ type TodayProps = {
   showMandatoryHabitsInImportantItems: boolean;
   onUpdateHabit: (habit: Habit) => void;
   onUpdateTask: (task: Task) => void;
+  // Gentle restart: present only after a meaningful inactivity gap with
+  // reliable local activity data. Null falls back to the normal Today view.
+  welcomeBack?: { daysAway: number } | null;
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -122,6 +132,51 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
     margin: "0 0 4px",
+  },
+  welcomeBack: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "var(--space-3)",
+    padding: "var(--space-4)",
+    marginBottom: "var(--space-4)",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-lg)",
+  },
+  welcomeBackInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  welcomeBackTitle: {
+    fontSize: "var(--type-md)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-primary)",
+    margin: "0 0 4px",
+  },
+  welcomeBackText: {
+    fontSize: "var(--type-sm)",
+    color: "var(--text-secondary)",
+    margin: 0,
+  },
+  // Quiet completion confirmation: one plain line, no animation, no
+  // celebration styling. It is event-sourced (see handleTaskToggle /
+  // handleHabitToggle) so rerenders alone can never show it twice.
+  completionConfirmation: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-2)",
+    padding: "var(--space-2) 0",
+    margin: "-var(--space-2) 0 var(--space-4)",
+    background: "transparent",
+    border: "none",
+  },
+  completionConfirmationText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: "var(--type-sm)",
+    color: "var(--text-secondary)",
+    margin: 0,
+    overflowWrap: "anywhere",
   },
   progressSection: {
     display: "flex",
@@ -326,17 +381,6 @@ const styles: Record<string, CSSProperties> = {
   },
   checkboxHover: {
     borderColor: "var(--checkbox-checked-border)",
-  },
-  feedbackStrip: {
-    margin: "0 0 var(--space-6)",
-    paddingTop: "var(--space-3)",
-    borderTop: "1px solid var(--border-color)",
-  },
-  feedbackLine: {
-    margin: 0,
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    fontVariantNumeric: "tabular-nums",
   },
   emptyState: {
     display: "flex",
@@ -662,6 +706,7 @@ function Today({
   onAddTask,
   onQuickTaskFocusReady,
   onStartFocus,
+  onQuickFocus,
   onNavigateToHabits,
   onNavigateToGoals,
   onNavigateToHistory,
@@ -671,9 +716,13 @@ function Today({
   showMandatoryHabitsInImportantItems,
   onUpdateHabit,
   onUpdateTask,
+  welcomeBack = null,
 }: TodayProps) {
   const todayKey = getTodayKey(dayResetHour);
   const today = useMemo(() => new Date(), []);
+  // Session-only dismissal: hides the calm welcome for this mount without
+  // touching goals, habits, tasks, or progress.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [schedulingItem, setSchedulingItem] = useState<{ type: 'habit' | 'task'; id: string | number } | null>(null);
   const [scheduleTime, setScheduleTime] = useState("");
@@ -738,8 +787,20 @@ function Today({
     return `${mins}m`;
   };
 
-  const pendingTodayTasks = todayTasks.filter((task) => !task.completed);
-  const completedTodayTasks = todayTasks.filter((task) => task.completed);
+  // One memoized, order-preserving partition of today's already-sorted
+  // tasks. Completing a task moves it from pending to completed (and
+  // uncompleting moves it back) without re-sorting or refetching, and the
+  // stable array identities keep downstream memos (Next Up, counts) from
+  // recomputing on unrelated renders.
+  const { pendingTodayTasks, completedTodayTasks } = useMemo(() => {
+    const pending: Task[] = [];
+    const completed: Task[] = [];
+    for (const task of todayTasks) {
+      if (task.completed) completed.push(task);
+      else pending.push(task);
+    }
+    return { pendingTodayTasks: pending, completedTodayTasks: completed };
+  }, [todayTasks]);
 
   const quickTaskInputRef = useRef<HTMLInputElement>(null);
   function focusQuickTaskInput() {
@@ -776,13 +837,16 @@ function Today({
   function renderTaskRow(task: Task, completed: boolean) {
     const chain = taskChain(task);
     const overdue = !completed && isTaskOverdue(task, todayKey);
+    // Same quiet-backlog treatment as the Tasks page: abandoned work stays
+    // visible, but only fresh overdue renders alarming red.
+    const stale = !completed && isTaskStaleBacklog(task, todayKey);
     return (
       <div key={task.id} className="today-item" style={styles.habitCard}>
         <button
           type="button"
           className="today-checkbox"
           style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
-          onClick={() => onToggleTask(task.id)}
+          onClick={() => handleTaskToggle(task, completed)}
           aria-label={`${completed ? "Mark incomplete" : "Complete"} ${task.title}`}
           aria-checked={completed}
           role="checkbox"
@@ -794,23 +858,35 @@ function Today({
           <div style={styles.taskMeta}>
             <span style={styles.taskPriority}>{task.priority}</span>
             {task.dueDate && (
-              <time dateTime={task.dueDate} style={overdue ? { color: "var(--priority-high-text)", fontWeight: 600 } : undefined}>
-                {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
+              <time dateTime={task.dueDate} style={overdue && !stale ? { color: "var(--priority-high-text)", fontWeight: 600 } : stale ? { color: "var(--text-muted)" } : undefined}>
+                {stale ? `Backlog since ${formatFullDate(task.dueDate)}` : overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
               </time>
             )}
+            {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
           </div>
           {chain && <div style={styles.taskChain}>{chain}</div>}
         </div>
         {!completed && (
-          <button
-            className="today-focus-button"
-            style={styles.focusButton}
-            onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-            aria-label={`Start Focus on ${task.title}`}
-            title="Start Focus"
-          >
-            <Play size={14} />
-          </button>
+          <>
+            <button
+              className="today-focus-button"
+              style={styles.focusButton}
+              onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+              aria-label={`Start Focus on ${task.title}`}
+              title="Start Focus"
+            >
+              <Play size={14} />
+            </button>
+            <button
+              type="button"
+              style={styles.focusButton}
+              onClick={() => openScheduleModal("task", task.id)}
+              aria-label={`${task.scheduledTime ? "Reschedule" : "Schedule"} task ${task.title}`}
+              title={task.scheduledTime ? "Reschedule" : "Schedule time"}
+            >
+              <MoreVertical size={14} />
+            </button>
+          </>
         )}
       </div>
     );
@@ -830,23 +906,156 @@ function Today({
       .reduce((total, session) => total + session.durationMinutes, 0);
   }, [focusSessions, dayResetHour, today]);
 
-  const bestStreak = useMemo(() => {
-    return Math.max(0, ...todayHabits.map((habit) => calculateStreak(habit, streakFreeze, dayResetHour)));
-  }, [todayHabits, streakFreeze, dayResetHour]);
-
   // The single next action: most urgent pending Task (already sorted:
   // overdue → due → priority), else the next incomplete Habit. Mandatory
   // Habits are preferred when the user opts into them as important items.
-  const nextUpTask = pendingTodayTasks[0] ?? null;
-  const nextUpHabit = useMemo(() => {
-    if (nextUpTask) return null;
-    const incomplete = todayHabits.filter((habit) => !habit.completedDates.includes(todayKey));
-    if (incomplete.length === 0) return null;
-    if (showMandatoryHabitsInImportantItems) {
-      return incomplete.find((habit) => habit.priority === "Mandatory") ?? incomplete[0];
+  const nextStepBaseInput = useMemo(() => ({
+    habits,
+    tasks,
+    goals,
+    milestones,
+    projects,
+    todayKey,
+    preferMandatoryHabits: showMandatoryHabitsInImportantItems,
+  }), [habits, tasks, goals, milestones, projects, todayKey, showMandatoryHabitsInImportantItems]);
+
+  // Session-only skip/choice state: no new storage, so skips never persist
+  // beyond this mount. Completing, deleting, or invalidating the underlying
+  // item refreshes the pick automatically because it derives from props.
+  const [skippedTaskIds, setSkippedTaskIds] = useState<string[]>([]);
+  const [skippedHabitIds, setSkippedHabitIds] = useState<number[]>([]);
+  const [chosenNextStepKey, setChosenNextStepKey] = useState<string | null>(null);
+
+  const { nextStep, nextStepOptions } = useMemo(() => {
+    const fallback = {
+      kind: "none" as const,
+      title: "Next step unavailable",
+      reason: "Couldn't load the recommendation. Your tasks and habits are listed below.",
+    };
+    try {
+      const options = listNextStepCandidates(nextStepBaseInput);
+      const pinned = chosenNextStepKey
+        ? options.find((option) => nextStepKey(option) === chosenNextStepKey) ?? null
+        : null;
+      if (pinned) return { nextStep: pinned, nextStepOptions: options };
+      return {
+        nextStep: recommendNextStep({ ...nextStepBaseInput, skippedTaskIds, skippedHabitIds }),
+        nextStepOptions: options,
+      };
+    } catch {
+      return { nextStep: fallback, nextStepOptions: [] };
     }
-    return incomplete[0];
-  }, [nextUpTask, todayHabits, todayKey, showMandatoryHabitsInImportantItems]);
+  }, [nextStepBaseInput, chosenNextStepKey, skippedTaskIds, skippedHabitIds]);
+
+  function skipNextStep() {
+    if (nextStep.kind === "task") {
+      setSkippedTaskIds((current) =>
+        current.includes(nextStep.taskId) ? current : [...current, nextStep.taskId],
+      );
+    } else if (nextStep.kind === "habit") {
+      setSkippedHabitIds((current) =>
+        current.includes(nextStep.habitId) ? current : [...current, nextStep.habitId],
+      );
+    }
+    setChosenNextStepKey(null);
+  }
+
+  // Picking an alternative pins it until it is completed, deleted, or
+  // becomes ineligible; choosing a previously skipped item unskips it.
+  function chooseNextStep(key: string) {
+    setChosenNextStepKey(key);
+    if (key.startsWith("task:")) {
+      setSkippedTaskIds((current) => current.filter((id) => `task:${id}` !== key));
+    } else if (key.startsWith("habit:")) {
+      setSkippedHabitIds((current) => current.filter((id) => `habit:${id}` !== key));
+    }
+  }
+
+  function startNextStep() {
+    if (nextStep.kind === "task") {
+      onQuickFocus({ taskId: nextStep.taskId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES });
+    } else if (nextStep.kind === "habit") {
+      onQuickFocus({ habitId: nextStep.habitId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES });
+    } else {
+      onStartFocus();
+    }
+  }
+
+  function completeNextStep() {
+    if (nextStep.kind === "task") {
+      const task = tasks.find((item) => item.id === nextStep.taskId);
+      // The hero only ever recommends incomplete work, so this is always a
+      // completion; route through the shared wrapper for the calm confirm.
+      handleTaskToggle(task ?? { id: nextStep.taskId, title: nextStep.title } as Task, false);
+    } else if (nextStep.kind === "habit") {
+      const habit = habits.find((item) => item.id === nextStep.habitId);
+      handleHabitToggle(habit ?? { id: nextStep.habitId, name: nextStep.title } as Habit, false, todayKey);
+    }
+  }
+
+  // Single completion path for every Today checkbox (rows, timeline, hero,
+  // habit cards). Feedback is event-sourced here — never derived in render —
+  // so rerenders alone can never show it twice. Completing replaces any
+  // prior confirmation instead of stacking; unmarking clears a confirmation
+  // for the same item so a quick complete→uncomplete leaves nothing stale.
+  // Sound stays with the existing App handlers (per gesture, settings-aware);
+  // Today adds no new sounds.
+  const [lastCompletion, setLastCompletion] = useState<{ itemKey: string; message: string } | null>(null);
+
+  useEffect(() => {
+    if (lastCompletion === null) return;
+    const timerId = window.setTimeout(() => setLastCompletion(null), COMPLETION_CONFIRMATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [lastCompletion]);
+
+  function isFinalCompletion(): boolean {
+    const openCount = pendingTodayTasks.length + (todayHabits.length - completedHabitCount);
+    return openCount <= 1;
+  }
+
+  function handleTaskToggle(task: Pick<Task, "id" | "title">, completed: boolean) {
+    const itemKey = `task:${task.id}`;
+    if (completed) {
+      if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
+      onToggleTask(task.id);
+      return;
+    }
+    onToggleTask(task.id);
+    setLastCompletion({ itemKey, message: getCompletionMessage(task.title, isFinalCompletion()) });
+  }
+
+  function handleHabitToggle(habit: Pick<Habit, "id" | "name">, isCompleted: boolean, dateKey: string) {
+    const itemKey = `habit:${habit.id}`;
+    if (isCompleted) {
+      if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
+      onToggleHabit(habit.id, dateKey);
+      return;
+    }
+    onToggleHabit(habit.id, dateKey);
+    setLastCompletion({ itemKey, message: getCompletionMessage(habit.name, isFinalCompletion()) });
+  }
+
+  // One quiet line after the hero: what just finished, nothing more. The
+  // refreshed hero directly above already carries the next action with its
+  // Start button, so no planning step is needed. role="status" announces it
+  // politely without stealing focus.
+  function renderCompletionConfirmation() {
+    if (lastCompletion === null) return null;
+    return (
+      <div data-testid="completion-confirmation" role="status" style={styles.completionConfirmation}>
+        <Check size={14} aria-hidden="true" style={{ flexShrink: 0, color: "var(--text-secondary)" }} />
+        <p style={styles.completionConfirmationText}>{lastCompletion.message}</p>
+        <button
+          type="button"
+          style={styles.textButton}
+          onClick={() => setLastCompletion(null)}
+          aria-label="Dismiss completion message"
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
 
   // Goal Progress Snapshot
   const activeGoals = useMemo(() => {
@@ -863,15 +1072,43 @@ function Today({
     });
   }, [activeGoals, milestones, tasks, habits, streakFreeze, dayResetHour, projects]);
 
-  function renderNextUp() {
-    if (!nextUpTask && !nextUpHabit) {
+  // One hero card driven by the Next Step engine: title, truthful reason,
+  // and duration only when the underlying item actually carries one. Start
+  // is the single primary action; completing and skipping are quiet, and a
+  // compact picker switches candidates without leaving Today.
+
+  // Calm, non-blocking welcome for a return after inactivity. It never
+  // mentions failure, streaks, or falling behind, never gates the Next Step
+  // hero or the lists below, and dismisses quietly in-session only.
+  function renderWelcomeBack() {
+    if (welcomeBack === null || welcomeBack === undefined || welcomeDismissed) return null;
+    return (
+      <section aria-label="Welcome back" data-testid="welcome-back" style={styles.welcomeBack}>
+        <div style={styles.welcomeBackInfo}>
+          <h2 style={styles.welcomeBackTitle}>{getWelcomeBackTitle()}</h2>
+          <p style={styles.welcomeBackText}>{getWelcomeBackSubtitle()}</p>
+        </div>
+        <button
+          type="button"
+          style={styles.textButton}
+          onClick={() => setWelcomeDismissed(true)}
+          aria-label="Dismiss welcome back message"
+        >
+          Dismiss
+        </button>
+      </section>
+    );
+  }
+
+  function renderNextStep() {
+    if (nextStep.kind === "none") {
       if (totalCount === 0) return null;
       return (
-        <section aria-label="Next up" aria-live="polite" data-testid="next-up" style={styles.nextUp}>
+        <section aria-label="Next step" aria-live="polite" data-testid="next-step" style={styles.nextUp}>
           <div style={styles.nextUpInfo}>
-            <p style={styles.nextUpEyebrow}>Next Up</p>
+            <p style={styles.nextUpEyebrow}>Next Step</p>
             <h2 style={styles.nextUpTitle}>All clear for today. Nicely done.</h2>
-            <p style={styles.nextUpClear}>Nothing left actionable — enjoy the momentum.</p>
+            <p style={styles.nextUpClear}>{nextStep.reason}</p>
           </div>
           <div style={styles.nextUpActions}>
             <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
@@ -885,91 +1122,78 @@ function Today({
       );
     }
 
-    if (nextUpTask) {
-      const task = nextUpTask;
-      const overdue = isTaskOverdue(task, todayKey);
-      const reason = overdue
-        ? "Overdue"
-        : task.dueDate === todayKey
-          ? "Due today"
-          : "Active milestone";
-      const chain = taskChain(task);
-      const duration = task.durationMinutes ?? task.estimatedMinutes;
-      return (
-        <section aria-label="Next up" aria-live="polite" data-testid="next-up" style={styles.nextUp}>
-          <div style={styles.nextUpInfo}>
-            <p style={styles.nextUpEyebrow}>Next Up · Task · {reason}</p>
-            <h2 style={styles.nextUpTitle}>{task.title}</h2>
-            <div style={styles.nextUpMeta}>
-              <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{task.priority}</span>
-              {task.dueDate && (
-                <time
-                  dateTime={task.dueDate}
-                  style={overdue ? { color: "var(--priority-high-text)", fontWeight: 600 } : undefined}
-                >
-                  {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
-                </time>
-              )}
-              {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
-              {duration !== undefined && <span>{duration} min</span>}
-            </div>
-            {chain && <div style={styles.taskChain}>{chain}</div>}
-          </div>
-          <div style={styles.nextUpActions}>
-            <button
-              type="button"
-              style={styles.submitButton}
-              onClick={() => onToggleTask(task.id)}
-              aria-label={`Mark done: ${task.title}`}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Check size={14} />
-                <span>Mark Done</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              style={styles.secondaryButton}
-              onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-              aria-label={`Start Focus on ${task.title}`}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Play size={14} />
-                <span>Start Focus</span>
-              </span>
-            </button>
-          </div>
-        </section>
-      );
-    }
-
-    const habit = nextUpHabit;
-    if (!habit) return null;
-    const streak = calculateStreak(habit, streakFreeze, dayResetHour);
-    const habitGoalTitle = habit.goalId
-      ? goals.find((goal) => goal.id === habit.goalId)?.title
+    const isTask = nextStep.kind === "task";
+    const currentKey = nextStepKey(nextStep);
+    const linkedTask = isTask ? tasks.find((task) => task.id === nextStep.taskId) : undefined;
+    const linkedHabit = !isTask && nextStep.kind === "habit"
+      ? habits.find((habit) => habit.id === nextStep.habitId)
       : undefined;
-    const habitReason = habit.scheduledTime
-      ? `Scheduled ${habit.scheduledTime}`
-      : habit.priority;
+    const chain = linkedTask ? taskChain(linkedTask) : null;
+    const streak = linkedHabit ? calculateStreak(linkedHabit, streakFreeze, dayResetHour) : 0;
+    const habitGoalTitle = linkedHabit?.goalId
+      ? goals.find((goal) => goal.id === linkedHabit.goalId)?.title
+      : undefined;
     return (
-      <section aria-label="Next up" aria-live="polite" data-testid="next-up" style={styles.nextUp}>
+      <section aria-label="Next step" aria-live="polite" data-testid="next-step" style={styles.nextUp}>
         <div style={styles.nextUpInfo}>
-          <p style={styles.nextUpEyebrow}>Next Up · Habit · {habitReason}</p>
-          <h2 style={styles.nextUpTitle}>{habit.name}</h2>
+          <p style={styles.nextUpEyebrow}>Next Step · {isTask ? "Task" : "Habit"}</p>
+          <h2 style={styles.nextUpTitle}>{nextStep.title}</h2>
           <div style={styles.nextUpMeta}>
-            <span>{habit.priority}</span>
-            {habit.category && <span>{habit.category}</span>}
-            {habitGoalTitle && <span>{habitGoalTitle}</span>}
-            <StreakBadge streak={streak} />
+            <span>{nextStep.reason}</span>
+            {nextStep.durationMinutes !== undefined && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <Clock size={12} aria-hidden="true" />
+                <span>{nextStep.durationMinutes} min</span>
+              </span>
+            )}
           </div>
+          {chain && <div style={styles.taskChain}>{chain}</div>}
+          {!isTask && linkedHabit && (
+            <div style={{ ...styles.nextUpMeta, marginTop: 6 }}>
+              <span>{linkedHabit.priority}</span>
+              {linkedHabit.category && <span>{linkedHabit.category}</span>}
+              {habitGoalTitle && <span>{habitGoalTitle}</span>}
+              <StreakBadge streak={streak} />
+            </div>
+          )}
+          {nextStepOptions.length > 1 && (
+            <div style={{ ...styles.nextUpMeta, marginTop: 8 }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span>Choose another</span>
+                <select
+                  aria-label="Choose another task or habit"
+                  value={currentKey}
+                  onChange={(event) => chooseNextStep(event.target.value)}
+                  style={{ ...FORM_CONTROL, height: 32, minHeight: 32, fontSize: 12, maxWidth: 240 }}
+                >
+                  {nextStepOptions.slice(0, 8).map((option) => (
+                    <option key={nextStepKey(option)} value={nextStepKey(option)}>
+                      {option.kind === "task" ? "Task" : "Habit"}: {option.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
         </div>
         <div style={styles.nextUpActions}>
           <button
             type="button"
             style={styles.submitButton}
-            onClick={() => onToggleHabit(habit.id, todayKey)}
-            aria-label={`Mark done: ${habit.name}`}
+            onClick={startNextStep}
+            aria-label={`Start ${QUICK_FOCUS_MINUTES}-minute focus on ${nextStep.title}`}
+            title={`Start a ${QUICK_FOCUS_MINUTES}-minute focus session — the timer stays fully adjustable`}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Play size={14} />
+              <span>Start · {QUICK_FOCUS_MINUTES} min</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            style={styles.secondaryButton}
+            onClick={completeNextStep}
+            aria-label={`Mark done: ${nextStep.title}`}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Check size={14} />
@@ -978,14 +1202,11 @@ function Today({
           </button>
           <button
             type="button"
-            style={styles.secondaryButton}
-            onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-            aria-label={`Start Focus on ${habit.name}`}
+            style={styles.textButton}
+            onClick={skipNextStep}
+            aria-label={`Skip for now: ${nextStep.title}`}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Play size={14} />
-              <span>Start Focus</span>
-            </span>
+            Not now
           </button>
         </div>
       </section>
@@ -1084,8 +1305,8 @@ function Today({
           className="today-checkbox"
           style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
           onClick={() => block.kind === "task"
-            ? onToggleTask(block.taskId)
-            : onToggleHabit(block.habitId, todayKey)}
+            ? handleTaskToggle({ id: block.taskId, title: block.title }, completed)
+            : handleHabitToggle({ id: block.habitId, name: block.title }, completed, todayKey)}
           aria-label={`${completed ? "Mark incomplete" : "Complete"} ${block.title}`}
           aria-checked={completed}
           role="checkbox"
@@ -1231,20 +1452,12 @@ function Today({
     );
   }
 
-  const remainingCount = totalCount - completedCount;
   const overdueCount = pendingTodayTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
   const briefingParts: string[] = [];
   if (overdueCount > 0) briefingParts.push(`${overdueCount} overdue`);
   briefingParts.push(`${pendingTodayTasks.length} Tasks Open`);
   briefingParts.push(`${todayHabits.length - completedHabitCount} Habits Left`);
   if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
-
-  // Lightweight momentum feedback: everything the old summary grid showed,
-  // as one quiet line instead of dashboard cards.
-  const momentumParts: string[] = [];
-  if (remainingCount > 0) momentumParts.push(`${remainingCount} Remaining`);
-  if (bestStreak > 0) momentumParts.push(`Best streak ${bestStreak}`);
-  if (todayFocusTime > 0) momentumParts.push(`${todayFocusTime}m focused`);
 
   return (
     <div style={styles.page}>
@@ -1270,7 +1483,11 @@ function Today({
         </div>
       </div>
 
-      {renderNextUp()}
+      {renderWelcomeBack()}
+
+      {renderNextStep()}
+
+      {renderCompletionConfirmation()}
 
       {renderGoalProgressSnapshot()}
 
@@ -1343,7 +1560,7 @@ function Today({
                     ...styles.checkbox,
                     ...(isCompleted ? styles.checkboxChecked : {}),
                   }}
-                  onClick={() => onToggleHabit(habit.id, todayKey)}
+                  onClick={() => handleHabitToggle(habit, isCompleted, todayKey)}
                   aria-label={`Toggle ${habit.name}`}
                   aria-checked={isCompleted}
                 >
@@ -1362,15 +1579,26 @@ function Today({
                   <HabitMetadata habit={habit} streak={streak} goalTitle={habitGoalTitle} />
                 </div>
                 {!isCompleted && (
-                  <button
-                    className="today-focus-button"
-                    style={styles.focusButton}
-                    onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-                    aria-label={`Start Focus on ${habit.name}`}
-                    title="Start Focus"
-                  >
-                    <Play size={14} />
-                  </button>
+                  <>
+                    <button
+                      className="today-focus-button"
+                      style={styles.focusButton}
+                      onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
+                      aria-label={`Start Focus on ${habit.name}`}
+                      title="Start Focus"
+                    >
+                      <Play size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.focusButton}
+                      onClick={() => openScheduleModal("habit", habit.id)}
+                      aria-label={`${habit.scheduledTime ? "Reschedule" : "Schedule"} habit ${habit.name}`}
+                      title={habit.scheduledTime ? "Reschedule" : "Schedule time"}
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                  </>
                 )}
               </div>
             );
@@ -1390,13 +1618,6 @@ function Today({
             {upcomingTimelineBlocks.map((block) => renderTimelineBlock(block))}
           </div>
         </div>
-      )}
-
-      {momentumParts.length > 0 && (
-        <section style={styles.feedbackStrip} aria-label="Today's momentum">
-          <p style={styles.eyebrow}>Momentum</p>
-          <p style={styles.feedbackLine}>{momentumParts.join(" · ")}</p>
-        </section>
       )}
 
       <div style={styles.section}>

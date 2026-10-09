@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   FOCUS_SESSIONS: "focusSessions",
   STREAK_FREEZE: "streakFreeze",
   CUSTOM_CATEGORIES: "habitCategories",
+  LAST_SEEN: "synchron-last-seen",
 } as const;
 
 /**

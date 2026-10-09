@@ -677,7 +677,9 @@ export default function Goals({
       title: trimmedTitle,
       projectId: milestoneEditProjectId || undefined,
       targetDate: milestoneEditTargetDate || undefined,
-      goalId: milestones?.find((m) => m.id === milestoneId)?.goalId || "",
+      // Preserve undefined (never fabricate ""): an empty goalId would
+      // otherwise spread onto child Tasks during move propagation.
+      goalId: milestones?.find((m) => m.id === milestoneId)?.goalId,
     });
     setEditingMilestoneId(null);
   }

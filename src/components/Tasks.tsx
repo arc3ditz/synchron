@@ -4,6 +4,7 @@ import { Check, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { FORM_CONTROL } from "../theme";
 import type { Goal, Milestone, Project, Task } from "../types";
 import { resolveTaskContext } from "../domain/tasks";
+import { isTaskStaleBacklog } from "../domain/nextStep";
 import { getTodayKey } from "../utils/dates";
 import { formatFullDate } from "../utils/dates";
 
@@ -202,6 +203,9 @@ const styles: Record<string, CSSProperties> = {
   overdue: {
     color: "var(--priority-high-text)",
     fontWeight: 600,
+  },
+  backlog: {
+    color: "var(--text-muted)",
   },
   context: {
     color: "var(--text-muted)",
@@ -457,6 +461,9 @@ export default function Tasks({
 
   function renderRow(task: Task) {
     const overdue = !task.completed && task.dueDate !== undefined && task.dueDate < todayKey;
+    // Abandoned work stays visible and actionable, but stops shouting:
+    // stale backlog renders quiet instead of alarming red.
+    const stale = !task.completed && isTaskStaleBacklog(task, todayKey);
 
     if (editingTaskId === task.id) {
       return (
@@ -595,8 +602,8 @@ export default function Tasks({
                 {task.priority}
               </span>
               {task.dueDate && (
-                <time dateTime={task.dueDate} style={overdue ? styles.overdue : undefined}>
-                  {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
+                <time dateTime={task.dueDate} style={overdue && !stale ? styles.overdue : stale ? styles.backlog : undefined}>
+                  {stale ? `Backlog since ${formatFullDate(task.dueDate)}` : overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
                 </time>
               )}
               {task.scheduledTime && (

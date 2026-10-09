@@ -27,6 +27,13 @@ export interface FocusSessionInput {
 }
 
 /**
+ * Short initial commitment offered by the Next Step hero ("Start 5-min
+ * focus"). Applied to the existing Focus Timer's one-shot auto-start — never
+ * saved over the user's default duration, never a new timer.
+ */
+export const QUICK_FOCUS_MINUTES = 5;
+
+/**
  * Build a FocusSessionRecord from a completed session, preserving the linked
  * Task ID and resolving the Project behind the session through its Task or
  * Milestone. Sessions without a Task keep working: unrelated fields pass

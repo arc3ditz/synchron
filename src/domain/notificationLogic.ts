@@ -4,7 +4,7 @@
  */
 
 import type { AppSettings, Habit } from "../types";
-import { getTodayKey, isHabitScheduledOnDate } from "../utils/dates";
+import { getTodayKey, isHabitScheduledOnDate } from "../utils/dates.ts";
 import { onAction, registerActionTypes, sendNotification } from "@tauri-apps/plugin-notification";
 
 export type NotificationType = "timing" | "incomplete" | "availability";

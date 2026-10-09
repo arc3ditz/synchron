@@ -82,6 +82,8 @@ import {
   toggleMilestone,
   deleteMilestone,
   detachTasksFromDeletedMilestone,
+  detachMilestonesFromDeletedGoal,
+  detachTasksFromDeletedGoal,
   disassociateGoalFocusSessions,
 } from "./domain/goals";
 import {
@@ -95,13 +97,14 @@ import {
   disassociateProjectFocusSessions,
 } from "./domain/projects";
 import { createTask, completeTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
-import { buildFocusSessionRecord } from "./domain/focusTimer";
+import { buildFocusSessionRecord, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
 import {
   alignMilestone,
   alignProject,
   alignTask,
   detachHabitsFromDeletedGoal,
   normalizeRelationships,
+  propagateMilestoneMove,
   propagateProjectGoalChange,
 } from "./domain/relationships";
 import {
@@ -125,6 +128,7 @@ import {
   markHabitIncomplete,
   sanitizeCompletedAt,
 } from "./domain/completions";
+import { shouldShowWelcomeBack } from "./domain/welcomeBack";
 
 const DEFAULT_SETTINGS: AppSettings = {
   viewMode: "grid",
@@ -1156,7 +1160,12 @@ function App() {
     goalId?: string;
     title?: string;
   } | undefined>(undefined);
-  const [notificationTimerAction, setNotificationTimerAction] = useState<{
+  // One-shot auto-start for the existing Focus Timer, shared by
+  // notification actions and the Next Step quick start. Entity linking
+  // travels through initialFocusEntityId; this carries only the short
+  // duration and is cleared after a single start.
+  const [timerAutoStartAction, setTimerAutoStartAction] = useState<{
+    taskId?: string;
     habitId?: number;
     title?: string;
     durationMinutes?: number;
@@ -1165,6 +1174,38 @@ function App() {
     const stored = loadStorageData<boolean>("synchron-sidebar-collapsed", false);
     return stored === true;
   });
+
+  // Gentle restart: decide once per launch whether this is a return after a
+  // meaningful gap. Derived only from reliable local data (last-seen day,
+  // habit completions, focus sessions); missing or invalid data falls back
+  // to the normal Today experience. Nothing here resets goals, habits,
+  // tasks, or progress — it only selects a calm banner.
+  const [welcomeBack] = useState<{ daysAway: number } | null>(() => {
+    try {
+      const todayKey = getTodayKey(appSettings.dayResetHour);
+      const lastSeenKey = loadStorageData<string | null>(STORAGE_KEYS.LAST_SEEN, null);
+      const decision = shouldShowWelcomeBack({
+        habits,
+        focusSessions,
+        lastSeenKey,
+        todayKey,
+      });
+      return decision.show ? { daysAway: decision.daysAway } : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Record this launch day so the same welcome is not shown on every launch.
+  // The next launch compares against today instead of the stale return date.
+  useEffect(() => {
+    try {
+      saveStorageData(STORAGE_KEYS.LAST_SEEN, getTodayKey(appSettings.dayResetHour));
+    } catch {
+      // localStorage unavailable — welcome simply falls back next launch.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     saveStorageData(STORAGE_KEYS.SETTINGS, appSettings);
@@ -1292,9 +1333,19 @@ function App() {
   }
 
   function handleEditMilestone(milestoneId: string, data: Omit<Milestone, "id" | "completed">) {
-    setMilestones((current) => current.map((milestone) =>
-      milestone.id === milestoneId ? alignMilestone(updateMilestone(milestone, data), projects) : milestone,
-    ));
+    const existing = milestones.find((milestone) => milestone.id === milestoneId);
+    if (!existing) return;
+    const updatedMilestone = alignMilestone(updateMilestone(existing, data), projects);
+    const nextMilestones = milestones.map((milestone) =>
+      milestone.id === milestoneId ? updatedMilestone : milestone,
+    );
+    setMilestones(nextMilestones);
+    // A Milestone is the source of truth for its Tasks' inherited links:
+    // re-resolve child Tasks when the Milestone moves so no stale reference
+    // survives that progress would count under both old and new parents.
+    if (updatedMilestone.projectId !== existing.projectId || updatedMilestone.goalId !== existing.goalId) {
+      setTasks((current) => propagateMilestoneMove(current, updatedMilestone, nextMilestones, projects));
+    }
   }
 
   function handleDeleteMilestone(milestoneId: string) {
@@ -1384,7 +1435,7 @@ function App() {
       const title = detail.habitName ?? detail.title;
       const durationMinutes = detail.durationMinutes ?? appSettings.defaultFocusDuration;
 
-      setNotificationTimerAction({ habitId, title, durationMinutes });
+      setTimerAutoStartAction({ habitId, title, durationMinutes });
       setInitialFocusEntityId(
         habitId !== undefined
           ? { habitId, title }
@@ -1671,6 +1722,25 @@ function App() {
 
   function startFocusSession(entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) {
     setInitialFocusEntityId(entityId);
+    navigateToView("Timer");
+  }
+
+  // Low-friction start for the Next Step hero: link the recommended item on
+  // the existing Timer, apply a short commitment without touching the saved
+  // default duration, and auto-start once. No setup screens or confirmations.
+  // Completion still follows existing rules — the timer never auto-completes.
+  function startQuickFocus(entity: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number }) {
+    const durationMinutes = entity.durationMinutes ?? QUICK_FOCUS_MINUTES;
+    setInitialFocusEntityId(
+      entity.taskId !== undefined
+        ? { taskId: entity.taskId, title: entity.title }
+        : entity.habitId !== undefined
+          ? { habitId: entity.habitId, title: entity.title }
+          : entity.title
+            ? { title: entity.title }
+            : undefined,
+    );
+    setTimerAutoStartAction({ ...entity, durationMinutes });
     navigateToView("Timer");
   }
 
@@ -2598,6 +2668,9 @@ function App() {
               onStartFocus={(entityId) => {
                 startFocusSession(entityId);
               }}
+              onQuickFocus={(entity) => {
+                startQuickFocus(entity);
+              }}
               onNavigateToHabits={() => navigateToView("Habits")}
               onNavigateToGoals={() => navigateToView("goals")}
               onNavigateToHistory={() => navigateToView("History")}
@@ -2615,6 +2688,7 @@ function App() {
                   task.id === updatedTask.id ? updatedTask : task,
                 ))
               }
+              welcomeBack={welcomeBack}
             />
           </div>
 
@@ -3099,8 +3173,8 @@ function App() {
               onCompleteTask={handleCompleteTaskFromFocus}
               allHabits={habits}
               initialEntityId={initialFocusEntityId}
-              autoStartAction={notificationTimerAction}
-              onAutoStartHandled={() => setNotificationTimerAction(null)}
+              autoStartAction={timerAutoStartAction}
+              onAutoStartHandled={() => setTimerAutoStartAction(null)}
               onTimerShortcutReady={registerTimerShortcut}
             />
           </div>
@@ -3174,25 +3248,19 @@ function App() {
                 ))
               }
               onDeleteGoal={(goalId) => {
-                const deletedMilestoneIds = new Set(
-                  milestones.filter((milestone) => milestone.goalId === goalId).map((milestone) => milestone.id),
-                );
-                const deletedTaskIds = new Set(
-                  tasks
-                    .filter((task) => task.goalId === goalId || (task.milestoneId && deletedMilestoneIds.has(task.milestoneId)))
-                    .map((task) => task.id),
-                );
+                // Only the Goal itself is deleted: its Milestones, Tasks,
+                // Projects, and Habits are detached (kept), matching the
+                // Project/Milestone deletion conventions. Focus Sessions keep
+                // their surviving child links; only the Goal link is cleared.
                 setFocusSessions((current) => disassociateGoalFocusSessions(
                   current,
                   goalId,
-                  deletedMilestoneIds,
-                  deletedTaskIds,
+                  new Set<string>(),
+                  new Set<string>(),
                 ));
                 setGoals((current) => current.filter((goal) => goal.id !== goalId));
-                setTasks((current) => current.filter((task) =>
-                  task.goalId !== goalId && !(task.milestoneId && deletedMilestoneIds.has(task.milestoneId)),
-                ));
-                setMilestones((current) => current.filter((milestone) => milestone.goalId !== goalId));
+                setMilestones((current) => detachMilestonesFromDeletedGoal(current, goalId));
+                setTasks((current) => detachTasksFromDeletedGoal(current, goalId));
                 setProjects((current) => detachGoalFromProjects(current, goalId));
                 setHabits((current) => detachHabitsFromDeletedGoal(current, goalId));
               }}              onAddMilestone={handleAddMilestone}

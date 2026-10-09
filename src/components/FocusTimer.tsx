@@ -28,7 +28,11 @@ type FocusTimerProps = {
   onCompleteTask?: (taskId: string) => void;
   allHabits?: Habit[];
   initialEntityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string };
-  autoStartAction?: { habitId?: number; title?: string; durationMinutes?: number } | null;
+  // One-shot auto-start request: set a short duration on the existing Timer
+  // and start it. Entity-agnostic — the linked task/habit arrives through
+  // initialEntityId. Cleared via onAutoStartHandled so it can never restart
+  // the timer or log twice.
+  autoStartAction?: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number } | null;
   onAutoStartHandled?: () => void;
   onTimerShortcutReady?: (handler: (() => boolean) | null) => void;
 };
@@ -471,7 +475,6 @@ function FocusTimer({
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
   const quickAdjustStepInputFocusedRef = useRef(false);
   const primaryControlRef = useRef<HTMLButtonElement>(null);
-  const wasRunningBeforePauseRef = useRef(false);
 
   useEffect(() => {
     const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
@@ -783,13 +786,13 @@ function FocusTimer({
     requestNotificationPermissionIfNeeded();
     primeSfxContext();
 
-    // Play start sound only if this is a fresh start (not a resume)
-    if (!wasRunningBeforePauseRef.current) {
-      playSfx("start");
-    } else {
-      playSfx("pauseResume");
-    }
-    wasRunningBeforePauseRef.current = true;
+    // Match the Start/Resume button label below: resuming partial progress
+    // plays the resume sound, while a full bar is always a fresh start.
+    // Deriving this from remaining/total (instead of a flag) keeps the
+    // sound correct across completions, resets, duration changes, and modes.
+    const startRemainingMs = mode === "Timer" ? timerRemainingRef.current : pomodoroRemainingRef.current;
+    const startTotalMs = mode === "Timer" ? timerTotalMsRef.current : pomodoroTotalMsRef.current;
+    playSfx(startRemainingMs > 0 && startRemainingMs < startTotalMs ? "pauseResume" : "start");
 
     const now = Date.now();
     if (mode === "Timer") {
@@ -826,7 +829,6 @@ function FocusTimer({
   }
 
   function handleReset() {
-    wasRunningBeforePauseRef.current = false;
     if (mode === "Timer") {
       const totalMs = timerMinutesRef.current * 60000;
       updateTimerTotalMs(totalMs);

@@ -12,8 +12,8 @@
   --color-text-primary: #f4f4f5;
   --color-text-body: #d4d4d8;
   --color-text-secondary: #a0a0a0;
-  --color-text-muted: #71717a;
-  --color-text-dim: #5c5d63;
+  --color-text-muted: #7e7e88;
+  --color-text-dim: #787880;
   --color-accent: #00f0ff;
   --color-accent-soft: #00e5ff;
   --color-accent-rgb: 0, 240, 255;
@@ -24,7 +24,7 @@
   --color-danger: #dc2626;
   --color-danger-border: #ef4444;
   --color-danger-hover: #f87171;
-  --color-danger-text: #fff1f2;
+  --color-danger-text: #ffffff;
   --color-category: #c4b5fd;
   --color-category-wash: rgba(168, 85, 247, 0.05);
   --color-category-border: rgba(168, 85, 247, 0.2);
@@ -169,7 +169,7 @@
   --color-text-body: #39372f;
   --color-text-secondary: #625f56;
   --color-text-muted: #716d63;
-  --color-text-dim: #817c71;
+  --color-text-dim: #767165;
   --color-accent: #9a5b13;
   --color-accent-soft: #854d10;
   --color-accent-rgb: 154, 91, 19;
@@ -411,6 +411,21 @@ input[type="radio"] {
   font-size: var(--control-font-size);
   line-height: var(--control-line-height);
   vertical-align: middle;
+}
+
+/* Range sliders join the 42px control family: same outer height so they
+   align with neighboring controls and labels. The native track/thumb stay
+   untouched (accent-color comes from the global input rule); only the box
+   geometry is normalized. */
+.ui-range {
+  box-sizing: border-box;
+  height: var(--control-height);
+  min-height: var(--control-min-height);
+  cursor: pointer;
+}
+
+.ui-range:disabled {
+  cursor: not-allowed;
 }
 
 /* Normalize browser-native date/time/number/select internals so their inner
