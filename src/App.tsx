@@ -671,6 +671,11 @@ const styles: Record<string, CSSProperties> = {
     padding: "2px var(--space-2)",
     whiteSpace: "nowrap",
   },
+  habitGoalLink: {
+    color: "var(--text-muted)",
+    fontSize: 12,
+    overflowWrap: "anywhere",
+  },
   categoryManageButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1117,6 +1122,11 @@ function App() {
   const focusTimerAfterNavigationRef = useRef(false);
   const notificationIntervalRegisteredRef = useRef(false);
   const notificationListenerRegisteredRef = useRef(false);
+  // Latest habits/settings for the stable 5-minute poller below. Reading via
+  // refs keeps the interval cadence steady: editing or completing a habit no
+  // longer resets the timer or fires an immediate extra check.
+  const habitsRef = useRef(habits);
+  const appSettingsRef = useRef(appSettings);
   const registerTimerShortcut = useCallback((handler: (() => boolean) | null) => {
     timerShortcutRef.current = handler;
   }, []);
@@ -1256,9 +1266,15 @@ function App() {
   }
 
   function handleToggleTask(taskId: string) {
+    const isCurrentlyComplete = tasks.find((task) => task.id === taskId)?.completed ?? false;
     setTasks((current) => current.map((task) =>
       task.id === taskId ? toggleTaskCompletion(task) : task,
     ));
+
+    // Same subtle confirmation as habits, only when marking complete (not unmarking)
+    if (!isCurrentlyComplete) {
+      playSfx("habitComplete");
+    }
   }
 
   function handleEditTask(taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) {
@@ -1313,23 +1329,35 @@ function App() {
   }
 
   useEffect(() => {
+    habitsRef.current = habits;
+  }, [habits]);
+
+  useEffect(() => {
+    appSettingsRef.current = appSettings;
+  }, [appSettings]);
+
+  useEffect(() => {
     // Prevent multiple interval registrations
     if (notificationIntervalRegisteredRef.current) return;
     notificationIntervalRegisteredRef.current = true;
 
-    // Check for intelligent notifications every 5 minutes
+    // Check for intelligent notifications every 5 minutes. The domain layer
+    // enforces the global toggle, per-type toggles, frequency cooldown,
+    // Focus-Timer suppression, and per-habit per-day dedupe.
     const checkNotifications = () => {
+      const latestHabits = habitsRef.current;
+      const latestSettings = appSettingsRef.current;
       const currentHour = new Date().getHours();
       const notification = getIntelligentNotification(
-        habits,
-        appSettings.dayResetHour,
+        latestHabits,
+        latestSettings.dayResetHour,
         currentHour,
-        appSettings.defaultFocusDuration,
-        appSettings,
+        latestSettings.defaultFocusDuration,
+        latestSettings,
       );
 
       if (notification) {
-        void sendIntelligentNotification(notification, appSettings);
+        void sendIntelligentNotification(notification, latestSettings);
       }
     };
 
@@ -1342,7 +1370,7 @@ function App() {
       window.clearInterval(intervalId);
       notificationIntervalRegisteredRef.current = false;
     };
-  }, [habits, appSettings]);
+  }, []);
 
   useEffect(() => {
     // Prevent multiple listener registrations
@@ -2069,6 +2097,9 @@ function App() {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
     const isEditing = editingId === habit.id;
+    const linkedGoal = habit.goalId
+      ? goals.find((goal) => goal.id === habit.goalId)
+      : undefined;
     const todayKey = getTodayKey(appSettings.dayResetHour);
     const isFrozen = habit.streakFreezeDates?.includes(todayKey) ?? false;
 
@@ -2132,9 +2163,10 @@ function App() {
                 style={styles.editSelect}
                 value={editingGoalId}
                 onChange={(event) => setEditingGoalId(event.target.value)}
-                aria-label="Linked Goal"
+                aria-label="Linked Goal (optional)"
+                title="Link this habit to a goal it supports (optional)"
               >
-                <option value="">No Goal</option>
+                <option value="">No Goal — standalone habit</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -2182,6 +2214,11 @@ function App() {
             )}
             {habit.category && (
               <span style={styles.categoryBadge}>{habit.category}</span>
+            )}
+            {linkedGoal && (
+              <span style={styles.habitGoalLink} title={`Supports goal: ${linkedGoal.title}`}>
+                → {linkedGoal.title}
+              </span>
             )}
           </div>
 
@@ -2285,6 +2322,9 @@ function App() {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
     const progress = doneOnSelectedDate ? 100 : 0;
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
+    const linkedGoal = habit.goalId
+      ? goals.find((goal) => goal.id === habit.goalId)
+      : undefined;
     const todayKey = getTodayKey(appSettings.dayResetHour);
     const isFrozen = habit.streakFreezeDates?.includes(todayKey) ?? false;
 
@@ -2300,6 +2340,11 @@ function App() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={styles.gridCardName} title={habit.name}>{habit.name}</div>
             {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
+            {linkedGoal && (
+              <span style={{ ...styles.habitGoalLink, display: "block", marginTop: 2 }} title={`Supports goal: ${linkedGoal.title}`}>
+                → {linkedGoal.title}
+              </span>
+            )}
           </div>
           <span
             style={{
@@ -2883,9 +2928,10 @@ function App() {
                 style={styles.habitPropertySelect}
                 value={newGoalId}
                 onChange={(event) => setNewGoalId(event.target.value)}
-                aria-label="Linked Goal"
+                aria-label="Linked Goal (optional)"
+                title="Link this habit to a goal it supports (optional)"
               >
-                <option value="">No Goal</option>
+                <option value="">No Goal — standalone habit</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.title}</option>
                 ))}
@@ -3177,6 +3223,7 @@ function App() {
               tasks={tasks}
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
+              onNavigateToGoals={() => navigateToView("goals")}
               onAddProject={handleAddProject}
               onEditProject={(projectId, data) => {
                 const existing = projects.find((project) => project.id === projectId);

@@ -274,7 +274,7 @@
   border: 1px solid var(--checkbox-border);
   border-radius: 6px;
   background: transparent;
-  color: #fff;
+  color: var(--color-accent-contrast);
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -289,7 +289,7 @@
 .main-content button.milestone-checkbox[aria-pressed="true"] {
   border-color: var(--checkbox-checked-border);
   background: var(--checkbox-checked-bg);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 
 .milestone-checkbox-icon {
@@ -336,6 +336,27 @@
   place-items: center;
   padding: 20px;
   background: var(--overlay-dim);
+  animation: overlay-in var(--transition-standard) ease-out;
+}
+
+/* Fast, subtle mount motion for every dialog (all dialogs mount
+   conditionally, so this plays once on open). Close stays instant —
+   no unmount delay. Reduced-motion is neutralized by the global rule. */
+[role="dialog"] {
+  animation: dialog-in var(--transition-standard) ease-out;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .delete-modal {
@@ -580,12 +601,31 @@
   border-radius: 8px;
 }
 
-.main-content button.today-checkbox:hover {
+.today-schedule-focus:hover h3 {
+  color: var(--color-accent) !important;
+}
+
+.today-schedule-focus:hover svg {
+  color: var(--color-accent) !important;
+}
+
+.main-content button.today-checkbox:hover:not([aria-checked="true"]) {
   border-color: var(--checkbox-checked-border) !important;
+  background: var(--accent-wash-soft) !important;
 }
 
 .main-content button.today-checkbox:active {
   transform: scale(0.94);
+}
+
+/* The check only mounts when the item becomes completed, so this pop
+   plays exactly once per completion. Reduced-motion is covered globally. */
+.main-content button.today-checkbox svg {
+  animation: check-in 0.15s ease-in-out;
+}
+
+.today-item h3 {
+  transition: color var(--transition-standard);
 }
 
 .habit-row button svg {

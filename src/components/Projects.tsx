@@ -13,6 +13,7 @@ type ProjectsProps = {
   tasks: Task[];
   selectedProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
+  onNavigateToGoals?: () => void;
   onAddProject: (data: Omit<Project, "id" | "createdAt" | "status">) => void;
   onEditProject: (projectId: string, data: Omit<Project, "id" | "createdAt" | "status">) => void;
   onEditProjectStatus: (projectId: string, status: Project["status"]) => void;
@@ -102,6 +103,58 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     fontSize: 13,
     cursor: "pointer",
+  },
+  breadcrumb: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: "var(--space-4)",
+    color: "var(--text-secondary)",
+    fontSize: 13,
+  },
+  breadcrumbLink: {
+    color: "var(--color-accent)",
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  breadcrumbSeparator: {
+    color: "var(--text-muted)",
+  },
+  breadcrumbCurrent: {
+    color: "var(--text-primary)",
+    fontWeight: 500,
+  },
+  goalBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "4px 8px",
+    background: "var(--bg-inset)",
+    borderRadius: 6,
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    fontWeight: 500,
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  sectionTitleWithCount: {
+    margin: 0,
+    color: "var(--text-secondary)",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+  },
+  sectionCount: {
+    color: "var(--text-muted)",
+    fontSize: 11,
+    fontWeight: 500,
   },
   form: {
     display: "grid",
@@ -520,6 +573,18 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     cursor: "pointer",
   },
+  emptyWithHint: {
+    padding: "16px 0",
+    color: "var(--text-secondary)",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  emptyHint: {
+    display: "block",
+    marginTop: 4,
+    color: "var(--text-muted)",
+    fontSize: 12,
+  },
   inlineForm: {
     display: "grid",
     gap: 8,
@@ -536,6 +601,7 @@ export default function Projects({
   tasks,
   selectedProjectId,
   onSelectProject,
+  onNavigateToGoals,
   onAddProject,
   onEditProject,
   onEditProjectStatus,
@@ -825,9 +891,17 @@ export default function Projects({
 
     return (
       <section style={styles.section} aria-label={`Milestones for "${project.name}"`}>
-        <h3 style={styles.sectionTitle}>Milestones</h3>
+        <div style={styles.sectionHeader}>
+          <h3 style={styles.sectionTitleWithCount}>
+            Milestones
+            <span style={styles.sectionCount}> ({projectMilestones.length})</span>
+          </h3>
+        </div>
         {projectMilestones.length === 0 ? (
-          <p style={styles.meta}>No milestones yet.</p>
+          <div style={styles.emptyWithHint}>
+            No milestones yet
+            <span style={styles.emptyHint}>Define key checkpoints for this project</span>
+          </div>
         ) : (
           <ul style={styles.milestoneList}>
             {projectMilestones.map((milestone) => (
@@ -1112,9 +1186,17 @@ export default function Projects({
 
     return (
       <section style={styles.section} aria-label={`Tasks for "${project.name}"`}>
-        <h3 style={styles.sectionTitle}>Tasks</h3>
+        <div style={styles.sectionHeader}>
+          <h3 style={styles.sectionTitleWithCount}>
+            Tasks
+            <span style={styles.sectionCount}> ({projectTasks.length})</span>
+          </h3>
+        </div>
         {projectTasks.length === 0 ? (
-          <p style={styles.meta}>No tasks yet.</p>
+          <div style={styles.emptyWithHint}>
+            No tasks yet
+            <span style={styles.emptyHint}>Break down milestones into actionable tasks</span>
+          </div>
         ) : (
           <ul style={styles.taskList}>
             {projectTasks.map((task) => renderTaskItem(task, projectMilestones))}
@@ -1200,6 +1282,23 @@ export default function Projects({
 
     return (
       <section style={styles.page} aria-labelledby="project-detail-title">
+        {linkedGoal && (
+          <div style={styles.breadcrumb}>
+            {onNavigateToGoals ? (
+              <button
+                type="button"
+                style={styles.breadcrumbLink}
+                onClick={onNavigateToGoals}
+              >
+                {linkedGoal.title}
+              </button>
+            ) : (
+              <span style={styles.breadcrumbCurrent}>{linkedGoal.title}</span>
+            )}
+            <span style={styles.breadcrumbSeparator}>›</span>
+            <span style={styles.breadcrumbCurrent}>{project.name}</span>
+          </div>
+        )}
         <button
           type="button"
           style={styles.backButton}
@@ -1302,14 +1401,23 @@ export default function Projects({
           )}
 
           {project.description && <p style={styles.description}>{project.description}</p>}
-          <p style={styles.meta}>
-            {linkedGoal ? `Goal: ${linkedGoal.title}` : "No Goal"}
-            {project.startDate && <> · Start: {formatFullDate(project.startDate)}</>}
-            {project.targetDate && <> · Target: {formatFullDate(project.targetDate)}</>}
-            {" · "}{project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-          </p>
 
-          <div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+            {linkedGoal && (
+              <div style={styles.goalBadge}>
+                Goal: {linkedGoal.title}
+              </div>
+            )}
+            <p style={styles.meta}>
+              {project.startDate && <>Start: {formatFullDate(project.startDate)}</>}
+              {project.startDate && project.targetDate && " · "}
+              {project.targetDate && <>Target: {formatFullDate(project.targetDate)}</>}
+              {(project.startDate || project.targetDate) && " · "}
+              Status: {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
               <span style={styles.percentLabel}>{progress.percent}% complete</span>
               <span style={styles.meta}>{progress.completed} of {progress.total} items</span>

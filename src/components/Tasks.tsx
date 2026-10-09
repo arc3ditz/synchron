@@ -189,7 +189,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 8,
     color: "var(--text-muted)",
     fontSize: 11,
   },
@@ -259,6 +259,24 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     fontSize: 13,
     textAlign: "center",
+  },
+  emptyHint: {
+    display: "block",
+    marginTop: 4,
+    color: "var(--text-muted)",
+    fontSize: 12,
+  },
+  taskContextBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "2px 6px",
+    background: "var(--bg-inset)",
+    borderRadius: 4,
+    color: "var(--text-muted)",
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: "uppercase",
   },
 };
 
@@ -427,7 +445,14 @@ export default function Tasks({
       (part): part is string => part !== undefined && part !== "",
     );
     if (parts.length === 0) return null;
-    return <span style={styles.context}>{parts.join(" › ")}</span>;
+    return (
+      <span style={styles.context}>
+        {goal && <span style={styles.taskContextBadge}>Goal</span>}
+        {project && <span style={styles.taskContextBadge}>Project</span>}
+        {milestone && <span style={styles.taskContextBadge}>Milestone</span>}
+        {parts.join(" › ")}
+      </span>
+    );
   }
 
   function renderRow(task: Task) {
@@ -752,8 +777,18 @@ export default function Tasks({
       {visibleTasks.length === 0 ? (
         <p style={styles.empty}>
           {tasks.length === 0
-            ? "No tasks yet — add your first one above."
-            : "Nothing here. Try a different filter."}
+            ? (
+              <>
+                No tasks yet
+                <span style={styles.emptyHint}>Add your first task above to get started</span>
+              </>
+            )
+            : (
+              <>
+                No tasks match your filter
+                <span style={styles.emptyHint}>Try adjusting the filter or add a new task</span>
+              </>
+            )}
         </p>
       ) : (
         <ul style={styles.list}>

@@ -1,5 +1,5 @@
 import { useState, useRef, type CSSProperties } from "react";
-import { ArrowRight, ArrowLeft, Sparkles, Check, BookOpen, Dumbbell, Book, Sprout, CalendarDays } from "lucide-react";
+import { ArrowRight, ArrowLeft, Sparkles, Check, BookOpen, Dumbbell, Book, Sprout, CalendarDays, Play, BarChart3 } from "lucide-react";
 import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import type { Habit, Priority, FrequencyType } from "../types";
 
@@ -26,6 +26,31 @@ const HABIT_SUGGESTIONS: Record<string, string[]> = {
   "personal-growth": ["Journal for 10 Minutes", "Meditate", "Learn a New Skill"],
   other: ["Start a Morning Routine", "Practice a Hobby", "Stay Hydrated"],
 };
+
+// The daily loop, in product terms: Today brings the plan together,
+// Focus executes it, Complete records it, Feedback shows what to adjust.
+const LOOP_STEPS = [
+  {
+    icon: CalendarDays,
+    title: "Today brings it together",
+    description: "Your habits and tasks land in one place — open Today and pick what's next.",
+  },
+  {
+    icon: Play,
+    title: "Focus to execute",
+    description: "Start a Focus session on any action and work it through with the timer.",
+  },
+  {
+    icon: Check,
+    title: "Complete to build momentum",
+    description: "Checking things off grows streaks and moves goals forward.",
+  },
+  {
+    icon: BarChart3,
+    title: "Review, adjust, repeat",
+    description: "History and Analytics show your trend — tune the plan and keep going.",
+  },
+];
 
 const styles: Record<string, CSSProperties> = {
   overlay: {
@@ -55,6 +80,15 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "var(--space-2)",
+    textAlign: "center",
+  },
+  eyebrow: {
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--color-accent)",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    margin: 0,
     textAlign: "center",
   },
   title: {
@@ -186,9 +220,55 @@ const styles: Record<string, CSSProperties> = {
     width: 64,
     height: 64,
     borderRadius: "50%",
-    background: "rgba(var(--accent-rgb), 0.1)",
+    background: "var(--accent-wash)",
     color: "var(--color-accent)",
     margin: "0 auto",
+  },
+  loopList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "var(--space-2)",
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+  },
+  loopItem: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "var(--space-3)",
+    padding: "var(--space-3)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    background: "transparent",
+  },
+  loopIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+    borderRadius: "var(--radius-md)",
+    background: "var(--accent-wash-soft)",
+    color: "var(--color-accent)",
+  },
+  loopText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    minWidth: 0,
+  },
+  loopTitle: {
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-primary)",
+    margin: 0,
+  },
+  loopDescription: {
+    fontSize: "var(--type-sm)",
+    color: "var(--text-secondary)",
+    margin: 0,
+    lineHeight: 1.5,
   },
 };
 
@@ -279,9 +359,11 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
         {step === "welcome" && (
           <>
             <div style={styles.header}>
-              <h1 style={styles.title}>Welcome to Synchron</h1>
+              <p style={styles.eyebrow}>How Synchron works</p>
+              <h1 style={styles.title}>Turn goals into daily action</h1>
               <p style={styles.description}>
-                Turn your goals into consistent action through habits, focus, and daily progress.
+                Set a goal, plan it into habits and tasks, focus on the work, and complete it.
+                Today brings it all together — streaks and feedback show what to adjust next.
               </p>
             </div>
             <div style={styles.actions}>
@@ -307,9 +389,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
         {step === "focus" && (
           <>
             <div style={styles.header}>
-              <h1 style={styles.title}>What Do You Want to Improve?</h1>
+              <p style={styles.eyebrow}>Step 1 · Your goal</p>
+              <h1 style={styles.title}>What do you want?</h1>
               <p style={styles.description}>
-                Choose a focus area to personalize your experience.
+                A goal is the outcome you want. Pick an area — your first habit will feed into it.
               </p>
             </div>
             <div style={styles.focusGrid}>
@@ -365,9 +448,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
         {step === "habit" && (
           <>
             <div style={styles.header}>
-              <h1 style={styles.title}>Let's Build Your First Habit</h1>
+              <p style={styles.eyebrow}>Step 2 · Your first habit</p>
+              <h1 style={styles.title}>What will you do repeatedly?</h1>
               <p style={styles.description}>
-                Create a habit to start tracking your progress.
+                Habits handle the recurring actions toward your goal. One-off wins belong in Tasks.
               </p>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
@@ -466,11 +550,28 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
               <div style={styles.readyIcon}>
                 <CalendarDays size={32} />
               </div>
-              <h1 style={styles.title}>You're Ready to Begin</h1>
+              <p style={styles.eyebrow}>Step 3 · Your daily loop</p>
+              <h1 style={styles.title}>Your habit is on Today</h1>
               <p style={styles.description}>
-                Complete your habit from Today to start building momentum.
+                Complete it, or start a Focus session on it. Then repeat — that loop is the whole product.
               </p>
             </div>
+            <ul style={styles.loopList}>
+              {LOOP_STEPS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.title} style={styles.loopItem}>
+                    <span style={styles.loopIcon}>
+                      <Icon size={16} />
+                    </span>
+                    <span style={styles.loopText}>
+                      <span style={styles.loopTitle}>{item.title}</span>
+                      <span style={styles.loopDescription}>{item.description}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
             <div style={styles.actions}>
               <button
                 type="button"

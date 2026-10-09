@@ -75,27 +75,37 @@ const styles: Record<string, CSSProperties> = {
   },
   nextUp: {
     display: "flex",
-    alignItems: "center",
-    gap: "var(--space-3)",
-    padding: "var(--space-3) 0",
+    alignItems: "flex-start",
+    gap: "var(--space-4)",
+    padding: "var(--space-4)",
     marginBottom: "var(--space-6)",
-    borderBottom: "1px solid var(--border-color)",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--accent-border-soft)",
+    borderRadius: "var(--radius-lg)",
+  },
+  nextUpEyebrow: {
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--color-accent)",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    margin: "0 0 var(--space-2)",
   },
   nextUpInfo: {
     flex: 1,
     minWidth: 0,
   },
   nextUpTitle: {
-    fontSize: "var(--type-base)",
+    fontSize: "var(--type-md)",
     fontWeight: "var(--font-semibold)",
     color: "var(--text-primary)",
-    margin: "0 0 4px",
+    margin: "0 0 6px",
     overflowWrap: "anywhere",
   },
   nextUpMeta: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     flexWrap: "wrap",
     color: "var(--text-secondary)",
     fontSize: "var(--type-xs)",
@@ -103,13 +113,15 @@ const styles: Record<string, CSSProperties> = {
   nextUpActions: {
     display: "flex",
     alignItems: "center",
+    alignSelf: "center",
     gap: 8,
     flexShrink: 0,
+    flexWrap: "wrap",
   },
   nextUpClear: {
-    fontSize: "var(--type-base)",
+    fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
-    margin: 0,
+    margin: "0 0 4px",
   },
   progressSection: {
     display: "flex",
@@ -121,6 +133,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "var(--type-sm)",
     color: "var(--text-body)",
     fontWeight: 500,
+    fontVariantNumeric: "tabular-nums",
   },
   progressBar: {
     flex: 1,
@@ -222,7 +235,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: "var(--font-medium)",
     padding: "2px var(--space-2)",
     borderRadius: "var(--radius-md)",
-    backgroundColor: "var(--color-category-wash)",
+    background: "var(--color-category-wash)",
     color: "var(--color-category)",
     border: "1px solid var(--color-category-border)",
     whiteSpace: "nowrap",
@@ -258,6 +271,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 600,
     textTransform: "capitalize",
+  },
+  taskChain: {
+    margin: "2px 0 0",
+    fontSize: 12,
+    color: "var(--text-muted)",
+    overflowWrap: "anywhere",
   },
   goalTag: {
     display: "inline-flex",
@@ -371,7 +390,7 @@ const styles: Record<string, CSSProperties> = {
     background: "transparent",
     border: "1px solid transparent",
     borderRadius: 6,
-    color: "var(--text-muted)",
+    color: "var(--text-secondary)",
     cursor: "pointer",
     flexShrink: 0,
     transition: "background 0.15s ease, color 0.15s ease",
@@ -743,11 +762,22 @@ function Today({
     setQuickTaskTitle("");
   }
 
-  function renderTaskRow(task: Task, completed: boolean) {
+  // Single quiet "why" line for a Task: Goal → Project → Milestone in
+  // planning-model order, skipping levels the Task has no link to.
+  // Returns null when the Task is standalone so the row stays clean.
+  function taskChain(task: Task): string | null {
     const { goal, project, milestone } = resolveTaskContext(task, { goals, projects, milestones });
+    const parts = [goal?.title, project?.name, milestone?.title].filter(
+      (part): part is string => part !== undefined && part !== "",
+    );
+    return parts.length > 0 ? parts.join(" › ") : null;
+  }
+
+  function renderTaskRow(task: Task, completed: boolean) {
+    const chain = taskChain(task);
     const overdue = !completed && isTaskOverdue(task, todayKey);
     return (
-      <div key={task.id} style={styles.habitCard}>
+      <div key={task.id} className="today-item" style={styles.habitCard}>
         <button
           type="button"
           className="today-checkbox"
@@ -768,20 +798,20 @@ function Today({
                 {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
               </time>
             )}
-            {goal && <span style={styles.goalTag}>{goal.title}</span>}
-            {project && <span style={styles.milestoneTag}>{project.name}</span>}
-            {milestone && <span style={styles.milestoneTag}>{milestone.title}</span>}
           </div>
+          {chain && <div style={styles.taskChain}>{chain}</div>}
         </div>
-        <button
-          className="today-focus-button"
-          style={styles.focusButton}
-          onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-          aria-label={`Start Focus on ${task.title}`}
-          title="Start Focus"
-        >
-          <Play size={14} />
-        </button>
+        {!completed && (
+          <button
+            className="today-focus-button"
+            style={styles.focusButton}
+            onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+            aria-label={`Start Focus on ${task.title}`}
+            title="Start Focus"
+          >
+            <Play size={14} />
+          </button>
+        )}
       </div>
     );
   }
@@ -837,91 +867,100 @@ function Today({
     if (!nextUpTask && !nextUpHabit) {
       if (totalCount === 0) return null;
       return (
-        <div style={styles.nextUp}>
+        <section aria-label="Next up" aria-live="polite" data-testid="next-up" style={styles.nextUp}>
           <div style={styles.nextUpInfo}>
-            <p style={styles.eyebrow}>Up Next</p>
-            <p style={styles.nextUpClear}>All clear for today. Nicely done.</p>
+            <p style={styles.nextUpEyebrow}>Next Up</p>
+            <h2 style={styles.nextUpTitle}>All clear for today. Nicely done.</h2>
+            <p style={styles.nextUpClear}>Nothing left actionable — enjoy the momentum.</p>
           </div>
           <div style={styles.nextUpActions}>
             <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Play size={14} />
-                <span>Focus Anyway</span>
+                <span>Start Focus</span>
               </span>
             </button>
           </div>
-        </div>
+        </section>
       );
     }
 
     if (nextUpTask) {
       const task = nextUpTask;
-      const { goal, project, milestone } = resolveTaskContext(task, { goals, projects, milestones });
       const overdue = isTaskOverdue(task, todayKey);
-      const context = [goal?.title, project?.name, milestone?.title].filter(
-        (part): part is string => part !== undefined && part !== "",
-      );
+      const reason = overdue
+        ? "Overdue"
+        : task.dueDate === todayKey
+          ? "Due today"
+          : "Active milestone";
+      const chain = taskChain(task);
+      const duration = task.durationMinutes ?? task.estimatedMinutes;
       return (
-        <div style={styles.nextUp}>
-          <button
-            type="button"
-            className="today-checkbox"
-            style={styles.checkbox}
-            onClick={() => onToggleTask(task.id)}
-            aria-label={`Complete ${task.title}`}
-            aria-checked={false}
-            role="checkbox"
-          />
+        <section aria-label="Next up" aria-live="polite" data-testid="next-up" style={styles.nextUp}>
           <div style={styles.nextUpInfo}>
-            <p style={styles.eyebrow}>Up Next · Task</p>
+            <p style={styles.nextUpEyebrow}>Next Up · Task · {reason}</p>
             <h2 style={styles.nextUpTitle}>{task.title}</h2>
             <div style={styles.nextUpMeta}>
               <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{task.priority}</span>
               {task.dueDate && (
-                <time dateTime={task.dueDate}>
+                <time
+                  dateTime={task.dueDate}
+                  style={overdue ? { color: "var(--priority-high-text)", fontWeight: 600 } : undefined}
+                >
                   {overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
                 </time>
               )}
-              {context.length > 0 && <span>{context.join(" › ")}</span>}
+              {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
+              {duration !== undefined && <span>{duration} min</span>}
             </div>
+            {chain && <div style={styles.taskChain}>{chain}</div>}
           </div>
           <div style={styles.nextUpActions}>
             <button
               type="button"
               style={styles.submitButton}
+              onClick={() => onToggleTask(task.id)}
+              aria-label={`Mark done: ${task.title}`}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Check size={14} />
+                <span>Mark Done</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              style={styles.secondaryButton}
               onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
               aria-label={`Start Focus on ${task.title}`}
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Play size={14} />
-                <span>Focus</span>
+                <span>Start Focus</span>
               </span>
             </button>
           </div>
-        </div>
+        </section>
       );
     }
 
     const habit = nextUpHabit;
     if (!habit) return null;
     const streak = calculateStreak(habit, streakFreeze, dayResetHour);
+    const habitGoalTitle = habit.goalId
+      ? goals.find((goal) => goal.id === habit.goalId)?.title
+      : undefined;
+    const habitReason = habit.scheduledTime
+      ? `Scheduled ${habit.scheduledTime}`
+      : habit.priority;
     return (
-      <div style={styles.nextUp}>
-        <button
-          type="button"
-          className="today-checkbox"
-          style={styles.checkbox}
-          onClick={() => onToggleHabit(habit.id, todayKey)}
-          aria-label={`Complete habit ${habit.name}`}
-          aria-checked={false}
-          role="checkbox"
-        />
+      <section aria-label="Next up" aria-live="polite" data-testid="next-up" style={styles.nextUp}>
         <div style={styles.nextUpInfo}>
-          <p style={styles.eyebrow}>Up Next · Habit</p>
+          <p style={styles.nextUpEyebrow}>Next Up · Habit · {habitReason}</p>
           <h2 style={styles.nextUpTitle}>{habit.name}</h2>
           <div style={styles.nextUpMeta}>
             <span>{habit.priority}</span>
             {habit.category && <span>{habit.category}</span>}
+            {habitGoalTitle && <span>{habitGoalTitle}</span>}
             <StreakBadge streak={streak} />
           </div>
         </div>
@@ -929,16 +968,27 @@ function Today({
           <button
             type="button"
             style={styles.submitButton}
+            onClick={() => onToggleHabit(habit.id, todayKey)}
+            aria-label={`Mark done: ${habit.name}`}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Check size={14} />
+              <span>Mark Done</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            style={styles.secondaryButton}
             onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
             aria-label={`Start Focus on ${habit.name}`}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Play size={14} />
-              <span>Focus</span>
+              <span>Start Focus</span>
             </span>
           </button>
         </div>
-      </div>
+      </section>
     );
   }
 
@@ -997,7 +1047,8 @@ function Today({
           <div style={styles.scheduleTimeSlot}>{block.time}</div>
           <button
             type="button"
-            style={styles.scheduleItemButton}
+            className="today-schedule-focus"
+            style={{ ...styles.scheduleItemButton, display: "flex", gap: 8, alignItems: "flex-start" }}
             onClick={() => onStartFocus({
               taskId: block.taskId,
               habitId: block.habitId,
@@ -1005,11 +1056,15 @@ function Today({
               title: block.title,
             })}
             aria-label={`Start Focus on ${block.title}`}
+            title="Start Focus"
           >
-            <h3 style={styles.scheduleItemTitle}>{block.title}</h3>
-            <div style={styles.scheduleItemMeta}>
-              <span>Focus Session</span>
-            </div>
+            <Play size={13} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3, color: "var(--text-muted)" }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <h3 style={styles.scheduleItemTitle}>{block.title}</h3>
+              <div style={styles.scheduleItemMeta}>
+                <span>Focus Session</span>
+              </div>
+            </span>
           </button>
           <div style={styles.scheduleDuration}>
             <Clock size={12} />
@@ -1022,7 +1077,7 @@ function Today({
     const completed = block.completed;
     const kindLabel = block.kind === "task" ? "Task" : "Habit";
     return (
-      <div key={block.key} style={styles.scheduleItem}>
+      <div key={block.key} className="today-item" style={styles.scheduleItem}>
         <div style={styles.scheduleTimeSlot}>{block.time}</div>
         <button
           type="button"
@@ -1039,20 +1094,25 @@ function Today({
         </button>
         <button
           type="button"
-          style={styles.scheduleItemButton}
+          className="today-schedule-focus"
+          style={{ ...styles.scheduleItemButton, display: "flex", gap: 8, alignItems: "flex-start" }}
           onClick={() => onStartFocus(block.kind === "task"
             ? { taskId: block.taskId, title: block.title }
             : { habitId: block.habitId, title: block.title })}
           aria-label={`Start Focus on ${block.title}`}
+          title="Start Focus"
         >
-          <h3 style={{ ...styles.scheduleItemTitle, ...(completed ? styles.taskNameCompleted : {}) }}>
-            {block.title}
-          </h3>
-          <div style={styles.scheduleItemMeta}>
-            <span>{kindLabel}</span>
-            {block.meta && <span>· {block.meta}</span>}
-            {block.kind === "task" && block.overdue && <span>· Overdue</span>}
-          </div>
+          <Play size={13} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3, color: "var(--text-muted)" }} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ ...styles.scheduleItemTitle, ...(completed ? styles.taskNameCompleted : {}) }}>
+              {block.title}
+            </h3>
+            <div style={styles.scheduleItemMeta}>
+              <span>{kindLabel}</span>
+              {block.meta && <span>· {block.meta}</span>}
+              {block.kind === "task" && block.overdue && <span>· Overdue</span>}
+            </div>
+          </span>
         </button>
         {block.durationMinutes !== undefined && (
           <div style={styles.scheduleDuration}>
@@ -1196,7 +1256,7 @@ function Today({
         )}
 
         <div style={styles.progressSection}>
-          <span style={styles.progressText}>
+          <span style={styles.progressText} aria-live="polite">
             {completedCount} / {totalCount} Completed · {progressPercent}%
           </span>
           <div style={styles.progressBar}>
@@ -1270,6 +1330,7 @@ function Today({
             return (
               <div
                 key={habit.id}
+                className="today-item"
                 style={{
                   ...styles.habitCard,
                   ...(viewMode === "grid" ? styles.habitCardGrid : {}),
@@ -1300,15 +1361,17 @@ function Today({
                   </h3>
                   <HabitMetadata habit={habit} streak={streak} goalTitle={habitGoalTitle} />
                 </div>
-                <button
-                  className="today-focus-button"
-                  style={styles.focusButton}
-                  onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-                  aria-label={`Start Focus on ${habit.name}`}
-                  title="Start Focus"
-                >
-                  <Play size={14} />
-                </button>
+                {!isCompleted && (
+                  <button
+                    className="today-focus-button"
+                    style={styles.focusButton}
+                    onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
+                    aria-label={`Start Focus on ${habit.name}`}
+                    title="Start Focus"
+                  >
+                    <Play size={14} />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -1368,7 +1431,13 @@ function Today({
 
       {scheduleModalOpen && (
         <div style={styles.scheduleModal} onClick={closeScheduleModal}>
-          <div style={styles.scheduleModalContent} onClick={(e) => e.stopPropagation()}>
+          <div
+            style={styles.scheduleModalContent}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Schedule"
+          >
             <button
               style={styles.scheduleModalClose}
               onClick={closeScheduleModal}

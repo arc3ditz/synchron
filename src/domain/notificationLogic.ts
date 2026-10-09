@@ -14,7 +14,11 @@ type IntelligentNotificationSettings = Pick<
   | "notificationFrequency"
   | "habitReminders"
   | "incompleteHabitReminders"
->;
+> & {
+  // Day-reset hour is needed to key per-day dedupe. Optional so existing
+  // partial settings in tests keep working; defaults to 0 (midnight).
+  dayResetHour?: number;
+};
 
 export interface NotificationAction {
   type: "focus-habit";
@@ -144,6 +148,55 @@ const NOTIFICATION_COOLDOWNS_MS: Record<AppSettings["notificationFrequency"], nu
 let lastIntelligentNotificationTime = 0;
 let getIsFocusTimerRunning = () => false;
 
+// Per-habit, per-day dedupe so the 5-minute poller cannot repeat the same
+// nudge all evening. Keys look like `timing:123:2026-10-09`. The set resets
+// automatically when the logical day rolls over.
+const sentIntelligentNotificationKeys = new Set<string>();
+let sentIntelligentNotificationDayKey: string | null = null;
+
+function pruneSentNotificationHistory(todayKey: string): void {
+  if (sentIntelligentNotificationDayKey !== todayKey) {
+    sentIntelligentNotificationDayKey = todayKey;
+    sentIntelligentNotificationKeys.clear();
+  }
+}
+
+function buildIntelligentNotificationDedupeKey(
+  type: NotificationType,
+  habitId: number | undefined,
+  todayKey: string,
+): string {
+  return `${type}:${habitId ?? "general"}:${todayKey}`;
+}
+
+/** Test hook: has this habit already produced this type today? */
+export function isIntelligentNotificationDuplicate(
+  type: NotificationType,
+  habitId: number | undefined,
+  todayKey: string,
+): boolean {
+  pruneSentNotificationHistory(todayKey);
+  return sentIntelligentNotificationKeys.has(
+    buildIntelligentNotificationDedupeKey(type, habitId, todayKey),
+  );
+}
+
+function markIntelligentNotificationSent(
+  type: NotificationType,
+  habitId: number | undefined,
+  todayKey: string,
+): void {
+  pruneSentNotificationHistory(todayKey);
+  sentIntelligentNotificationKeys.add(
+    buildIntelligentNotificationDedupeKey(type, habitId, todayKey),
+  );
+}
+
+export function resetIntelligentNotificationDedupeForTesting(): void {
+  sentIntelligentNotificationKeys.clear();
+  sentIntelligentNotificationDayKey = null;
+}
+
 export function registerFocusTimerRunningState(getIsRunning: () => boolean): () => void {
   getIsFocusTimerRunning = getIsRunning;
   return () => {
@@ -174,26 +227,54 @@ export function shouldSendIntelligentNotification(
 }
 
 /**
- * Get completion time pattern from habit history
- * Returns the average hour of day if a clear pattern exists, otherwise null
- * Requires at least 5 completions on different days
+ * Get completion time pattern from habit history.
+ *
+ * Prefers real `completedAt` timestamps (circular mean, requires at least 5
+ * samples with a clear concentration) and falls back to the explicit
+ * time-block (`scheduledTime`) so newly planned habits still remind during
+ * the Plan -> Execute step. Returns the hour of day, otherwise null.
  */
-function getHabitCompletionPattern(habit: Habit): number | null {
-  const completedDates = habit.completedDates;
-  if (completedDates.length < 5) return null;
+function parseScheduledHour(scheduledTime?: string): number | null {
+  if (!scheduledTime) return null;
+  const match = /^(\d{1,2}):(\d{2})/.exec(scheduledTime.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  return hour >= 0 && hour <= 23 ? hour : null;
+}
 
-  // For simplicity, we'll use a basic heuristic:
-  // If most completions happened within a 2-hour window, return the center of that window
-  // Since we only have dates (not timestamps), we'll skip this for now
-  // In a real implementation, you'd need to store completion timestamps
-  
-  // For this implementation, we'll use scheduledTime if available
-  if (habit.scheduledTime) {
-    const [hours] = habit.scheduledTime.split(":").map(Number);
-    return hours;
+function averageHourFromCompletionTimestamps(
+  completedAt?: Record<string, number>,
+): number | null {
+  if (!completedAt) return null;
+  const timestamps = Object.values(completedAt).filter(
+    (value): value is number => typeof value === "number" && Number.isFinite(value),
+  );
+  if (timestamps.length < 5) return null;
+
+  let sumX = 0;
+  let sumY = 0;
+  for (const timestamp of timestamps) {
+    const date = new Date(timestamp);
+    const hourOfDay = date.getHours() + date.getMinutes() / 60;
+    const angle = (hourOfDay / 24) * 2 * Math.PI;
+    sumX += Math.cos(angle);
+    sumY += Math.sin(angle);
   }
-  
-  return null;
+  // Low resultant length means completions are scattered across the day:
+  // there is no useful "usual time" to remind about.
+  const concentration = Math.hypot(sumX, sumY) / timestamps.length;
+  if (concentration < 0.7) return null;
+
+  const meanAngle = Math.atan2(sumY / timestamps.length, sumX / timestamps.length);
+  const meanHour = ((meanAngle / (2 * Math.PI)) * 24 + 24) % 24;
+  return Math.round(meanHour) % 24;
+}
+
+function getHabitCompletionPattern(habit: Habit): number | null {
+  const fromHistory = averageHourFromCompletionTimestamps(habit.completedAt);
+  if (fromHistory !== null) return fromHistory;
+
+  return parseScheduledHour(habit.scheduledTime);
 }
 
 /**
@@ -217,20 +298,32 @@ export function shouldSendHabitTimingNotification(
   // Get completion pattern
   const patternHour = getHabitCompletionPattern(habit);
   if (patternHour === null) return false;
-  
-  // If current hour is within 1 hour of pattern hour, allow notification
-  const hourDiff = Math.abs(currentHour - patternHour);
+
+  // If current hour is within 1 hour of pattern hour, allow notification.
+  // Wrap around midnight so 23:00 and 00:00 count as neighbours.
+  const rawDiff = Math.abs(currentHour - patternHour);
+  const hourDiff = Math.min(rawDiff, 24 - rawDiff);
   return hourDiff <= 1;
 }
 
 /**
- * Generate a habit timing notification
+ * Generate a habit timing notification (Plan -> Execute).
+ * Uses the habit's own time-block/duration data so the Start Focus action
+ * matches what the user planned; falls back to the saved default.
  */
-export function generateHabitTimingNotification(habit: Habit): IntelligentNotification {
+export function generateHabitTimingNotification(
+  habit: Habit,
+  defaultFocusDuration = 25,
+): IntelligentNotification {
+  const durationMinutes = habit.durationMinutes ?? defaultFocusDuration;
+  const scheduled = habit.scheduledTime?.trim();
+  const body = scheduled
+    ? `Time-blocked for ${scheduled} — you usually do "${habit.name}" around now. Start a ${durationMinutes}-min focus session?`
+    : `You usually complete "${habit.name}" around this time. Start a ${durationMinutes}-min focus session?`;
   return {
     type: "timing",
     title: "Habit Reminder",
-    body: `You normally complete "${habit.name}" around this time.`,
+    body,
     habitId: habit.id,
     habitName: habit.name,
     action: {
@@ -238,9 +331,49 @@ export function generateHabitTimingNotification(habit: Habit): IntelligentNotifi
       habitId: habit.id,
       habitName: habit.name,
       title: habit.name,
-      durationMinutes: 25,
+      durationMinutes,
     },
   };
+}
+
+/**
+ * Rank incomplete habits scheduled today for the evening focus suggestion
+ * (Execute -> Complete). Mandatory first, then time-blocked habits that are
+ * already due, then earliest time-block, then stable id order.
+ */
+function rankIncompleteHabits(
+  habits: Habit[],
+  resetHour: number,
+  currentHour: number,
+): Habit[] {
+  const todayKey = getTodayKey(resetHour);
+
+  // Filter incomplete habits scheduled today
+  const incompleteHabits = habits.filter(
+    (habit) =>
+      !habit.isArchived &&
+      !habit.completedDates.includes(todayKey) &&
+      isHabitScheduledOnDate(habit, todayKey),
+  );
+
+  if (incompleteHabits.length === 0) return [];
+
+  // Only suggest if it's late enough in the day (after 6 PM or 18:00)
+  if (currentHour < 18) return [];
+
+  return [...incompleteHabits].sort((a, b) => {
+    if (a.priority === "Mandatory" && b.priority !== "Mandatory") return -1;
+    if (a.priority !== "Mandatory" && b.priority === "Mandatory") return 1;
+    const aHour = parseScheduledHour(a.scheduledTime);
+    const bHour = parseScheduledHour(b.scheduledTime);
+    const aOverdue = aHour !== null && aHour <= currentHour;
+    const bOverdue = bHour !== null && bHour <= currentHour;
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+    if (aHour !== null && bHour !== null && aHour !== bHour) return aHour - bHour;
+    if (aHour !== null && bHour === null) return -1;
+    if (aHour === null && bHour !== null) return 1;
+    return a.id - b.id;
+  });
 }
 
 /**
@@ -250,32 +383,9 @@ export function generateHabitTimingNotification(habit: Habit): IntelligentNotifi
 export function getIncompletePriorityHabit(
   habits: Habit[],
   resetHour: number,
-  currentHour: number
+  currentHour: number,
 ): Habit | null {
-  const todayKey = getTodayKey(resetHour);
-  
-  // Filter incomplete habits scheduled today
-  const incompleteHabits = habits.filter(
-    (habit) =>
-      !habit.isArchived &&
-      !habit.completedDates.includes(todayKey) &&
-      isHabitScheduledOnDate(habit, todayKey)
-  );
-  
-  if (incompleteHabits.length === 0) return null;
-  
-  // Only suggest if it's late enough in the day (after 6 PM or 18:00)
-  if (currentHour < 18) return null;
-  
-  // Sort by priority (Mandatory first) then by id
-  incompleteHabits.sort((a, b) => {
-    if (a.priority === "Mandatory" && b.priority !== "Mandatory") return -1;
-    if (a.priority !== "Mandatory" && b.priority === "Mandatory") return 1;
-    return a.id - b.id;
-  });
-  
-  const topHabit = incompleteHabits[0];
-  return topHabit;
+  return rankIncompleteHabits(habits, resetHour, currentHour)[0] ?? null;
 }
 
 /**
@@ -292,12 +402,21 @@ export function shouldSendFocusSuggestion(
 
 /**
  * Generate an incomplete habit focus suggestion notification
+ * (Execute -> Complete). Names how many habits are left so the nudge reads
+ * like a wrap-up rather than a repeat.
  */
-export function generateFocusSuggestionNotification(habit: Habit, defaultFocusDuration: number): IntelligentNotification {
+export function generateFocusSuggestionNotification(
+  habit: Habit,
+  defaultFocusDuration: number,
+  incompleteCount = 1,
+): IntelligentNotification {
+  const lead = incompleteCount > 1
+    ? `${incompleteCount} habits left tonight. Start with "${habit.name}"${habit.priority === "Mandatory" ? " (Mandatory)" : ""}?`
+    : `Your "${habit.name}" habit is still incomplete.`;
   return {
     type: "incomplete",
     title: "Incomplete Habit",
-    body: `Your "${habit.name}" habit is still incomplete. Would you like to start a ${defaultFocusDuration}-minute focus session?`,
+    body: `${lead} Start a ${defaultFocusDuration}-minute focus session to finish it?`,
     habitId: habit.id,
     habitName: habit.name,
     action: {
@@ -329,7 +448,9 @@ export function generateAvailabilityNotification(): IntelligentNotification | nu
 }
 
 /**
- * Main function to determine if any intelligent notification should be sent
+ * Main function to determine if any intelligent notification should be sent.
+ * Skips habits already nudged today so the poller rotates to the next useful
+ * habit instead of repeating the same one.
  */
 export function getIntelligentNotification(
   habits: Habit[],
@@ -340,23 +461,39 @@ export function getIntelligentNotification(
 ): IntelligentNotification | null {
   if (!settings.enableIntelligentNotifications || getIsFocusTimerRunning()) return null;
 
+  const todayKey = getTodayKey(resetHour);
+  pruneSentNotificationHistory(todayKey);
+
   // Check timing notifications first
   if (settings.habitReminders) {
     for (const habit of habits) {
+      if (
+        sentIntelligentNotificationKeys.has(
+          buildIntelligentNotificationDedupeKey("timing", habit.id, todayKey),
+        )
+      ) {
+        continue;
+      }
       if (shouldSendHabitTimingNotification(habit, currentHour, resetHour)) {
-        return generateHabitTimingNotification(habit);
+        return generateHabitTimingNotification(habit, defaultFocusDuration);
       }
     }
   }
-  
+
   // Check focus suggestion
   if (settings.incompleteHabitReminders && shouldSendFocusSuggestion(habits, resetHour, currentHour)) {
-    const habit = getIncompletePriorityHabit(habits, resetHour, currentHour);
+    const ranked = rankIncompleteHabits(habits, resetHour, currentHour);
+    const habit = ranked.find(
+      (candidate) =>
+        !sentIntelligentNotificationKeys.has(
+          buildIntelligentNotificationDedupeKey("incomplete", candidate.id, todayKey),
+        ),
+    );
     if (habit) {
-      return generateFocusSuggestionNotification(habit, defaultFocusDuration);
+      return generateFocusSuggestionNotification(habit, defaultFocusDuration, ranked.length);
     }
   }
-  
+
   // Availability notification not implemented
   return null;
 }
@@ -378,6 +515,14 @@ export async function sendIntelligentNotification(
   settings: IntelligentNotificationSettings,
 ): Promise<void> {
   if (!shouldSendIntelligentNotification(notification.type, settings)) return;
+
+  // Record the attempt before delivery: whether Tauri or the browser
+  // fallback wins, retrying the same habit today would just be noise.
+  markIntelligentNotificationSent(
+    notification.type,
+    notification.habitId,
+    getTodayKey(settings.dayResetHour ?? 0),
+  );
 
   const action = notification.action;
 
@@ -420,4 +565,5 @@ export async function sendIntelligentNotification(
 
 export function clearIntelligentNotificationCooldown(): void {
   lastIntelligentNotificationTime = 0;
+  resetIntelligentNotificationDedupeForTesting();
 }

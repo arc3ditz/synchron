@@ -163,7 +163,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--color-accent)",
   },
   today: {
-    outline: "1px solid rgba(var(--accent-rgb), 0.5)",
+    outline: "1px solid var(--accent-border)",
     outlineOffset: -1,
   },
   empty: {

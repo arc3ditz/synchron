@@ -326,6 +326,69 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflowWrap: "anywhere",
   },
+  hierarchySection: {
+    width: "100%",
+    marginTop: 0,
+    paddingTop: 16,
+    borderTop: "1px solid var(--border-color)",
+  },
+  hierarchyHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    margin: "0 0 10px",
+  },
+  hierarchyTitle: {
+    margin: 0,
+    color: "var(--text-secondary)",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+  },
+  hierarchyCount: {
+    color: "var(--text-muted)",
+    fontSize: 11,
+    fontWeight: 500,
+  },
+  projectRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "var(--space-2) 0",
+    borderBottom: "1px solid var(--border-color)",
+  },
+  projectRowLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  projectHierarchyBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "2px 6px",
+    background: "var(--bg-inset)",
+    borderRadius: 4,
+    color: "var(--text-muted)",
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: "uppercase",
+  },
+  emptyWithHint: {
+    padding: "16px 0",
+    color: "var(--text-secondary)",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  emptyHint: {
+    display: "block",
+    marginTop: 4,
+    color: "var(--text-muted)",
+    fontSize: 12,
+  },
   goalEditForm: {
     display: "grid",
     gap: 8,
@@ -675,7 +738,10 @@ export default function Goals({
 
       <div style={styles.grid}>
         {activeGoals.length === 0 ? (
-          <div style={styles.empty}>No active goals. Create one to get started.</div>
+          <div style={styles.empty}>
+            No active goals yet
+            <span style={styles.emptyHint}>Create a goal to start planning your work</span>
+          </div>
         ) : activeGoals.map((goal) => {
           const goalWork = selectGoalWork(goal, { projects, milestones, tasks, habits });
           const linkedHabits = goalWork.habits;
@@ -820,39 +886,54 @@ export default function Goals({
               </p>
               <p style={{ ...styles.meta, marginTop: 6 }}>Total Focus: {focusTimeLabel}</p>
 
-              <section style={styles.linkedHabits} aria-label={`Projects for "${goal.title}"`}>
-                <h3 style={styles.linkedHabitsTitle}>Projects</h3>
-                {goalProjects.map((project) => {
-                  const projectProgress = calculateProjectProgress(project, milestones, tasks);
-                  return (
-                    <div key={project.id} style={styles.linkedHabitRow}>
-                      <button
-                        type="button"
-                        style={styles.projectOpenButton}
-                        onClick={() => onOpenProject(project.id)}
-                        aria-label={`Open project "${project.name}"`}
-                      >
-                        {project.name}
-                      </button>
-                      <span style={styles.projectRowMeta}>
-                        <span style={styles.status}>{project.status}</span>
-                        <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                          {projectProgress.percent}%
-                        </span>
-                        <span style={styles.projectProgressTrack}>
-                          <span
-                            style={{
-                              display: "block",
-                              height: "100%",
-                              width: `${projectProgress.percent}%`,
-                              background: "var(--color-accent)",
-                            }}
-                          />
-                        </span>
-                      </span>
-                    </div>
-                  );
-                })}
+              <section style={styles.hierarchySection} aria-label={`Projects for "${goal.title}"`}>
+                <div style={styles.hierarchyHeader}>
+                  <h3 style={styles.hierarchyTitle}>Projects</h3>
+                  <span style={styles.hierarchyCount}>{goalProjects.length}</span>
+                </div>
+                {goalProjects.length === 0 ? (
+                  <div style={styles.emptyWithHint}>
+                    No projects yet
+                    <span style={styles.emptyHint}>Break this goal into smaller projects</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    {goalProjects.map((project) => {
+                      const projectProgress = calculateProjectProgress(project, milestones, tasks);
+                      return (
+                        <div key={project.id} style={styles.projectRow}>
+                          <div style={styles.projectRowLeft}>
+                            <span style={styles.projectHierarchyBadge}>Project</span>
+                            <button
+                              type="button"
+                              style={styles.projectOpenButton}
+                              onClick={() => onOpenProject(project.id)}
+                              aria-label={`Open project "${project.name}"`}
+                            >
+                              {project.name}
+                            </button>
+                          </div>
+                          <span style={styles.projectRowMeta}>
+                            <span style={styles.status}>{project.status}</span>
+                            <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                              {projectProgress.percent}%
+                            </span>
+                            <span style={styles.projectProgressTrack}>
+                              <span
+                                style={{
+                                  display: "block",
+                                  height: "100%",
+                                  width: `${projectProgress.percent}%`,
+                                  background: "var(--color-accent)",
+                                }}
+                              />
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {projectGoalId === goal.id ? (
                   <form style={styles.milestoneForm} onSubmit={(event) => handleProjectSubmit(event, goal.id)}>
@@ -885,22 +966,38 @@ export default function Goals({
                 )}
               </section>
 
-              <section style={styles.linkedHabits} aria-label={`Habits linked to "${goal.title}"`}>
-                <h3 style={styles.linkedHabitsTitle}>Linked Habits</h3>
+              <section style={styles.hierarchySection} aria-label={`Habits linked to "${goal.title}"`}>
+                <div style={styles.hierarchyHeader}>
+                  <h3 style={styles.hierarchyTitle}>Linked Habits</h3>
+                  <span style={styles.hierarchyCount}>{linkedHabits.length}</span>
+                </div>
                 {linkedHabits.length === 0 ? (
-                  <p style={{ ...styles.meta, marginTop: 0 }}>No Linked Habits</p>
-                ) : linkedHabits.map((habit) => (
-                  <div key={habit.id} style={styles.linkedHabitRow}>
-                    <span style={styles.linkedHabitName}>{habit.name}</span>
-                    <StreakBadge streak={calculateStreak(habit, streakFreeze, dayResetHour)} />
+                  <div style={styles.emptyWithHint}>
+                    No linked habits
+                    <span style={styles.emptyHint}>Connect daily habits to track progress</span>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    {linkedHabits.map((habit) => (
+                      <div key={habit.id} style={styles.linkedHabitRow}>
+                        <span style={styles.linkedHabitName}>{habit.name}</span>
+                        <StreakBadge streak={calculateStreak(habit, streakFreeze, dayResetHour)} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
-              <section style={styles.milestonesSection} aria-label={`Milestones for "${goal.title}"`}>
-                <h3 style={styles.milestonesTitle}>Milestones</h3>
+              <section style={styles.hierarchySection} aria-label={`Milestones for "${goal.title}"`}>
+                <div style={styles.hierarchyHeader}>
+                  <h3 style={styles.hierarchyTitle}>Milestones</h3>
+                  <span style={styles.hierarchyCount}>{goalMilestones.length}</span>
+                </div>
                   {goalMilestones.length === 0 ? (
-                  <p style={{ ...styles.meta, marginTop: 0, marginBottom: 12 }}>No milestones yet.</p>
+                  <div style={styles.emptyWithHint}>
+                    No milestones yet
+                    <span style={styles.emptyHint}>Define key checkpoints to track progress</span>
+                  </div>
                 ) : (
                   <div style={styles.milestoneList}>
                     {goalMilestones.map((milestone) => (
