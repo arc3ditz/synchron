@@ -2639,7 +2639,7 @@ function App() {
                 {summary.mandatoryTotal > 0 && (
                   <span style={styles.summarySecondary}>
                     {summary.mandatoryDone} of {summary.mandatoryTotal}{" "}
-                    Mandatory done
+                    Mandatory Done
                   </span>
                 )}
               </div>

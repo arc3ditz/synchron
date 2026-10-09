@@ -418,7 +418,7 @@ function History({
         <div style={styles.empty}>
           <HistoryIcon size={22} style={styles.emptyIcon} />
           <span style={styles.emptyTitle}>
-            {selectedHabit ? "No completed days yet" : "Choose a habit to begin"}
+            {selectedHabit ? "No completed days yet" : "Choose a Habit to Begin"}
           </span>
           <p style={styles.emptyText}>
             {selectedHabit

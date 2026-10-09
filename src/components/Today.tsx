@@ -1175,14 +1175,14 @@ function Today({
   const overdueCount = pendingTodayTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
   const briefingParts: string[] = [];
   if (overdueCount > 0) briefingParts.push(`${overdueCount} overdue`);
-  briefingParts.push(`${pendingTodayTasks.length} tasks open`);
-  briefingParts.push(`${todayHabits.length - completedHabitCount} habits left`);
+  briefingParts.push(`${pendingTodayTasks.length} Tasks Open`);
+  briefingParts.push(`${todayHabits.length - completedHabitCount} Habits Left`);
   if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
 
   // Lightweight momentum feedback: everything the old summary grid showed,
   // as one quiet line instead of dashboard cards.
   const momentumParts: string[] = [];
-  if (remainingCount > 0) momentumParts.push(`${remainingCount} remaining`);
+  if (remainingCount > 0) momentumParts.push(`${remainingCount} Remaining`);
   if (bestStreak > 0) momentumParts.push(`Best streak ${bestStreak}`);
   if (todayFocusTime > 0) momentumParts.push(`${todayFocusTime}m focused`);
 
