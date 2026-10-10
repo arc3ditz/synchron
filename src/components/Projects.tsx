@@ -1,8 +1,8 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, ChevronLeft, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { FORM_CONTROL } from "../theme";
 import type { Milestone, Project, Task } from "../types";
+import { FORM_CONTROL } from "../theme";
 import { calculateProjectProgress } from "../domain/projects";
 import { formatFullDate } from "../utils/dates";
 
@@ -32,554 +32,21 @@ type PendingDeletion = {
   title: string;
 };
 
-const priorityStyles: Record<Task["priority"], CSSProperties> = {
-  high: {
-    color: "var(--priority-high-text)",
-    background: "var(--priority-high-bg)",
-    border: "1px solid var(--priority-high-border)",
-  },
-  medium: {
-    color: "var(--priority-medium-text)",
-    background: "var(--priority-medium-bg)",
-    border: "1px solid var(--priority-medium-border)",
-  },
-  low: {
-    color: "var(--priority-low-text)",
-    background: "var(--priority-low-bg)",
-    border: "1px solid var(--priority-low-border)",
-  },
+const STATUS_DOT: Record<Project["status"], string> = {
+  active: "var(--color-accent)",
+  planned: "var(--color-warning)",
+  completed: "var(--color-success)",
+  archived: "var(--text-muted)",
 };
 
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: "100%",
-    marginInline: "auto",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "var(--space-4)",
-    marginBottom: "var(--space-6)",
-  },
-  title: {
-    margin: 0,
-    color: "var(--text-primary)",
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-semibold)",
-  },
-  subtitle: {
-    margin: "-12px 0 var(--space-5)",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-  },
-  addButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "var(--space-2)",
-    flexShrink: 0,
-    padding: "var(--space-2) var(--space-3)",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-md)",
-    background: "var(--color-accent)",
-    color: "var(--color-accent-contrast)",
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-semibold)",
-    cursor: "pointer",
-  },
-  backButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: "var(--space-4)",
-    padding: "6px 10px",
-    border: "1px solid transparent",
-    borderRadius: 7,
-    background: "transparent",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  breadcrumb: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: "var(--space-4)",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-  },
-  breadcrumbLink: {
-    color: "var(--color-accent)",
-    background: "transparent",
-    border: "none",
-    padding: 0,
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  breadcrumbSeparator: {
-    color: "var(--text-muted)",
-  },
-  breadcrumbCurrent: {
-    color: "var(--text-primary)",
-    fontWeight: 500,
-  },
-  sectionHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  sectionTitleWithCount: {
-    margin: 0,
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-  },
-  sectionCount: {
-    color: "var(--text-muted)",
-    fontSize: 11,
-    fontWeight: 500,
-  },
-  form: {
-    display: "grid",
-    gap: "var(--space-3)",
-    marginBottom: "var(--space-4)",
-    padding: "var(--space-4) 0",
-    background: "transparent",
-    border: "none",
-    borderTop: "1px solid var(--border-color)",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  formTitle: {
-    margin: 0,
-    color: "var(--text-primary)",
-    fontSize: 16,
-    fontWeight: 600,
-  },
-  input: {
-    ...FORM_CONTROL,
-    width: "100%",
-    minWidth: 0,
-  },
-  compactInput: {
-    ...FORM_CONTROL,
-    width: "100%",
-    minWidth: 0,
-  },
-  formActions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  secondaryButton: {
-    padding: "8px 12px",
-    border: "1px solid var(--border-color)",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--text-body)",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  submitButton: {
-    padding: "8px 12px",
-    border: "1px solid transparent",
-    borderRadius: 8,
-    background: "var(--color-accent)",
-    color: "var(--color-accent-contrast)",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  grid: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0,
-    borderTop: "1px solid var(--border-color)",
-  },
-  card: {
-    width: "100%",
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-4)",
-    padding: "var(--space-5) 0",
-    background: "transparent",
-    border: "none",
-    borderBottom: "1px solid var(--border-color)",
-    borderRadius: 0,
-  },
-  cardHeader: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  cardActions: {
-    display: "flex",
-    alignItems: "center",
-    flexShrink: 0,
-    gap: 6,
-  },
-  iconButton: {
-    display: "grid",
-    placeItems: "center",
-    width: 30,
-    height: 30,
-    padding: 0,
-    border: "1px solid transparent",
-    borderRadius: 7,
-    background: "transparent",
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-  },
-  projectTitleButton: {
-    margin: 0,
-    padding: 0,
-    border: "none",
-    background: "transparent",
-    color: "var(--text-primary)",
-    fontSize: 17,
-    fontWeight: 600,
-    textAlign: "left",
-    overflowWrap: "anywhere",
-    cursor: "pointer",
-  },
-  projectTitle: {
-    margin: 0,
-    color: "var(--text-primary)",
-    fontSize: 20,
-    fontWeight: 600,
-    overflowWrap: "anywhere",
-  },
-  statusSelect: {
-    ...FORM_CONTROL,
-    width: "auto",
-    minWidth: 108,
-    cursor: "pointer",
-  },
-  status: {
-    flexShrink: 0,
-    padding: "3px 8px",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 12,
-    color: "var(--text-secondary)",
-    fontSize: 10,
-    textTransform: "capitalize",
-  },
-  description: {
-    margin: "0",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-  },
-  meta: {
-    margin: "0",
-    color: "var(--text-muted)",
-    fontSize: 12,
-  },
-  progressTrack: {
-    width: "100%",
-    height: "var(--space-1)",
-    marginTop: "var(--space-2)",
-    borderRadius: "var(--radius-sm)",
-    background: "var(--bg-inset)",
-    overflow: "hidden",
-    display: "flex",
-  },
-  progressFill: {
-    height: "100%",
-    background: "var(--color-accent)",
-  },
-  progressLegend: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 8,
-    fontSize: 11,
-    color: "var(--text-muted)",
-  },
-  progressLegendItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  progressLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
-  },
-  progressLegendDotTask: {
-    background: "var(--color-accent)",
-  },
-  progressLegendDotMilestone: {
-    background: "var(--color-accent-soft)",
-  },
-  percentLabel: {
-    color: "var(--text-primary)",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  openButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    padding: "7px 0",
-    border: "none",
-    borderRadius: 0,
-    background: "transparent",
-    color: "var(--color-accent)",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  empty: {
-    gridColumn: "1 / -1",
-    padding: 28,
-    color: "var(--text-secondary)",
-    textAlign: "center",
-    background: "transparent",
-    border: "none",
-  },
-  archivedSection: {
-    display: "grid",
-    gap: 12,
-    marginTop: 24,
-  },
-  archivedToggle: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    width: "100%",
-    padding: "10px 12px",
-    border: "1px solid var(--border-color)",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    fontWeight: 600,
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  archivedList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0,
-    borderTop: "1px solid var(--border-color)",
-  },
-  detailCard: {
-    width: "100%",
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-4)",
-    padding: "var(--space-4) 0",
-    background: "transparent",
-    border: "none",
-  },
-  detailEditForm: {
-    display: "grid",
-    gap: 8,
-    paddingTop: 12,
-    borderTop: "1px solid var(--border-color)",
-  },
-  projectFormRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
-    gap: 8,
-  },
-  projectLabel: {
-    display: "grid",
-    gap: 5,
-    color: "var(--text-secondary)",
-    fontSize: 12,
-  },
-  section: {
-    width: "100%",
-    display: "grid",
-    gap: 8,
-    paddingTop: 16,
-    borderTop: "1px solid var(--border-color)",
-  },
-  sectionTitle: {
-    margin: 0,
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-  },
-  milestoneList: {
-    display: "grid",
-    gap: 0,
-    margin: 0,
-    padding: 0,
-    listStyle: "none",
-  },
-  milestoneItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-3)",
-    padding: "var(--space-2) 0",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  milestoneContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  milestoneTitle: {
-    margin: 0,
-    color: "var(--text-primary)",
-    fontSize: 13,
-    fontWeight: 500,
-    overflowWrap: "anywhere",
-  },
-  milestoneTitleCompleted: {
-    textDecoration: "line-through",
-    color: "var(--text-muted)",
-  },
-  milestoneMeta: {
-    margin: "2px 0 0",
-    color: "var(--text-muted)",
-    fontSize: 11,
-  },
-  milestoneActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  checkbox: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 20,
-    height: 20,
-    minWidth: 20,
-    minHeight: 20,
-    flex: "0 0 20px",
-    flexShrink: 0,
-    padding: 0,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderRadius: 6,
-    cursor: "pointer",
-    transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
-  },
-  taskList: {
-    display: "grid",
-    gap: 8,
-    margin: 0,
-    padding: 0,
-    listStyle: "none",
-  },
-  taskRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 9,
-  },
-  taskButton: {
-    display: "flex",
-    alignItems: "center",
-    flex: 1,
-    minWidth: 0,
-    gap: 9,
-    padding: "8px 12px",
-    border: "1px solid transparent",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--text-body)",
-    textAlign: "left",
-    cursor: "pointer",
-    transition: "all 0.15s ease",
-  },
-  taskButtonHover: {
-    background: "var(--button-hover-bg)",
-    border: "1px solid var(--button-hover-border)",
-  },
-  taskDetails: {
-    display: "grid",
-    minWidth: 0,
-    gap: 4,
-  },
-  taskMetadata: {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 6,
-    color: "var(--text-muted)",
-    fontSize: 11,
-  },
-  priorityBadge: {
-    padding: "1px 6px",
-    fontSize: 10,
-    fontWeight: 600,
-    textTransform: "capitalize",
-  },
-  taskCheck: {
-    display: "grid",
-    placeItems: "center",
-    width: 20,
-    height: 20,
-    flex: "0 0 20px",
-    border: "1px solid var(--checkbox-border)",
-    borderRadius: 6,
-    background: "transparent",
-    color: "var(--color-accent-contrast)",
-    transition: "all 0.15s ease",
-  },
-  taskCheckCompleted: {
-    background: "var(--checkbox-checked-bg)",
-    border: "1px solid var(--checkbox-checked-border)",
-    boxShadow: "var(--checkbox-checked-shadow)",
-  },
-  taskEditForm: {
-    display: "grid",
-    flex: 1,
-    minWidth: 0,
-    gap: 6,
-  },
-  taskFormFields: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) minmax(82px, 0.7fr)",
-    gap: 6,
-  },
-  addInlineButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    padding: "8px 0",
-    border: "none",
-    borderRadius: 0,
-    background: "transparent",
-    color: "var(--text-secondary)",
-    fontSize: 12,
-    cursor: "pointer",
-  },
-  emptyWithHint: {
-    padding: "16px 0",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    textAlign: "center",
-  },
-  emptyHint: {
-    display: "block",
-    marginTop: 4,
-    color: "var(--text-muted)",
-    fontSize: 12,
-  },
-  inlineForm: {
-    display: "grid",
-    gap: 8,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: "1px solid var(--border-color)",
-  },
+const PRIORITY_BADGE_CLASS: Record<Task["priority"], string> = {
+  high: "ui-badge ui-badge--danger",
+  medium: "ui-badge ui-badge--warning",
+  low: "ui-badge ui-badge--subdued",
 };
+
+// Selects build on the shared control spec so every dropdown matches inputs.
+const selectStyle: CSSProperties = { ...FORM_CONTROL, width: "auto" };
 
 export default function Projects({
   projects,
@@ -637,14 +104,17 @@ export default function Projects({
   const [itemToDelete, setItemToDelete] = useState<PendingDeletion | null>(null);
 
   // Reset transient detail-form state when moving between projects.
-  useEffect(() => {
+  // Render-phase adjustment (no effect) keeps the selection change atomic.
+  const [prevProjectId, setPrevProjectId] = useState(selectedProjectId);
+  if (prevProjectId !== selectedProjectId) {
+    setPrevProjectId(selectedProjectId);
     setEditingProjectId(null);
     setShowMilestoneForm(false);
     setEditingMilestoneId(null);
     setShowTaskForm(false);
     setEditingTaskId(null);
     setItemToDelete(null);
-  }, [selectedProjectId]);
+  }
 
   const selectedProject = selectedProjectId
     ? projects.find((project) => project.id === selectedProjectId) ?? null
@@ -780,263 +250,109 @@ export default function Projects({
     setEditingTaskId(null);
   }
 
-  function renderStatusSelect(project: Project) {
-    return (
-      <select
-        style={{ ...styles.compactInput, ...styles.statusSelect }}
-        value={project.status}
-        onChange={(event) =>
-          onEditProjectStatus(project.id, event.target.value as Project["status"])
-        }
-        aria-label={`Status for "${project.name}"`}
-      >
-        <option value="planned">Planned</option>
-        <option value="active">Active</option>
-        <option value="completed">Completed</option>
-        <option value="archived">Archived</option>
-      </select>
+  function projectTasksFor(project: Project): Task[] {
+    const ids = new Set(milestones.filter((m) => m.projectId === project.id).map((m) => m.id));
+    return tasks.filter((task) =>
+      task.projectId === project.id ||
+      (task.milestoneId !== undefined && ids.has(task.milestoneId)),
     );
   }
 
-  function renderProjectCard(project: Project) {
-    const progress = calculateProjectProgress(project, milestones, tasks);
-
+  function renderProgressBar(percent: number, label: string) {
     return (
-      <article key={project.id} style={styles.card}>
-        <div style={styles.cardHeader}>
-          <button
-            type="button"
-            style={styles.projectTitleButton}
-            onClick={() => onSelectProject(project.id)}
-            aria-label={`Open project "${project.name}"`}
-          >
-            {project.name}
-          </button>
-          <div style={styles.cardActions}>
-            {renderStatusSelect(project)}
-            <button
-              type="button"
-              style={styles.iconButton}
-              onClick={() => setItemToDelete({ type: "project", id: project.id, title: project.name })}
-              aria-label={`Delete "${project.name}"`}
-              title="Delete Project"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        </div>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        style={{ height: 6, borderRadius: "var(--radius-pill)", background: "var(--bg-inset)", overflow: "hidden" }}
+      >
+        <div style={{ height: "100%", width: `${percent}%`, background: "var(--color-accent)", borderRadius: "var(--radius-pill)" }} />
+      </div>
+    );
+  }
 
-        {project.description && <p style={styles.description}>{project.description}</p>}
-        {(project.startDate || project.targetDate) && (
-          <p style={styles.meta}>
-            {project.startDate && <>Start: {formatFullDate(project.startDate)}</>}
-            {project.startDate && project.targetDate && " · "}
-            {project.targetDate && <>Target: {formatFullDate(project.targetDate)}</>}
-          </p>
-        )}
+  function renderStatusPill(project: Project) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span className="ui-badge ui-badge--accent" style={{ textTransform: "capitalize" }}>{project.status}</span>
+        <select
+          className="form-control"
+          style={{ ...selectStyle, width: "auto", height: 32, minHeight: 32, fontSize: "var(--type-xs)" }}
+          value={project.status}
+          onChange={(event) =>
+            onEditProjectStatus(project.id, event.target.value as Project["status"])
+          }
+          aria-label={`Status for "${project.name}"`}
+        >
+          <option value="planned">Planned</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+          <option value="archived">Archived</option>
+        </select>
+      </span>
+    );
+  }
 
-        <div>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-            <span style={styles.percentLabel}>{progress.percent}%</span>
-            <span style={styles.meta}>
-              Tasks {progress.taskCompleted}/{progress.taskTotal} · Milestones{" "}
-              {progress.milestoneCompleted}/{progress.milestoneTotal}
-            </span>
-          </div>
-          <div style={styles.progressTrack} role="progressbar" aria-label={`"${project.name}" progress`}>
-            <div style={{ ...styles.progressFill, width: `${progress.percent}%` }} />
-          </div>
-        </div>
-
+  function renderRailRow(project: Project) {
+    const progress = calculateProjectProgress(project, milestones, tasks);
+    const active = project.id === selectedProjectId;
+    return (
+      <li key={project.id} className="row-item" style={active ? { background: "var(--bg-hover)" } : undefined}>
+        <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: STATUS_DOT[project.status] }} />
         <button
           type="button"
-          style={styles.openButton}
           onClick={() => onSelectProject(project.id)}
+          aria-current={active ? "true" : undefined}
+          aria-label={`Open project "${project.name}"`}
+          style={{ display: "grid", flex: 1, minWidth: 0, gap: 6, padding: 0, border: "none", background: "transparent", color: "var(--text-primary)", textAlign: "left", cursor: "pointer" }}
         >
-          Open Project
+          <span className="truncate-1" style={{ fontWeight: 600 }}>{project.name}</span>
+          <span style={{ fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
+            Tasks {progress.taskCompleted}/{progress.taskTotal} · Milestones {progress.milestoneCompleted}/{progress.milestoneTotal}
+          </span>
+          {renderProgressBar(progress.percent, `"${project.name}" progress`)}
         </button>
-      </article>
+        <button
+          type="button"
+          className="ui-button ui-button--ghost ui-button--sm"
+          style={{ minHeight: 30, padding: "4px 8px" }}
+          onClick={() => setItemToDelete({ type: "project", id: project.id, title: project.name })}
+          aria-label={`Delete "${project.name}"`}
+          title="Delete Project"
+        >
+          <Trash2 size={14} />
+        </button>
+      </li>
     );
   }
 
-  function renderMilestonesSection(project: Project) {
-    const projectMilestones = milestones.filter((milestone) => milestone.projectId === project.id);
-
-    return (
-      <section style={styles.section} aria-label={`Milestones for "${project.name}"`}>
-        <div style={styles.sectionHeader}>
-          <h3 style={styles.sectionTitleWithCount}>
-            Milestones
-            <span style={styles.sectionCount}> ({projectMilestones.length})</span>
-          </h3>
-        </div>
-        {projectMilestones.length === 0 ? (
-          <div style={styles.emptyWithHint}>
-            No milestones yet
-            <span style={styles.emptyHint}>Define key checkpoints for this project</span>
-          </div>
-        ) : (
-          <ul style={styles.milestoneList}>
-            {projectMilestones.map((milestone) => (
-              <li key={milestone.id} style={styles.milestoneItem}>
-                {editingMilestoneId === milestone.id ? (
-                  <form
-                    style={{ ...styles.taskEditForm, flex: 1 }}
-                    onSubmit={(event) => handleMilestoneEditSubmit(event, milestone)}
-                  >
-                    <input
-                      autoFocus
-                      required
-                      maxLength={120}
-                      style={styles.compactInput}
-                      value={milestoneEditTitle}
-                      onChange={(event) => setMilestoneEditTitle(event.target.value)}
-                      aria-label="Milestone Title"
-                    />
-                    <input
-                      type="date"
-                      style={styles.compactInput}
-                      value={milestoneEditTargetDate}
-                      onChange={(event) => setMilestoneEditTargetDate(event.target.value)}
-                      aria-label="Milestone Target Date"
-                    />
-                    <div style={styles.formActions}>
-                      <button
-                        type="button"
-                        style={styles.secondaryButton}
-                        onClick={() => setEditingMilestoneId(null)}
-                      >
-                        Cancel
-                      </button>
-                      <button type="submit" style={styles.submitButton}>Save</button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="milestone-checkbox"
-                      style={styles.checkbox}
-                      onClick={() => onToggleMilestone(milestone.id)}
-                      aria-pressed={milestone.completed}
-                      aria-label={`${milestone.completed ? "Mark incomplete" : "Complete"} milestone: "${milestone.title}"`}
-                    >
-                      {milestone.completed && (
-                        <Check className="milestone-checkbox-icon" width={14} height={14} strokeWidth={2.5} />
-                      )}
-                    </button>
-                    <div style={styles.milestoneContent}>
-                      <h4
-                        style={{
-                          ...styles.milestoneTitle,
-                          ...(milestone.completed ? styles.milestoneTitleCompleted : {}),
-                        }}
-                      >
-                        {milestone.title}
-                      </h4>
-                      {milestone.targetDate && (
-                        <p style={styles.milestoneMeta}>
-                          Target: <time dateTime={milestone.targetDate}>{formatFullDate(milestone.targetDate)}</time>
-                        </p>
-                      )}
-                    </div>
-                    <div style={styles.milestoneActions}>
-                      <button
-                        type="button"
-                        style={styles.iconButton}
-                        onClick={() => {
-                          setEditingMilestoneId(milestone.id);
-                          setMilestoneEditTitle(milestone.title);
-                          setMilestoneEditTargetDate(milestone.targetDate ?? "");
-                        }}
-                        aria-label={`Edit "${milestone.title}"`}
-                        title="Edit Milestone"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        style={styles.iconButton}
-                        onClick={() =>
-                          setItemToDelete({ type: "milestone", id: milestone.id, title: milestone.title })
-                        }
-                        aria-label={`Delete "${milestone.title}"`}
-                        title="Delete Milestone"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {showMilestoneForm ? (
-          <form style={styles.inlineForm} onSubmit={(event) => handleMilestoneSubmit(event, project)}>
-            <input
-              autoFocus
-              required
-              maxLength={120}
-              style={styles.compactInput}
-              value={milestoneTitle}
-              onChange={(event) => setMilestoneTitle(event.target.value)}
-              placeholder="Milestone Title"
-              aria-label="Milestone Title"
-            />
-            <input
-              type="date"
-              style={styles.compactInput}
-              value={milestoneTargetDate}
-              onChange={(event) => setMilestoneTargetDate(event.target.value)}
-              aria-label="Milestone Target Date"
-            />
-            <div style={styles.formActions}>
-              <button
-                type="button"
-                style={styles.secondaryButton}
-                onClick={() => setShowMilestoneForm(false)}
-              >
-                Cancel
-              </button>
-              <button type="submit" style={styles.submitButton}>Add Milestone</button>
-            </div>
-          </form>
-        ) : (
-          <button type="button" style={styles.addInlineButton} onClick={() => setShowMilestoneForm(true)}>
-            <Plus size={14} />
-            Add Milestone
-          </button>
-        )}
-      </section>
-    );
-  }
-
-  function renderTaskItem(task: Task, projectMilestones: Milestone[]) {
+  function renderTaskRow(task: Task, projectMilestones: Milestone[]) {
     const linkedMilestone = projectMilestones.find((milestone) => milestone.id === task.milestoneId);
 
-    return (
-      <li key={task.id} style={styles.taskRow}>
-        {editingTaskId === task.id ? (
-          <form style={styles.taskEditForm} onSubmit={(event) => handleTaskEditSubmit(event, task)}>
+    if (editingTaskId === task.id) {
+      return (
+        <li key={task.id} className="row-item" style={{ alignItems: "stretch" }}>
+          <form style={{ display: "grid", flex: 1, minWidth: 0, gap: 6 }} onSubmit={(event) => handleTaskEditSubmit(event, task)}>
             <input
               autoFocus
               required
               maxLength={120}
-              style={styles.compactInput}
+              className="form-control"
               value={taskEditTitle}
               onChange={(event) => setTaskEditTitle(event.target.value)}
               aria-label="Task Title"
             />
             {projectMilestones.length > 0 && (
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={taskEditMilestoneId}
                 onChange={(event) => setTaskEditMilestoneId(event.target.value)}
                 aria-label="Link to Milestone (Optional)"
               >
-                <option value="">No Milestone (General Task)</option>
+                <option value="">No Milestone</option>
                 {projectMilestones.map((milestone) => (
                   <option key={milestone.id} value={milestone.id}>
                     {milestone.title}
@@ -1044,10 +360,10 @@ export default function Projects({
                 ))}
               </select>
             )}
-            <div style={styles.taskFormFields}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))", gap: 6 }}>
               <input
                 type="date"
-                style={styles.compactInput}
+                className="form-control"
                 value={taskEditDueDate}
                 onChange={(event) => setTaskEditDueDate(event.target.value)}
                 aria-label="Task Due Date"
@@ -1056,14 +372,15 @@ export default function Projects({
                 type="number"
                 min={1}
                 step={1}
-                style={styles.compactInput}
+                className="form-control"
                 value={taskEditEstimatedMinutes}
                 onChange={(event) => setTaskEditEstimatedMinutes(event.target.value)}
                 placeholder="Minutes"
                 aria-label="Estimated Minutes"
               />
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={taskEditPriority}
                 onChange={(event) => setTaskEditPriority(event.target.value as Task["priority"])}
                 aria-label="Task Priority"
@@ -1073,129 +390,279 @@ export default function Projects({
                 <option value="low">Low</option>
               </select>
             </div>
-            <div style={styles.formActions}>
-              <button type="button" style={styles.secondaryButton} onClick={() => setEditingTaskId(null)}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="ui-button ui-button--sm" onClick={() => setEditingTaskId(null)}>
                 Cancel
               </button>
-              <button type="submit" style={styles.submitButton}>Save</button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Save</button>
+            </div>
+          </form>
+        </li>
+      );
+    }
+
+    return (
+      <li key={task.id} className="row-item">
+        <button
+          type="button"
+          className="ring-check"
+          style={{ width: 24, height: 24 }}
+          onClick={() => onToggleTask(task.id)}
+          aria-pressed={task.completed}
+          aria-label={`${task.completed ? "Mark incomplete" : "Complete"} "${task.title}"`}
+        >
+          {task.completed && <Check size={13} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleTask(task.id)}
+          aria-label={`${task.completed ? "Mark incomplete" : "Complete"} "${task.title}"`}
+          style={{ display: "grid", flex: 1, minWidth: 0, gap: 3, padding: 0, border: "none", background: "transparent", color: "var(--text-body)", textAlign: "left", cursor: "pointer" }}
+        >
+          <span className="truncate-1" style={{ textDecoration: task.completed ? "line-through" : "none", color: task.completed ? "var(--text-muted)" : "var(--text-primary)", fontWeight: 500 }}>
+            {task.title}
+          </span>
+          <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
+            <span className={PRIORITY_BADGE_CLASS[task.priority]}>{task.priority}</span>
+            {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
+            {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
+            {linkedMilestone && <span>{linkedMilestone.title}</span>}
+          </span>
+        </button>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--sm"
+            style={{ minHeight: 30, padding: "4px 8px" }}
+            onClick={() => {
+              setEditingTaskId(task.id);
+              setTaskEditTitle(task.title);
+              setTaskEditDueDate(task.dueDate ?? "");
+              setTaskEditEstimatedMinutes(task.estimatedMinutes?.toString() ?? "");
+              setTaskEditPriority(task.priority);
+              setTaskEditMilestoneId(task.milestoneId ?? "");
+            }}
+            aria-label={`Edit "${task.title}"`}
+            title="Edit Task"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--sm"
+            style={{ minHeight: 30, padding: "4px 8px" }}
+            onClick={() => setItemToDelete({ type: "task", id: task.id, title: task.title })}
+            aria-label={`Delete "${task.title}"`}
+            title="Delete Task"
+          >
+            <Trash2 size={14} />
+          </button>
+        </span>
+      </li>
+    );
+  }
+
+  function renderMilestonesSection(project: Project) {
+    const projectMilestones = milestones.filter((milestone) => milestone.projectId === project.id);
+    const projectTasks = projectTasksFor(project);
+
+    return (
+      <section aria-label={`Milestones for "${project.name}"`} style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+          <h3 className="section-eyebrow">Milestones · {projectMilestones.length}</h3>
+        </div>
+        {projectMilestones.length === 0 ? (
+          <div className="atelier-group ui-empty-state" style={{ padding: "var(--space-6) var(--space-4)" }}>
+            <strong>No milestones yet</strong>
+            <span className="atelier-sub">Define key checkpoints for this project</span>
+          </div>
+        ) : (
+          <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {projectMilestones.map((milestone) => {
+              const nested = projectTasks.filter((task) => task.milestoneId === milestone.id);
+              return (
+                <li key={milestone.id} className="row-item" style={{ alignItems: "stretch", flexDirection: "column", gap: 0 }}>
+                  {editingMilestoneId === milestone.id ? (
+                    <form
+                      style={{ display: "grid", gap: 8, flex: 1, width: "100%" }}
+                      onSubmit={(event) => handleMilestoneEditSubmit(event, milestone)}
+                    >
+                      <input
+                        autoFocus
+                        required
+                        maxLength={120}
+                        className="form-control"
+                        value={milestoneEditTitle}
+                        onChange={(event) => setMilestoneEditTitle(event.target.value)}
+                        aria-label="Milestone Title"
+                      />
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={milestoneEditTargetDate}
+                        onChange={(event) => setMilestoneEditTargetDate(event.target.value)}
+                        aria-label="Milestone Target Date"
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                        <button
+                          type="button"
+                          className="ui-button ui-button--sm"
+                          onClick={() => setEditingMilestoneId(null)}
+                        >
+                          Cancel
+                        </button>
+                        <button type="submit" className="ui-button ui-button--sm ui-button--primary">Save</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+                        <button
+                          type="button"
+                          className="milestone-checkbox"
+                          onClick={() => onToggleMilestone(milestone.id)}
+                          aria-pressed={milestone.completed}
+                          aria-label={`${milestone.completed ? "Mark incomplete" : "Complete"} milestone: "${milestone.title}"`}
+                        >
+                          {milestone.completed && (
+                            <Check className="milestone-checkbox-icon" width={14} height={14} strokeWidth={2.5} />
+                          )}
+                        </button>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h4 className="truncate-1" style={{ margin: 0, fontSize: "var(--type-sm)", fontWeight: 600, color: milestone.completed ? "var(--text-muted)" : "var(--text-primary)", textDecoration: milestone.completed ? "line-through" : "none" }}>
+                            {milestone.title}
+                          </h4>
+                          {milestone.targetDate && (
+                            <p style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
+                              Target: <time dateTime={milestone.targetDate}>{formatFullDate(milestone.targetDate)}</time>
+                              <span> · {nested.filter((t) => t.completed).length}/{nested.length} tasks</span>
+                            </p>
+                          )}
+                        </div>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className="ui-button ui-button--ghost ui-button--sm"
+                            style={{ minHeight: 30, padding: "4px 8px" }}
+                            onClick={() => {
+                              setEditingMilestoneId(milestone.id);
+                              setMilestoneEditTitle(milestone.title);
+                              setMilestoneEditTargetDate(milestone.targetDate ?? "");
+                            }}
+                            aria-label={`Edit "${milestone.title}"`}
+                            title="Edit Milestone"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-button ui-button--ghost ui-button--sm"
+                            style={{ minHeight: 30, padding: "4px 8px" }}
+                            onClick={() =>
+                              setItemToDelete({ type: "milestone", id: milestone.id, title: milestone.title })
+                            }
+                            aria-label={`Delete "${milestone.title}"`}
+                            title="Delete Milestone"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </span>
+                      </div>
+                      {nested.length > 0 && (
+                        <ul style={{ margin: "8px 0 0 34px", padding: "0 0 0 12px", listStyle: "none", borderLeft: "1px solid var(--border-color)", display: "grid" }}>
+                          {nested.map((task) => renderTaskRow(task, projectMilestones))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {showMilestoneForm ? (
+          <form className="atelier-group" style={{ padding: 12, display: "grid", gap: 8 }} onSubmit={(event) => handleMilestoneSubmit(event, project)}>
+            <input
+              autoFocus
+              required
+              maxLength={120}
+              className="form-control"
+              value={milestoneTitle}
+              onChange={(event) => setMilestoneTitle(event.target.value)}
+              placeholder="Milestone title"
+              aria-label="Milestone Title"
+            />
+            <input
+              type="date"
+              className="form-control"
+              value={milestoneTargetDate}
+              onChange={(event) => setMilestoneTargetDate(event.target.value)}
+              aria-label="Milestone Target Date"
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                className="ui-button ui-button--sm"
+                onClick={() => setShowMilestoneForm(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Add Milestone</button>
             </div>
           </form>
         ) : (
-          <>
-            <button
-              type="button"
-              style={styles.taskButton}
-              onClick={() => onToggleTask(task.id)}
-              aria-pressed={task.completed}
-              aria-label={`${task.completed ? "Mark incomplete" : "Complete"} "${task.title}"`}
-              onMouseEnter={(event) => {
-                Object.assign(event.currentTarget.style, styles.taskButtonHover);
-              }}
-              onMouseLeave={(event) => {
-                Object.assign(event.currentTarget.style, styles.taskButton);
-              }}
-            >
-              <span
-                style={{
-                  ...styles.taskCheck,
-                  ...(task.completed ? styles.taskCheckCompleted : {}),
-                }}
-              >
-                {task.completed && <Check size={13} />}
-              </span>
-              <span style={styles.taskDetails}>
-                <span style={{ overflowWrap: "anywhere", textDecoration: task.completed ? "line-through" : "none" }}>
-                  {task.title}
-                </span>
-                <span style={styles.taskMetadata}>
-                  <span style={{ ...styles.priorityBadge, ...priorityStyles[task.priority] }}>
-                    {task.priority}
-                  </span>
-                  {task.dueDate && (
-                    <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>
-                  )}
-                  {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
-                  {linkedMilestone && <span>{linkedMilestone.title}</span>}
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              style={styles.iconButton}
-              onClick={() => {
-                setEditingTaskId(task.id);
-                setTaskEditTitle(task.title);
-                setTaskEditDueDate(task.dueDate ?? "");
-                setTaskEditEstimatedMinutes(task.estimatedMinutes?.toString() ?? "");
-                setTaskEditPriority(task.priority);
-                setTaskEditMilestoneId(task.milestoneId ?? "");
-              }}
-              aria-label={`Edit "${task.title}"`}
-              title="Edit Task"
-            >
-              <Pencil size={14} />
-            </button>
-            <button
-              type="button"
-              style={styles.iconButton}
-              onClick={() => setItemToDelete({ type: "task", id: task.id, title: task.title })}
-              aria-label={`Delete "${task.title}"`}
-              title="Delete Task"
-            >
-              <Trash2 size={14} />
-            </button>
-          </>
+          <button type="button" className="ui-button ui-button--ghost ui-button--sm" style={{ justifySelf: "start" }} onClick={() => setShowMilestoneForm(true)}>
+            <Plus size={14} />
+            Add Milestone
+          </button>
         )}
-      </li>
+      </section>
     );
   }
 
   function renderTasksSection(project: Project) {
     const projectMilestones = milestones.filter((milestone) => milestone.projectId === project.id);
-    const projectTasks = tasks.filter((task) =>
-      task.projectId === project.id ||
-      (task.milestoneId !== undefined && projectMilestones.some((milestone) => milestone.id === task.milestoneId)),
-    );
+    const unassigned = projectTasksFor(project).filter((task) => task.milestoneId === undefined || !projectMilestones.some((m) => m.id === task.milestoneId));
 
     return (
-      <section style={styles.section} aria-label={`Tasks for "${project.name}"`}>
-        <div style={styles.sectionHeader}>
-          <h3 style={styles.sectionTitleWithCount}>
-            Tasks
-            <span style={styles.sectionCount}> ({projectTasks.length})</span>
-          </h3>
+      <section aria-label={`Tasks for "${project.name}"`} style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+          <h3 className="section-eyebrow">Tasks · {projectTasksFor(project).length}</h3>
+          <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>Ungrouped below · milestone tasks nest above</span>
         </div>
-        {projectTasks.length === 0 ? (
-          <div style={styles.emptyWithHint}>
-            No tasks yet
-            <span style={styles.emptyHint}>Add a task below — milestones are optional</span>
+        {unassigned.length === 0 ? (
+          <div className="atelier-group ui-empty-state" style={{ padding: "var(--space-6) var(--space-4)" }}>
+            <strong>No ungrouped tasks</strong>
+            <span className="atelier-sub">Add a task below — milestones are optional</span>
           </div>
         ) : (
-          <ul style={styles.taskList}>
-            {projectTasks.map((task) => renderTaskItem(task, projectMilestones))}
+          <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {unassigned.map((task) => renderTaskRow(task, projectMilestones))}
           </ul>
         )}
 
         {showTaskForm ? (
-          <form style={styles.inlineForm} onSubmit={(event) => handleTaskSubmit(event, project)}>
+          <form className="atelier-group" style={{ padding: 12, display: "grid", gap: 8 }} onSubmit={(event) => handleTaskSubmit(event, project)}>
             <input
               autoFocus
               required
               maxLength={120}
-              style={styles.compactInput}
+              className="form-control"
               value={taskTitle}
               onChange={(event) => setTaskTitle(event.target.value)}
-              placeholder="Task Title"
+              placeholder="Task title"
               aria-label="Task Title"
             />
             {projectMilestones.length > 0 && (
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={taskMilestoneId}
                 onChange={(event) => setTaskMilestoneId(event.target.value)}
                 aria-label="Link to Milestone (Optional)"
               >
-                <option value="">No Milestone (General Task)</option>
+                <option value="">No Milestone</option>
                 {projectMilestones.map((milestone) => (
                   <option key={milestone.id} value={milestone.id}>
                     {milestone.title}
@@ -1203,10 +670,10 @@ export default function Projects({
                 ))}
               </select>
             )}
-            <div style={styles.taskFormFields}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))", gap: 8 }}>
               <input
                 type="date"
-                style={styles.compactInput}
+                className="form-control"
                 value={taskDueDate}
                 onChange={(event) => setTaskDueDate(event.target.value)}
                 aria-label="Task Due Date"
@@ -1215,14 +682,15 @@ export default function Projects({
                 type="number"
                 min={1}
                 step={1}
-                style={styles.compactInput}
+                className="form-control"
                 value={taskEstimatedMinutes}
                 onChange={(event) => setTaskEstimatedMinutes(event.target.value)}
                 placeholder="Minutes"
                 aria-label="Estimated Minutes"
               />
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={taskPriority}
                 onChange={(event) => setTaskPriority(event.target.value as Task["priority"])}
                 aria-label="Task Priority"
@@ -1232,15 +700,15 @@ export default function Projects({
                 <option value="low">Low</option>
               </select>
             </div>
-            <div style={styles.formActions}>
-              <button type="button" style={styles.secondaryButton} onClick={() => setShowTaskForm(false)}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="ui-button ui-button--sm" onClick={() => setShowTaskForm(false)}>
                 Cancel
               </button>
-              <button type="submit" style={styles.submitButton}>Add Task</button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Add Task</button>
             </div>
           </form>
         ) : (
-          <button type="button" style={styles.addInlineButton} onClick={() => setShowTaskForm(true)}>
+          <button type="button" className="ui-button ui-button--ghost ui-button--sm" style={{ justifySelf: "start" }} onClick={() => setShowTaskForm(true)}>
             <Plus size={14} />
             Add Task
           </button>
@@ -1253,258 +721,117 @@ export default function Projects({
     const progress = calculateProjectProgress(project, milestones, tasks);
 
     return (
-      <section style={styles.page} aria-labelledby="project-detail-title">
-        <button
-          type="button"
-          style={styles.backButton}
-          onClick={() => onSelectProject(null)}
-        >
-          <ChevronLeft size={15} />
-          All Projects
-        </button>
-
-        <div style={styles.detailCard}>
-          <div style={styles.cardHeader}>
-            <h1 id="project-detail-title" style={styles.projectTitle}>{project.name}</h1>
-            <div style={styles.cardActions}>
-              {renderStatusSelect(project)}
+      <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
+        <div className="atelier-group" style={{ padding: 16, display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <h2 id="project-detail-title" className="truncate-1" style={{ margin: 0, fontSize: "var(--type-lg)", fontWeight: 700, color: "var(--text-primary)" }}>{project.name}</h2>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               <button
                 type="button"
-                style={styles.iconButton}
+                className="ui-button ui-button--ghost ui-button--sm"
+                style={{ minHeight: 30, padding: "4px 8px" }}
                 onClick={() => beginProjectEdit(project)}
                 aria-label={`Edit "${project.name}"`}
                 title="Edit Project"
               >
-                <Pencil size={15} />
+                <Pencil size={14} />
               </button>
               <button
                 type="button"
-                style={styles.iconButton}
+                className="ui-button ui-button--ghost ui-button--sm"
+                style={{ minHeight: 30, padding: "4px 8px" }}
                 onClick={() => setItemToDelete({ type: "project", id: project.id, title: project.name })}
                 aria-label={`Delete "${project.name}"`}
                 title="Delete Project"
               >
-                <Trash2 size={15} />
+                <Trash2 size={14} />
               </button>
-            </div>
+            </span>
           </div>
+
+          {renderStatusPill(project)}
 
           {editingProjectId === project.id && (
             <form
-              style={styles.detailEditForm}
+              style={{ display: "grid", gap: 8, paddingTop: 10, borderTop: "1px solid var(--border-color)" }}
               onSubmit={(event) => handleProjectEditSubmit(event, project.id)}
             >
               <input
                 required
                 maxLength={120}
-                style={styles.compactInput}
+                className="form-control"
                 value={projectEditName}
                 onChange={(event) => setProjectEditName(event.target.value)}
                 aria-label="Project Name"
               />
               <textarea
                 maxLength={500}
-                style={{ ...styles.compactInput, minHeight: 56, resize: "vertical" }}
+                className="form-control"
+                style={{ ...FORM_CONTROL, height: "auto", minHeight: 76 }}
                 value={projectEditDescription}
                 onChange={(event) => setProjectEditDescription(event.target.value)}
-                placeholder="Description (Optional)"
+                placeholder="Description (optional)"
                 aria-label="Project Description"
               />
-              <div style={styles.projectFormRow}>
-                <label style={styles.projectLabel}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8 }}>
+                <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
                   Start Date
                   <input
                     type="date"
-                    style={styles.compactInput}
+                    className="form-control"
                     value={projectEditStartDate}
                     onChange={(event) => setProjectEditStartDate(event.target.value)}
                   />
                 </label>
-                <label style={styles.projectLabel}>
+                <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
                   Target Date
                   <input
                     type="date"
-                    style={styles.compactInput}
+                    className="form-control"
                     value={projectEditTargetDate}
                     onChange={(event) => setProjectEditTargetDate(event.target.value)}
                   />
                 </label>
               </div>
-              <div style={styles.formActions}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button
                   type="button"
-                  style={styles.secondaryButton}
+                  className="ui-button ui-button--sm"
                   onClick={() => setEditingProjectId(null)}
                 >
                   Cancel
                 </button>
-                <button type="submit" style={styles.submitButton}>Save Project</button>
+                <button type="submit" className="ui-button ui-button--sm ui-button--primary">Save Project</button>
               </div>
             </form>
           )}
 
-          {project.description && <p style={styles.description}>{project.description}</p>}
+          {project.description && <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: "var(--type-sm)", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{project.description}</p>}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-            <p style={styles.meta}>
-              {project.startDate && <>Start: {formatFullDate(project.startDate)}</>}
-              {project.startDate && project.targetDate && " · "}
-              {project.targetDate && <>Target: {formatFullDate(project.targetDate)}</>}
-              {(project.startDate || project.targetDate) && " · "}
-              Status: {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-            </p>
-          </div>
+          <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
+            {project.startDate && <>Start: {formatFullDate(project.startDate)}</>}
+            {project.startDate && project.targetDate && " · "}
+            {project.targetDate && <>Target: {formatFullDate(project.targetDate)}</>}
+            {(project.startDate || project.targetDate) && " · "}
+            Status: {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+          </p>
 
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "grid", gap: 6 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-              <span style={styles.percentLabel}>{progress.percent}% complete</span>
-              <span style={styles.meta}>{progress.completed} of {progress.total} items</span>
+              <span style={{ color: "var(--text-primary)", fontSize: 13, fontWeight: 700 }}>{progress.percent}% complete</span>
+              <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>{progress.completed} of {progress.total} items</span>
             </div>
-            <div
-              style={styles.progressTrack}
-              role="progressbar"
-              aria-label={`"${project.name}" progress`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progress.percent}
-            >
-              <div style={{ ...styles.progressFill, width: `${progress.percent}%` }} />
-            </div>
-            <div style={styles.progressLegend}>
-              <div style={styles.progressLegendItem}>
-                <div style={{ ...styles.progressLegendDot, ...styles.progressLegendDotTask }} />
-                <span>Tasks {progress.taskCompleted}/{progress.taskTotal} ({progress.taskPercent}%)</span>
-              </div>
-              <div style={styles.progressLegendItem}>
-                <div style={{ ...styles.progressLegendDot, ...styles.progressLegendDotMilestone }} />
-                <span>
-                  Milestones {progress.milestoneCompleted}/{progress.milestoneTotal} ({progress.milestonePercent}%)
-                </span>
-              </div>
+            {renderProgressBar(progress.percent, `"${project.name}" progress`)}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <span className="ui-badge ui-badge--accent">Tasks {progress.taskCompleted}/{progress.taskTotal} ({progress.taskPercent}%)</span>
+              <span className="ui-badge ui-badge--subdued">Milestones {progress.milestoneCompleted}/{progress.milestoneTotal} ({progress.milestonePercent}%)</span>
             </div>
           </div>
-
-          {renderMilestonesSection(project)}
-          {renderTasksSection(project)}
-        </div>
-      </section>
-    );
-  }
-
-  function renderList() {
-    return (
-      <section style={styles.page} aria-labelledby="projects-title">
-        <header style={styles.header}>
-          <h1 id="projects-title" style={styles.title}>Projects</h1>
-          <button
-            type="button"
-            style={styles.addButton}
-            onClick={() => setShowProjectForm((visible) => !visible)}
-            aria-expanded={showProjectForm}
-          >
-            <Plus size={16} />
-            New Project
-          </button>
-        </header>
-        <p style={styles.subtitle}>
-          A project groups milestones and tasks. Projects are optional.
-        </p>
-
-        {showProjectForm && (
-          <form style={styles.form} onSubmit={handleProjectSubmit}>
-            <h2 style={styles.formTitle}>Create a Project</h2>
-            <input
-              autoFocus
-              required
-              maxLength={120}
-              style={styles.input}
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Project Name"
-              aria-label="Project Name"
-            />
-            {showProjectDetails ? (
-              <>
-                <textarea
-                  maxLength={500}
-                  style={{ ...styles.input, minHeight: 72, resize: "vertical" }}
-                  value={projectDescription}
-                  onChange={(event) => setProjectDescription(event.target.value)}
-                  placeholder="Description (Optional)"
-                  aria-label="Project Description"
-                />
-                <div style={styles.projectFormRow}>
-                  <label style={styles.projectLabel}>
-                    Start Date (Optional)
-                    <input
-                      type="date"
-                      style={styles.compactInput}
-                      value={projectStartDate}
-                      onChange={(event) => setProjectStartDate(event.target.value)}
-                      aria-label="Project Start Date (Optional)"
-                    />
-                  </label>
-                  <label style={styles.projectLabel}>
-                    Target Date (Optional)
-                    <input
-                      type="date"
-                      style={styles.compactInput}
-                      value={projectTargetDate}
-                      onChange={(event) => setProjectTargetDate(event.target.value)}
-                      aria-label="Project Target Date (Optional)"
-                    />
-                  </label>
-                </div>
-              </>
-            ) : (
-              <button
-                type="button"
-                style={styles.addInlineButton}
-                onClick={() => setShowProjectDetails(true)}
-                aria-expanded={false}
-              >
-                <Plus size={14} />
-                Add details (optional)
-              </button>
-            )}
-            <div style={styles.formActions}>
-              <button type="button" style={styles.secondaryButton} onClick={() => setShowProjectForm(false)}>
-                Cancel
-              </button>
-              <button type="submit" style={styles.submitButton}>Create Project</button>
-            </div>
-          </form>
-        )}
-
-        <div style={styles.grid}>
-          {activeProjects.length === 0 ? (
-            <div style={styles.empty}>
-              No projects yet. Create one to group milestones and tasks toward an outcome.
-            </div>
-          ) : activeProjects.map((project) => renderProjectCard(project))}
         </div>
 
-        {archivedProjects.length > 0 && (
-          <section style={styles.archivedSection} aria-label="Archived Projects">
-            <button
-              type="button"
-              style={styles.archivedToggle}
-              onClick={() => setShowArchivedProjects((visible) => !visible)}
-              aria-expanded={showArchivedProjects}
-            >
-              <span>
-                {showArchivedProjects ? "Hide" : "Show"} Archived Projects ({archivedProjects.length})
-              </span>
-            </button>
-            {showArchivedProjects && (
-              <div style={styles.archivedList}>
-                {archivedProjects.map((project) => renderProjectCard(project))}
-              </div>
-            )}
-          </section>
-        )}
-
-      </section>
+        {renderMilestonesSection(project)}
+        {renderTasksSection(project)}
+      </div>
     );
   }
 
@@ -1547,18 +874,154 @@ export default function Projects({
     );
   }
 
-  if (selectedProject) {
-    return (
-      <>
-        {renderDetail(selectedProject)}
-        {renderDeleteModal()}
-      </>
-    );
-  }
-
   return (
     <>
-      {renderList()}
+      <style>{`.projects-pane{display:grid;gap:16px;align-items:start}@media (min-width:900px){.projects-pane{grid-template-columns:280px minmax(0,1fr)}}`}</style>
+      <section aria-labelledby="projects-title">
+        <header className="page-head" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <h1 id="projects-title">Projects</h1>
+            <p>{activeProjects.length} active · {archivedProjects.length} archived · Projects are optional — group milestones and tasks toward an outcome.</p>
+          </div>
+          <button
+            type="button"
+            className="ui-button ui-button--primary ui-button--sm"
+            onClick={() => setShowProjectForm((visible) => !visible)}
+            aria-expanded={showProjectForm}
+          >
+            <Plus size={15} />
+            New Project
+          </button>
+        </header>
+
+        {showProjectForm && (
+          <form className="page-toolbar" style={{ display: "grid", gap: 8 }} onSubmit={handleProjectSubmit} aria-label="Create a Project">
+            <strong style={{ color: "var(--text-primary)", fontSize: "var(--type-sm)" }}>Create a project</strong>
+            <input
+              autoFocus
+              required
+              maxLength={120}
+              className="form-control"
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              placeholder="Project name"
+              aria-label="Project Name"
+            />
+            {showProjectDetails ? (
+              <>
+                <textarea
+                  maxLength={500}
+                  className="form-control"
+                  style={{ ...FORM_CONTROL, height: "auto", minHeight: 76 }}
+                  value={projectDescription}
+                  onChange={(event) => setProjectDescription(event.target.value)}
+                  placeholder="Description (optional)"
+                  aria-label="Project Description"
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8 }}>
+                  <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
+                    Start Date (optional)
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={projectStartDate}
+                      onChange={(event) => setProjectStartDate(event.target.value)}
+                      aria-label="Project Start Date (Optional)"
+                    />
+                  </label>
+                  <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
+                    Target Date (optional)
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={projectTargetDate}
+                      onChange={(event) => setProjectTargetDate(event.target.value)}
+                      aria-label="Project Target Date (Optional)"
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="ui-button ui-button--ghost ui-button--sm"
+                style={{ justifySelf: "start" }}
+                onClick={() => setShowProjectDetails(true)}
+                aria-expanded={false}
+              >
+                <Plus size={14} />
+                Add details (optional)
+              </button>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="ui-button ui-button--sm" onClick={() => setShowProjectForm(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Create Project</button>
+            </div>
+          </form>
+        )}
+
+        <div className="projects-pane">
+          <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+            <nav aria-label="Project list" style={{ display: "grid", gap: 8 }}>
+              <h2 className="section-eyebrow">All projects · {activeProjects.length}</h2>
+              {activeProjects.length === 0 ? (
+                <div className="atelier-group ui-empty-state">
+                  <strong>No projects yet</strong>
+                  <span className="atelier-sub">Create one to group milestones and tasks toward an outcome.</span>
+                </div>
+              ) : (
+                <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {activeProjects.map((project) => renderRailRow(project))}
+                </ul>
+              )}
+            </nav>
+
+            {archivedProjects.length > 0 && (
+              <section aria-label="Archived Projects" style={{ display: "grid", gap: 8 }}>
+                <button
+                  type="button"
+                  className="ui-button ui-button--sm"
+                  onClick={() => setShowArchivedProjects((visible) => !visible)}
+                  aria-expanded={showArchivedProjects}
+                >
+                  <span>
+                    {showArchivedProjects ? "Hide" : "Show"} Archived Projects ({archivedProjects.length})
+                  </span>
+                </button>
+                {showArchivedProjects && (
+                  <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                    {archivedProjects.map((project) => renderRailRow(project))}
+                  </ul>
+                )}
+              </section>
+            )}
+          </div>
+
+          <div style={{ minWidth: 0, display: "grid", gap: 16 }}>
+            {selectedProject ? (
+              <>
+                <button
+                  type="button"
+                  className="ui-button ui-button--ghost ui-button--sm"
+                  style={{ justifySelf: "start" }}
+                  onClick={() => onSelectProject(null)}
+                >
+                  <ChevronLeft size={15} />
+                  All Projects
+                </button>
+                {renderDetail(selectedProject)}
+              </>
+            ) : (
+              <div className="atelier-group ui-empty-state">
+                <strong>{activeProjects.length === 0 ? "No project selected" : "Select a project"}</strong>
+                <span className="atelier-sub">Choose a project from the list to see milestones, tasks, and progress.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
       {renderDeleteModal()}
     </>
   );

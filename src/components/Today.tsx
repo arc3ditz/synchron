@@ -1,19 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, History as HistoryIcon, BarChart3 } from "lucide-react";
-import { CARD_SURFACE, FORM_CONTROL } from "../theme";
+import { BarChart3, Check, Clock, History as HistoryIcon, ListChecks, MoreVertical, Play, Plus, X } from "lucide-react";
 import StreakBadge from "./StreakBadge";
 import type { FocusSessionRecord, Habit, Milestone, Project, Task } from "../types";
 import {
-  getTodayKey,
-  isHabitScheduledOnDate,
   calculateStreak,
   formatFullDate,
+  getTodayKey,
+  isHabitScheduledOnDate,
 } from "../utils/dates";
-import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
-import { listNextStepCandidates, nextStepKey, recommendNextStep, isTaskStaleBacklog } from "../domain/nextStep";
+import { getFocusSessionsForLogicalToday, QUICK_FOCUS_MINUTES } from "../domain/focusTimer";
+import { FORM_CONTROL } from "../theme";
+import { isTaskStaleBacklog, listNextStepCandidates, nextStepKey, recommendNextStep } from "../domain/nextStep";
 import { getWelcomeBackSubtitle, getWelcomeBackTitle } from "../domain/welcomeBack";
 import { COMPLETION_CONFIRMATION_MS, getCompletionMessage } from "../domain/completionFeedback";
-import { QUICK_FOCUS_MINUTES } from "../domain/focusTimer";
 import { buildDailyTimeline, totalPlannedMinutes as sumPlannedMinutes, type TimelineBlock } from "../domain/timeline";
 import { isTaskOverdue, resolveTaskContext, selectTodayTasks, sortTodayTasks } from "../domain/tasks";
 
@@ -46,591 +45,114 @@ type TodayProps = {
   welcomeBack?: { daysAway: number } | null;
 };
 
+function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+// Atelier hero primary-button recipe (referenced once in renderNextStep).
 const styles: Record<string, CSSProperties> = {
-  page: {
-    maxWidth: 920,
-    width: "100%",
-    margin: "0 auto",
-    padding: "var(--space-4)",
-    boxSizing: "border-box",
-  },
-  header: {
-    marginBottom: "var(--space-6)",
-  },
-  title: {
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-bold)",
-    color: "var(--text-primary)",
-    margin: "0 0 8px",
-  },
-  date: {
-    fontSize: "var(--type-base)",
-    color: "var(--text-secondary)",
-    margin: "0 0 16px",
-  },
-  briefing: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    margin: "0 0 16px",
-  },
-  eyebrow: {
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    margin: "0 0 var(--space-2)",
-  },
-  nextUp: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "var(--space-4)",
-    padding: "var(--space-4)",
-    marginBottom: "var(--space-6)",
-    background: "var(--bg-surface)",
-    border: "1px solid var(--accent-border-soft)",
-    borderRadius: "var(--radius-lg)",
-  },
-  nextUpEyebrow: {
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--color-accent)",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    margin: "0 0 var(--space-2)",
-  },
-  nextUpInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  nextUpTitle: {
-    fontSize: "var(--type-md)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    margin: "0 0 6px",
-    overflowWrap: "anywhere",
-  },
-  nextUpMeta: {
-    display: "flex",
+  submitButton: {
+    display: "inline-flex",
     alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-    color: "var(--text-secondary)",
-    fontSize: "var(--type-xs)",
-  },
-  nextUpActions: {
-    display: "flex",
-    alignItems: "center",
-    alignSelf: "center",
     gap: 8,
-    flexShrink: 0,
-    flexWrap: "wrap",
+    padding: "12px 22px",
+    borderRadius: "var(--radius-pill)",
+    border: "1px solid transparent",
+    background: "var(--color-accent)",
+    color: "var(--color-accent-contrast)",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
   },
-  nextUpClear: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    margin: "0 0 4px",
-  },
-  welcomeBack: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "var(--space-3)",
-    padding: "var(--space-4)",
-    marginBottom: "var(--space-4)",
-    background: "var(--bg-surface)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-lg)",
-  },
-  welcomeBackInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  welcomeBackTitle: {
-    fontSize: "var(--type-md)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    margin: "0 0 4px",
-  },
-  welcomeBackText: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    margin: 0,
-  },
-  // Quiet completion confirmation: one plain line, no animation, no
-  // celebration styling. It is event-sourced (see handleTaskToggle /
-  // handleHabitToggle) so rerenders alone can never show it twice.
   completionConfirmation: {
+    position: "fixed",
+    left: 0,
+    right: 0,
+    bottom: 24,
+    zIndex: 200,
     display: "flex",
     alignItems: "center",
-    gap: "var(--space-2)",
-    padding: "var(--space-2) 0",
-    margin: "-var(--space-2) 0 var(--space-4)",
-    background: "transparent",
-    border: "none",
+    gap: 10,
+    width: "fit-content",
+    maxWidth: "min(92vw, 480px)",
+    marginInline: "auto",
+    padding: "10px 12px 10px 14px",
+    borderRadius: "var(--radius-pill)",
+    background: "var(--bg-raised)",
+    border: "1px solid var(--border-strong)",
+    boxShadow: "var(--shadow-popover)",
   },
   completionConfirmationText: {
     flex: 1,
     minWidth: 0,
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
     margin: 0,
-    overflowWrap: "anywhere",
-  },
-  progressSection: {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-4)",
-    marginBottom: "var(--space-6)",
-  },
-  progressText: {
     fontSize: "var(--type-sm)",
     color: "var(--text-body)",
-    fontWeight: 500,
-    fontVariantNumeric: "tabular-nums",
-  },
-  progressBar: {
-    flex: 1,
-    height: "var(--space-1)",
-    background: "var(--bg-inset)",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    background: "var(--color-accent)",
-    transition: "width 0.3s ease",
-  },
-  section: {
-    marginBottom: "var(--space-6)",
-  },
-  sectionTitle: {
-    fontSize: "var(--type-md)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    margin: "0 0 var(--space-3)",
-  },
-  habitList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  habitGridList: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: "var(--space-4)",
-  },
-  taskList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  habitCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-3)",
-    padding: "var(--space-3) 0",
-    width: "100%",
-    height: "100%",
-    minWidth: 0,
-    boxSizing: "border-box",
-    background: "transparent",
-    border: "none",
-    borderBottom: "1px solid var(--border-color)",
-    borderRadius: 0,
-    transition: "background-color var(--transition-standard), border-color var(--transition-standard)",
-  },
-  habitCardGrid: {
-    ...CARD_SURFACE,
-    padding: "var(--space-3)",
-    background: "var(--color-surface)",
-  },
-  habitInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  habitName: {
-    fontSize: 15,
-    fontWeight: 500,
-    color: "var(--text-body)",
-    margin: "0 0 6px",
-  },
-  habitMeta: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  priorityBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    minHeight: 22,
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-medium)",
-    borderRadius: "var(--radius-md)",
-    padding: "2px var(--space-2)",
-    whiteSpace: "nowrap",
-  },
-  priorityMandatory: {
-    color: "var(--color-accent)",
-    background: "var(--accent-wash-soft)",
-    border: "1px solid var(--accent-border-soft)",
-  },
-  priorityOptional: {
-    color: "var(--text-secondary)",
-    background: "var(--color-priority-neutral-wash)",
-    border: "1px solid var(--border-color)",
-  },
-  categoryBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    minHeight: 22,
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-medium)",
-    padding: "2px var(--space-2)",
-    borderRadius: "var(--radius-md)",
-    background: "var(--color-category-wash)",
-    color: "var(--color-category)",
-    border: "1px solid var(--color-category-border)",
-    whiteSpace: "nowrap",
-  },
-  habitCardCompleted: {
-    background: "var(--accent-wash-soft)",
-    borderBottom: "1px solid var(--accent-border-soft)",
-    opacity: 1,
-  },
-  habitNameCompleted: {
-    color: "var(--text-dim)",
-    textDecoration: "line-through",
-  },
-  taskName: {
-    fontSize: 15,
-    fontWeight: 500,
-    color: "var(--text-body)",
-    margin: "0 0 5px",
-  },
-  taskMeta: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-    color: "var(--text-secondary)",
-    fontSize: 12,
-  },
-  taskNameCompleted: {
-    color: "var(--text-dim)",
-    textDecoration: "line-through",
-  },
-  taskPriority: {
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "capitalize",
-  },
-  taskChain: {
-    margin: "2px 0 0",
-    fontSize: 12,
-    color: "var(--text-muted)",
     overflowWrap: "anywhere",
-  },
-  milestoneTag: {
-    display: "inline-flex",
-    alignItems: "center",
-    width: "fit-content",
-    maxWidth: "100%",
-    padding: "var(--space-1) var(--space-2)",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-md)",
-    background: "var(--bg-raised)",
-    color: "var(--text-secondary)",
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-medium)",
-    overflowWrap: "anywhere",
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    border: "2px solid var(--checkbox-border)",
-    background: "transparent",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    transition: "all 0.15s ease",
-  },
-  checkboxChecked: {
-    background: "var(--checkbox-checked-bg)",
-    borderColor: "var(--checkbox-checked-border)",
-    boxShadow: "var(--checkbox-checked-shadow)",
-  },
-  checkboxHover: {
-    borderColor: "var(--checkbox-checked-border)",
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-    padding: "48px 24px",
-    textAlign: "center",
-    background: "transparent",
-    border: "none",
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: 600,
-    color: "var(--text-primary)",
-    margin: 0,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "var(--text-secondary)",
-    margin: 0,
-  },
-  emptyActions: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    flexWrap: "wrap",
-    marginTop: 8,
   },
   textButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 0",
     border: "none",
     background: "transparent",
-    color: "var(--accent-teal)",
+    color: "var(--text-secondary)",
     fontSize: "var(--type-sm)",
     fontWeight: "var(--font-medium)",
     cursor: "pointer",
-  },
-  focusButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 28,
-    height: 28,
-    padding: 0,
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: 6,
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    flexShrink: 0,
-    transition: "background 0.15s ease, color 0.15s ease",
-  },
-  secondaryButton: {
-    padding: "8px 12px",
-    border: "1px solid var(--border-color)",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--text-body)",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  submitButton: {
-    padding: "8px 12px",
-    border: "1px solid transparent",
-    borderRadius: 8,
-    background: "var(--color-accent)",
-    color: "var(--color-accent-contrast)",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  quickActionList: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: "var(--space-3)",
-    width: "100%",
-  },
-  quickActionButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    width: "100%",
-    minHeight: 44,
-    minWidth: 0,
-    padding: "8px 12px",
-    background: "transparent",
-    border: "1px solid var(--border-color)",
-    borderRadius: 8,
-    color: "var(--text-body)",
-    fontSize: 13,
-    textAlign: "center",
-    cursor: "pointer",
-    transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), transform var(--transition-standard)",
-  },
-  scheduleSection: {
-    marginBottom: "var(--space-6)",
-  },
-  scheduleHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  scheduleTimeSummary: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    fontWeight: 500,
-  },
-  scheduleTimeline: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  scheduleItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-3)",
-    padding: "var(--space-3) 0",
-    position: "relative",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  scheduleTimeSlot: {
-    flexShrink: 0,
-    width: 70,
-    fontSize: "var(--type-sm)",
-    fontWeight: 600,
-    fontVariantNumeric: "tabular-nums",
-    color: "var(--accent-teal)",
-    textAlign: "right",
-  },
-  scheduleItemInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  scheduleItemButton: {
-    flex: 1,
-    minWidth: 0,
-    display: "block",
-    padding: 0,
-    background: "transparent",
-    border: "none",
-    color: "inherit",
-    font: "inherit",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  scheduleItemTitle: {
-    fontSize: "var(--type-base)",
-    fontWeight: "var(--font-medium)",
-    color: "var(--text-body)",
-    margin: "0 0 4px",
-  },
-  scheduleItemMeta: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: "var(--type-xs)",
-    color: "var(--text-secondary)",
-  },
-  scheduleDuration: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: "var(--type-xs)",
-    color: "var(--text-muted)",
-  },
-  scheduleButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 10px",
-    border: "1px solid var(--border-strong)",
-    borderRadius: "var(--radius-md)",
-    background: "transparent",
-    color: "var(--text-secondary)",
-    fontSize: "var(--type-xs)",
-    cursor: "pointer",
-  },
-  scheduleModal: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "var(--overlay-dim)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-  },
-  scheduleModalContent: {
-    ...CARD_SURFACE,
-    maxWidth: 400,
-    width: "90%",
-    padding: 24,
-    maxHeight: "80vh",
-    overflowY: "auto",
-  },
-  scheduleModalTitle: {
-    fontSize: 18,
-    fontWeight: 600,
-    color: "var(--text-primary)",
-    margin: "0 0 16px",
-  },
-  scheduleModalClose: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    background: "transparent",
-    border: "none",
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    padding: 4,
-  },
-  scheduleForm: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  scheduleFormItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  scheduleFormLabel: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: "var(--text-secondary)",
-  },
-  scheduleFormInput: {
-    ...FORM_CONTROL,
-  },
-  scheduleFormActions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-    marginTop: 8,
-  },
-  unscheduledSection: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTop: "1px solid var(--border-color)",
+    padding: "4px 6px",
   },
 };
 
 function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
   return (
-    <div style={styles.habitMeta}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       <span
         style={{
-          ...styles.priorityBadge,
+          display: "inline-flex",
+          alignItems: "center",
+          fontSize: "var(--type-xs)",
+          fontWeight: "var(--font-regular)",
+          borderRadius: "var(--radius-md)",
+          padding: "2px var(--space-2)",
+          whiteSpace: "nowrap",
           ...(habit.priority === "Mandatory"
-            ? styles.priorityMandatory
-            : styles.priorityOptional),
+            ? {
+                color: "var(--color-accent)",
+                background: "var(--accent-wash-soft)",
+                border: "1px solid var(--accent-border-soft)",
+              }
+            : {
+                color: "var(--text-muted)",
+                background: "var(--color-priority-neutral-wash)",
+                border: "1px solid var(--border-color)",
+              }),
         }}
       >
         {habit.priority}
       </span>
-      {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
+      {habit.category && (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            fontSize: "var(--type-xs)",
+            padding: "2px var(--space-2)",
+            borderRadius: "var(--radius-md)",
+            background: "var(--color-priority-neutral-wash)",
+            color: "var(--text-muted)",
+            border: "1px solid var(--border-color)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {habit.category}
+        </span>
+      )}
+      {habit.scheduledTime && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
+          <Clock size={12} aria-hidden="true" />
+          {habit.scheduledTime}
+        </span>
+      )}
       <StreakBadge streak={streak} />
     </div>
   );
@@ -666,10 +188,10 @@ function Today({
   // touching habits, tasks, or progress.
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [schedulingItem, setSchedulingItem] = useState<{ type: 'habit' | 'task'; id: string | number } | null>(null);
+  const [schedulingItem, setSchedulingItem] = useState<{ type: "habit" | "task"; id: string | number } | null>(null);
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleDuration, setScheduleDuration] = useState("");
-  
+
   const todayHabits = useMemo(() => {
     return habits.filter(
       (habit) =>
@@ -724,11 +246,6 @@ function Today({
     return `${mins}m`;
   };
 
-  // One memoized, order-preserving partition of today's already-sorted
-  // tasks. Completing a task moves it from pending to completed (and
-  // uncompleting moves it back) without re-sorting or refetching, and the
-  // stable array identities keep downstream memos (Next Up, counts) from
-  // recomputing on unrelated renders.
   // One memoized, order-preserving partition of today's already-sorted
   // tasks. Completing a task moves it from pending to completed (and
   // uncompleting moves it back) without re-sorting or refetching, and the
@@ -790,62 +307,61 @@ function Today({
     return parts.length > 0 ? parts.join(" › ") : null;
   }
 
-  function renderTaskRow(task: Task, completed: boolean) {
-    const chain = taskChain(task);
-    const overdue = !completed && isTaskOverdue(task, todayKey);
-    // Same quiet-backlog treatment as the Tasks page: abandoned work stays
-    // visible, but only fresh overdue renders alarming red.
-    const stale = !completed && isTaskStaleBacklog(task, todayKey);
-    return (
-      <div key={task.id} className="today-item" style={styles.habitCard}>
-        <button
-          type="button"
-          className="today-checkbox"
-          style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
-          onClick={() => handleTaskToggle(task, completed)}
-          aria-label={`${completed ? "Mark incomplete" : "Complete"} ${task.title}`}
-          aria-checked={completed}
-          role="checkbox"
-        >
-          {completed && <Check size={14} color="var(--color-accent-contrast)" />}
-        </button>
-        <div style={styles.habitInfo}>
-          <h3 style={{ ...styles.taskName, ...(completed ? styles.taskNameCompleted : {}) }}>{task.title}</h3>
-          <div style={styles.taskMeta}>
-            <span style={styles.taskPriority}>{task.priority}</span>
-            {task.dueDate && (
-              <time dateTime={task.dueDate} style={overdue && !stale ? { color: "var(--priority-high-text)", fontWeight: 600 } : stale ? { color: "var(--text-muted)" } : undefined}>
-                {stale ? `Backlog since ${formatFullDate(task.dueDate)}` : overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
-              </time>
-            )}
-            {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
-          </div>
-          {chain && <div style={styles.taskChain}>{chain}</div>}
-        </div>
-        {!completed && (
-          <>
-            <button
-              className="today-focus-button"
-              style={styles.focusButton}
-              onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-              aria-label={`Start Focus on ${task.title}`}
-              title="Start Focus"
-            >
-              <Play size={14} />
-            </button>
-            <button
-              type="button"
-              style={styles.focusButton}
-              onClick={() => openScheduleModal("task", task.id)}
-              aria-label={`${task.scheduledTime ? "Reschedule" : "Schedule"} task ${task.title}`}
-              title={task.scheduledTime ? "Reschedule" : "Schedule time"}
-            >
-              <MoreVertical size={14} />
-            </button>
-          </>
-        )}
-      </div>
-    );
+  // Single completion path for every Today checkbox (rows, timeline, hero,
+  // habit cards). Feedback is event-sourced here — never derived in render —
+  // so rerenders alone can never show it twice. Completing replaces any
+  // prior confirmation instead of stacking; unmarking clears a confirmation
+  // for the same item so a quick complete→uncomplete leaves nothing stale.
+  // Sound stays with the existing App handlers (per gesture, settings-aware);
+  // Today adds no new sounds.
+  const [lastCompletion, setLastCompletion] = useState<{ itemKey: string; message: string } | null>(null);
+
+  // Optimistic-toggle guard: a click's `completed` flag comes from render
+  // props, so rapid double-clicks before the store refresh would otherwise
+  // toggle twice (complete → reopen) while still showing "Done" and sounding
+  // twice. Repeats on the same item are ignored until tasks/habits refresh,
+  // which lands within a frame — deliberate unmarking still works the moment
+  // the new state arrives.
+  const pendingToggleRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    pendingToggleRef.current.clear();
+  }, [tasks, habits]);
+
+  useEffect(() => {
+    if (lastCompletion === null) return;
+    const timerId = window.setTimeout(() => setLastCompletion(null), COMPLETION_CONFIRMATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [lastCompletion]);
+
+  function isFinalCompletion(): boolean {
+    const openCount = pendingTodayTasks.length + (todayHabits.length - completedHabitCount);
+    return openCount <= 1;
+  }
+
+  function handleTaskToggle(task: Pick<Task, "id" | "title">, completed: boolean) {
+    const itemKey = `task:${task.id}`;
+    if (pendingToggleRef.current.has(itemKey)) return;
+    pendingToggleRef.current.add(itemKey);
+    if (completed) {
+      if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
+      onToggleTask(task.id);
+      return;
+    }
+    onToggleTask(task.id);
+    setLastCompletion({ itemKey, message: getCompletionMessage(task.title, isFinalCompletion()) });
+  }
+
+  function handleHabitToggle(habit: Pick<Habit, "id" | "name">, isCompleted: boolean, dateKey: string) {
+    const itemKey = `habit:${habit.id}`;
+    if (pendingToggleRef.current.has(itemKey)) return;
+    pendingToggleRef.current.add(itemKey);
+    if (isCompleted) {
+      if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
+      onToggleHabit(habit.id, dateKey);
+      return;
+    }
+    onToggleHabit(habit.id, dateKey);
+    setLastCompletion({ itemKey, message: getCompletionMessage(habit.name, isFinalCompletion()) });
   }
 
   const completedHabitCount = todayHabits.filter((habit) =>
@@ -953,319 +469,11 @@ function Today({
     }
   }
 
-  // Single completion path for every Today checkbox (rows, timeline, hero,
-  // habit cards). Feedback is event-sourced here — never derived in render —
-  // so rerenders alone can never show it twice. Completing replaces any
-  // prior confirmation instead of stacking; unmarking clears a confirmation
-  // for the same item so a quick complete→uncomplete leaves nothing stale.
-  // Sound stays with the existing App handlers (per gesture, settings-aware);
-  // Today adds no new sounds.
-  const [lastCompletion, setLastCompletion] = useState<{ itemKey: string; message: string } | null>(null);
-
-  // Optimistic-toggle guard: a click's `completed` flag comes from render
-  // props, so rapid double-clicks before the store refresh would otherwise
-  // toggle twice (complete → reopen) while still showing "Done" and sounding
-  // twice. Repeats on the same item are ignored until tasks/habits refresh,
-  // which lands within a frame — deliberate unmarking still works the moment
-  // the new state arrives.
-  const pendingToggleRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    pendingToggleRef.current.clear();
-  }, [tasks, habits]);
-
-  useEffect(() => {
-    if (lastCompletion === null) return;
-    const timerId = window.setTimeout(() => setLastCompletion(null), COMPLETION_CONFIRMATION_MS);
-    return () => window.clearTimeout(timerId);
-  }, [lastCompletion]);
-
-  function isFinalCompletion(): boolean {
-    const openCount = pendingTodayTasks.length + (todayHabits.length - completedHabitCount);
-    return openCount <= 1;
-  }
-
-  function handleTaskToggle(task: Pick<Task, "id" | "title">, completed: boolean) {
-    const itemKey = `task:${task.id}`;
-    if (pendingToggleRef.current.has(itemKey)) return;
-    pendingToggleRef.current.add(itemKey);
-    if (completed) {
-      if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
-      onToggleTask(task.id);
-      return;
-    }
-    onToggleTask(task.id);
-    setLastCompletion({ itemKey, message: getCompletionMessage(task.title, isFinalCompletion()) });
-  }
-
-  function handleHabitToggle(habit: Pick<Habit, "id" | "name">, isCompleted: boolean, dateKey: string) {
-    const itemKey = `habit:${habit.id}`;
-    if (pendingToggleRef.current.has(itemKey)) return;
-    pendingToggleRef.current.add(itemKey);
-    if (isCompleted) {
-      if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
-      onToggleHabit(habit.id, dateKey);
-      return;
-    }
-    onToggleHabit(habit.id, dateKey);
-    setLastCompletion({ itemKey, message: getCompletionMessage(habit.name, isFinalCompletion()) });
-  }
-
-  // One quiet line after the hero: what just finished, nothing more. The
-  // refreshed hero directly above already carries the next action with its
-  // Start button, so no planning step is needed. role="status" announces it
-  // politely without stealing focus.
-  function renderCompletionConfirmation() {
-    if (lastCompletion === null) return null;
-    return (
-      <div data-testid="completion-confirmation" role="status" style={styles.completionConfirmation}>
-        <Check size={14} aria-hidden="true" style={{ flexShrink: 0, color: "var(--text-secondary)" }} />
-        <p style={styles.completionConfirmationText}>{lastCompletion.message}</p>
-        <button
-          type="button"
-          style={styles.textButton}
-          onClick={() => setLastCompletion(null)}
-          aria-label="Dismiss completion message"
-        >
-          Dismiss
-        </button>
-      </div>
-    );
-  }
-
-
-  // One hero card driven by the Next Step engine: title, truthful reason,
-  // and duration only when the underlying item actually carries one. Start
-  // is the single primary action; completing and skipping are quiet, and a
-  // compact picker switches candidates without leaving Today.
-
-  // Calm, non-blocking welcome for a return after inactivity. It never
-  // mentions failure, streaks, or falling behind, never gates the Next Step
-  // hero or the lists below, and dismisses quietly in-session only.
-  function renderWelcomeBack() {
-    if (welcomeBack === null || welcomeBack === undefined || welcomeDismissed) return null;
-    return (
-      <section aria-label="Welcome back" data-testid="welcome-back" style={styles.welcomeBack}>
-        <div style={styles.welcomeBackInfo}>
-          <h2 style={styles.welcomeBackTitle}>{getWelcomeBackTitle()}</h2>
-          <p style={styles.welcomeBackText}>{getWelcomeBackSubtitle()}</p>
-        </div>
-        <button
-          type="button"
-          style={styles.textButton}
-          onClick={() => setWelcomeDismissed(true)}
-          aria-label="Dismiss welcome back message"
-        >
-          Dismiss
-        </button>
-      </section>
-    );
-  }
-
-  function renderNextStep() {
-    if (nextStep.kind === "none") {
-      if (totalCount === 0) return null;
-      return (
-        <section aria-label="Next step" aria-live="polite" data-testid="next-step" style={styles.nextUp}>
-          <div style={styles.nextUpInfo}>
-            <p style={styles.nextUpEyebrow}>Next Step</p>
-            <h2 style={styles.nextUpTitle}>All clear for today. Nicely done.</h2>
-            <p style={styles.nextUpClear}>{nextStep.reason}</p>
-          </div>
-          <div style={styles.nextUpActions}>
-            <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Play size={14} />
-                <span>Start Focus</span>
-              </span>
-            </button>
-          </div>
-        </section>
-      );
-    }
-
-    const isTask = nextStep.kind === "task";
-    const currentKey = nextStepKey(nextStep);
-    const linkedTask = isTask ? tasks.find((task) => task.id === nextStep.taskId) : undefined;
-    const linkedHabit = !isTask && nextStep.kind === "habit"
-      ? habits.find((habit) => habit.id === nextStep.habitId)
-      : undefined;
-    const chain = linkedTask ? taskChain(linkedTask) : null;
-    const streak = linkedHabit ? calculateStreak(linkedHabit, streakFreeze, dayResetHour) : 0;
-    return (
-      <section aria-label="Next step" aria-live="polite" data-testid="next-step" style={styles.nextUp}>
-        <div style={styles.nextUpInfo}>
-          <p style={styles.nextUpEyebrow}>Next Step · {isTask ? "Task" : "Habit"}</p>
-          <h2 style={styles.nextUpTitle}>{nextStep.title}</h2>
-          <div style={styles.nextUpMeta}>
-            <span>{nextStep.reason}</span>
-            {nextStep.durationMinutes !== undefined && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <Clock size={12} aria-hidden="true" />
-                <span>{nextStep.durationMinutes} min</span>
-              </span>
-            )}
-          </div>
-          {chain && <div style={styles.taskChain}>{chain}</div>}
-          {!isTask && linkedHabit && (
-            <div style={{ ...styles.nextUpMeta, marginTop: 6 }}>
-              <span>{linkedHabit.priority}</span>
-              {linkedHabit.category && <span>{linkedHabit.category}</span>}
-              <StreakBadge streak={streak} />
-            </div>
-          )}
-          {nextStepOptions.length > 1 && (
-            <div style={{ ...styles.nextUpMeta, marginTop: 8 }}>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span>Choose another</span>
-                <select
-                  aria-label="Choose another task or habit"
-                  value={currentKey}
-                  onChange={(event) => chooseNextStep(event.target.value)}
-                  style={{ ...FORM_CONTROL, height: 32, minHeight: 32, fontSize: 12, maxWidth: 240 }}
-                >
-                  {nextStepOptions.slice(0, 8).map((option) => (
-                    <option key={nextStepKey(option)} value={nextStepKey(option)}>
-                      {option.kind === "task" ? "Task" : "Habit"}: {option.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-        </div>
-        <div style={styles.nextUpActions}>
-          <button
-            type="button"
-            style={styles.submitButton}
-            onClick={startNextStep}
-            aria-label={`Start ${QUICK_FOCUS_MINUTES}-minute focus on ${nextStep.title}`}
-            title={`Start a ${QUICK_FOCUS_MINUTES}-minute focus session — the timer stays fully adjustable`}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Play size={14} />
-              <span>Start · {QUICK_FOCUS_MINUTES} min</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            style={styles.secondaryButton}
-            onClick={completeNextStep}
-            aria-label={`Mark done: ${nextStep.title}`}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Check size={14} />
-              <span>Mark Done</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            style={styles.textButton}
-            onClick={skipNextStep}
-            aria-label={`Skip for now: ${nextStep.title}`}
-          >
-            Not now
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  function renderTimelineBlock(block: TimelineBlock) {
-    if (block.kind === "session") {
-      return (
-        <div key={block.key} style={styles.scheduleItem}>
-          <div style={styles.scheduleTimeSlot}>{block.time}</div>
-          <button
-            type="button"
-            className="today-schedule-focus"
-            style={{ ...styles.scheduleItemButton, display: "flex", gap: 8, alignItems: "flex-start" }}
-            onClick={() => onStartFocus({
-              taskId: block.taskId,
-              habitId: block.habitId,
-              title: block.title,
-            })}
-            aria-label={`Start Focus on ${block.title}`}
-            title="Start Focus"
-          >
-            <Play size={13} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3, color: "var(--text-muted)" }} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={styles.scheduleItemTitle}>{block.title}</h3>
-              <div style={styles.scheduleItemMeta}>
-                <span>Focus Session</span>
-              </div>
-            </span>
-          </button>
-          <div style={styles.scheduleDuration}>
-            <Clock size={12} />
-            {formatDuration(block.durationMinutes)}
-          </div>
-        </div>
-      );
-    }
-
-    const completed = block.completed;
-    const kindLabel = block.kind === "task" ? "Task" : "Habit";
-    return (
-      <div key={block.key} className="today-item" style={styles.scheduleItem}>
-        <div style={styles.scheduleTimeSlot}>{block.time}</div>
-        <button
-          type="button"
-          className="today-checkbox"
-          style={{ ...styles.checkbox, ...(completed ? styles.checkboxChecked : {}) }}
-          onClick={() => block.kind === "task"
-            ? handleTaskToggle({ id: block.taskId, title: block.title }, completed)
-            : handleHabitToggle({ id: block.habitId, name: block.title }, completed, todayKey)}
-          aria-label={`${completed ? "Mark incomplete" : "Complete"} ${block.title}`}
-          aria-checked={completed}
-          role="checkbox"
-        >
-          {completed && <Check size={14} color="var(--color-accent-contrast)" />}
-        </button>
-        <button
-          type="button"
-          className="today-schedule-focus"
-          style={{ ...styles.scheduleItemButton, display: "flex", gap: 8, alignItems: "flex-start" }}
-          onClick={() => onStartFocus(block.kind === "task"
-            ? { taskId: block.taskId, title: block.title }
-            : { habitId: block.habitId, title: block.title })}
-          aria-label={`Start Focus on ${block.title}`}
-          title="Start Focus"
-        >
-          <Play size={13} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3, color: "var(--text-muted)" }} />
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ ...styles.scheduleItemTitle, ...(completed ? styles.taskNameCompleted : {}) }}>
-              {block.title}
-            </h3>
-            <div style={styles.scheduleItemMeta}>
-              <span>{kindLabel}</span>
-              {block.meta && <span>· {block.meta}</span>}
-              {block.kind === "task" && block.overdue && <span>· Overdue</span>}
-            </div>
-          </span>
-        </button>
-        {block.durationMinutes !== undefined && (
-          <div style={styles.scheduleDuration}>
-            <Clock size={12} />
-            {formatDuration(block.durationMinutes)}
-          </div>
-        )}
-        <button
-          type="button"
-          style={styles.scheduleButton}
-          onClick={() => openScheduleModal(block.kind, block.kind === "task" ? block.taskId : block.habitId)}
-          aria-label={`Reschedule ${kindLabel.toLowerCase()}`}
-        >
-          <MoreVertical size={14} />
-        </button>
-      </div>
-    );
-  }
-
-  const openScheduleModal = (type: 'habit' | 'task', id: string | number) => {
-    const item = type === 'habit' 
+  const openScheduleModal = (type: "habit" | "task", id: string | number) => {
+    const item = type === "habit"
       ? habits.find(h => h.id === id)
       : tasks.find(t => t.id === id);
-    
+
     if (item) {
       setSchedulingItem({ type, id });
       setScheduleTime(item.scheduledTime || "");
@@ -1284,9 +492,9 @@ function Today({
 
   const handleScheduleSave = () => {
     if (!schedulingItem) return;
-    
+
     const duration = parseInt(scheduleDuration, 10);
-    if (schedulingItem.type === 'habit') {
+    if (schedulingItem.type === "habit") {
       const habit = habits.find(h => h.id === schedulingItem.id);
       if (habit) {
         onUpdateHabit({
@@ -1305,91 +513,555 @@ function Today({
         });
       }
     }
-    
+
     closeScheduleModal();
   };
 
-  if (todayHabits.length === 0 && todayTasks.length === 0) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>Today</h1>
-          <p style={styles.date}>{formatFullDate(today)}</p>
-        </div>
+  const overdueCount = pendingTodayTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
+  const habitsLeft = todayHabits.length - completedHabitCount;
+  const dayName = today.toLocaleDateString(undefined, { weekday: "long" });
+  const greeting = greetingForHour(today.getHours());
 
-        <div style={styles.emptyState}>
-          <p style={styles.emptyTitle}>A quiet day — plan your first win</p>
-          <p style={styles.emptyText}>
-            Add a task for today, create a habit, or start a focus session.
+  const briefingParts: string[] = [];
+  if (overdueCount > 0) briefingParts.push(`${overdueCount} overdue`);
+  briefingParts.push(`${pendingTodayTasks.length} ${pendingTodayTasks.length === 1 ? "task" : "tasks"} open`);
+  briefingParts.push(`${habitsLeft} ${habitsLeft === 1 ? "habit" : "habits"} left`);
+  if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
+
+  // viewMode tunes the habits presentation: grid shows two-up compact rows
+  // inside the main column, list shows single-column rows. Both stay grouped.
+  const habitsGrid = viewMode === "grid" && todayHabits.length > 1;
+
+  function renderWelcomeBack() {
+    if (welcomeBack === null || welcomeBack === undefined || welcomeDismissed) return null;
+    return (
+      <section
+        aria-label="Welcome back"
+        data-testid="welcome-back"
+        className="atelier-group row-card"
+        style={{ padding: "var(--space-4)", marginBottom: "var(--space-4)", display: "flex", alignItems: "flex-start", gap: "var(--space-3)" }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 style={{ fontSize: "var(--type-md)", fontWeight: "var(--font-semibold)", color: "var(--text-primary)", margin: "0 0 4px" }}>
+            {getWelcomeBackTitle()}
+          </h2>
+          <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: 0 }}>
+            {getWelcomeBackSubtitle()}
           </p>
-          <form
-            style={{ display: "flex", gap: 8, width: "100%", maxWidth: 420 }}
-            onSubmit={handleQuickTaskSubmit}
+        </div>
+        <button
+          type="button"
+          onClick={() => setWelcomeDismissed(true)}
+          aria-label="Dismiss welcome back message"
+          style={{ border: "none", background: "transparent", color: "var(--color-accent)", fontSize: "var(--type-sm)", fontWeight: "var(--font-medium)", cursor: "pointer", padding: "4px 0" }}
+        >
+          Dismiss
+        </button>
+      </section>
+    );
+  }
+
+  // Hero "Up next" panel: one featured recommendation with a large ring
+  // checkbox, truthful reason, and duration only when the item carries one.
+  function renderNextStep() {
+    if (nextStep.kind === "none") {
+      if (totalCount === 0) return null;
+      return (
+        <section
+          aria-label="Next step"
+          aria-live="polite"
+          data-testid="next-step"
+          className="atelier-group row-card"
+          style={{ padding: "var(--space-5)", marginBottom: "var(--space-5)", display: "flex", alignItems: "center", gap: "var(--space-4)", flexWrap: "wrap" }}
+        >
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 6px" }}>
+              Up next
+            </p>
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.4rem, 3vw, 1.9rem)", fontWeight: 500, letterSpacing: "-0.01em", color: "var(--text-primary)", margin: "0 0 6px" }}>
+              All clear for today. Nicely done.
+            </h2>
+            <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: 0 }}>{nextStep.reason}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onStartFocus()}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 22px", borderRadius: "var(--radius-pill)", border: "1px solid transparent", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
           >
-            <input
-              style={{ ...styles.scheduleFormInput, flex: 1, minWidth: 0 }}
-              value={quickTaskTitle}
-              onChange={(event) => setQuickTaskTitle(event.target.value)}
-              placeholder="Add a Task for Today"
-              aria-label="Add a Task for Today"
-              maxLength={120}
-            />
-            <button type="submit" style={styles.submitButton} disabled={!quickTaskTitle.trim()}>
-              Add
-            </button>
-          </form>
-          <div style={styles.emptyActions}>
-            <button type="button" style={styles.secondaryButton} onClick={onNavigateToHabits}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Plus size={14} />
-                <span>New Habit</span>
+            <Play size={15} aria-hidden="true" />
+            Start focus
+          </button>
+        </section>
+      );
+    }
+
+    const isTask = nextStep.kind === "task";
+    const currentKey = nextStepKey(nextStep);
+    const linkedTask = isTask ? tasks.find((task) => task.id === nextStep.taskId) : undefined;
+    const linkedHabit = !isTask && nextStep.kind === "habit"
+      ? habits.find((habit) => habit.id === nextStep.habitId)
+      : undefined;
+    const chain = linkedTask ? taskChain(linkedTask) : null;
+    const streak = linkedHabit ? calculateStreak(linkedHabit, streakFreeze, dayResetHour) : 0;
+    const heroCompleted = false;
+
+    return (
+      <section
+        aria-label="Next step"
+        aria-live="polite"
+        data-testid="next-step"
+        className="atelier-group row-card"
+        style={{ padding: "clamp(20px, 3vw, 32px)", marginBottom: "var(--space-5)", display: "flex", alignItems: "flex-start", gap: "var(--space-4)" }}
+      >
+        <button
+          type="button"
+          className="today-checkbox"
+          onClick={completeNextStep}
+          aria-label={`Mark done: ${nextStep.title}`}
+          aria-checked={heroCompleted}
+          role="checkbox"
+          title="Mark done"
+        >
+          <Check size={15} aria-hidden="true" />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 6px" }}>
+            Up next · {isTask ? "Task" : "Habit"}
+          </p>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.4rem, 3vw, 1.9rem)", fontWeight: 500, letterSpacing: "-0.01em", lineHeight: 1.15, color: "var(--text-primary)", margin: "0 0 8px", overflowWrap: "anywhere" }}>
+            {nextStep.title}
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "var(--type-sm)", color: "var(--text-secondary)" }}>
+            <span>{nextStep.reason}</span>
+            {nextStep.durationMinutes !== undefined && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
+                <Clock size={12} aria-hidden="true" />
+                {nextStep.durationMinutes} min
               </span>
-            </button>
-            <button type="button" style={styles.secondaryButton} onClick={() => onStartFocus()}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Play size={14} />
-                <span>Start Focus</span>
+            )}
+            {!isTask && linkedHabit && (
+              <span className="streak-pill">
+                {streak}-day streak
               </span>
+            )}
+          </div>
+          {chain && (
+            <p style={{ margin: "6px 0 0", fontSize: "var(--type-xs)", color: "var(--text-muted)", overflowWrap: "anywhere" }}>
+              {chain}
+            </p>
+          )}
+          {nextStepOptions.length > 1 && (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
+              <span>Choose another</span>
+              <select
+                aria-label="Choose another task or habit"
+                value={currentKey}
+                onChange={(event) => chooseNextStep(event.target.value)}
+                style={{ ...FORM_CONTROL, height: 32, minHeight: 32, padding: "4px 10px", fontSize: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", maxWidth: 240 }}
+              >
+                {nextStepOptions.slice(0, 8).map((option) => (
+                  <option key={nextStepKey(option)} value={nextStepKey(option)}>
+                    {option.kind === "task" ? "Task" : "Habit"}: {option.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={startNextStep}
+              aria-label={`Start ${QUICK_FOCUS_MINUTES}-minute focus on ${nextStep.title}`}
+              title={`Start a ${QUICK_FOCUS_MINUTES}-minute focus session — the timer stays fully adjustable`}
+              style={{ ...styles.submitButton, color: "var(--color-accent-contrast)" }}
+            >
+              <Play size={15} aria-hidden="true" />
+              Start · {QUICK_FOCUS_MINUTES} min focus
             </button>
-            <button type="button" style={styles.textButton} onClick={onNavigateToProjects}>
-              Open Projects →
+            <button
+              type="button"
+              onClick={skipNextStep}
+              aria-label={`Skip for now: ${nextStep.title}`}
+              style={{ display: "inline-flex", alignItems: "center", padding: "12px 18px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-secondary)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              Not now
             </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // One quiet toast after the hero: what just finished, nothing more.
+  // role="status" announces it politely without stealing focus.
+  function renderCompletionConfirmation() {
+    if (lastCompletion === null) return null;
+    return (
+      <div
+        data-testid="completion-confirmation"
+        role="status"
+        style={styles.completionConfirmation}
+      >
+        <Check size={14} aria-hidden="true" style={{ flexShrink: 0, color: "var(--color-accent)" }} />
+        <p style={styles.completionConfirmationText}>{lastCompletion.message}</p>
+        <button
+          type="button"
+          onClick={() => setLastCompletion(null)}
+          aria-label="Dismiss completion message"
+          style={styles.textButton}
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
+
+  function renderTaskRow(task: Task, completed: boolean) {
+    const chain = taskChain(task);
+    const overdue = !completed && isTaskOverdue(task, todayKey);
+    // Same quiet-backlog treatment as the Tasks page: abandoned work stays
+    // visible, but only fresh overdue renders alarming red.
+    const stale = !completed && isTaskStaleBacklog(task, todayKey);
+    return (
+      <div
+        key={task.id}
+        className="today-item row-item"
+        style={overdue && !stale ? { borderLeft: "2px solid var(--priority-high-text)" } : undefined}
+      >
+        <button
+          type="button"
+          className="today-checkbox"
+          onClick={() => handleTaskToggle(task, completed)}
+          aria-label={`${completed ? "Mark incomplete" : "Complete"} ${task.title}`}
+          aria-checked={completed}
+          role="checkbox"
+        >
+          {completed && <Check size={14} aria-hidden="true" />}
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3
+            title={task.title}
+            style={{
+              margin: "0 0 4px",
+              fontSize: "var(--type-base)",
+              fontWeight: 600,
+              color: completed ? "var(--text-dim)" : "var(--text-body)",
+              textDecoration: completed ? "line-through" : "none",
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {task.title}
+          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
+            <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{task.priority}</span>
+            {task.dueDate && (
+              <time
+                dateTime={task.dueDate}
+                style={overdue && !stale
+                  ? { color: "var(--priority-high-text)", fontWeight: 700 }
+                  : stale
+                    ? { color: "var(--text-muted)" }
+                    : undefined}
+              >
+                {stale ? `Backlog since ${formatFullDate(task.dueDate)}` : overdue ? `Overdue · due ${formatFullDate(task.dueDate)}` : `Due ${formatFullDate(task.dueDate)}`}
+              </time>
+            )}
+            {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
+          </div>
+          {chain && (
+            <p style={{ margin: "2px 0 0", fontSize: "var(--type-xs)", color: "var(--text-muted)", overflowWrap: "anywhere" }}>
+              {chain}
+            </p>
+          )}
+        </div>
+        {!completed && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <button
+              type="button"
+              className="today-focus-button"
+              onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+              aria-label={`Start Focus on ${task.title}`}
+              title="Start Focus"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
+            >
+              <Play size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => openScheduleModal("task", task.id)}
+              aria-label={`${task.scheduledTime ? "Reschedule" : "Schedule"} task ${task.title}`}
+              title={task.scheduledTime ? "Reschedule" : "Schedule time"}
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
+            >
+              <MoreVertical size={14} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderTimelineBlock(block: TimelineBlock) {
+    if (block.kind === "session") {
+      return (
+        <div key={block.key} className="row-item" style={{ padding: "10px 0" }}>
+          <span style={{ flexShrink: 0, width: 64, fontSize: "var(--type-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "var(--color-accent)", textAlign: "right" }}>
+            {block.time}
+          </span>
+          <button
+            type="button"
+            className="today-schedule-focus"
+            onClick={() => onStartFocus({ taskId: block.taskId, habitId: block.habitId, title: block.title })}
+            aria-label={`Start Focus on ${block.title}`}
+            title="Start Focus"
+            style={{ flex: 1, minWidth: 0, display: "block", padding: 0, background: "transparent", border: "none", color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer" }}
+          >
+            <span style={{ display: "block", fontSize: "var(--type-sm)", fontWeight: "var(--font-medium)", color: "var(--text-body)", overflowWrap: "anywhere" }}>
+              {block.title}
+            </span>
+            <span style={{ display: "block", fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
+              Focus Session · {formatDuration(block.durationMinutes)}
+            </span>
+          </button>
+        </div>
+      );
+    }
+
+    const completed = block.completed;
+    const kindLabel = block.kind === "task" ? "Task" : "Habit";
+    return (
+      <div key={block.key} className="today-item row-item" style={{ padding: "10px 0" }}>
+        <span style={{ flexShrink: 0, width: 64, fontSize: "var(--type-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "var(--color-accent)", textAlign: "right" }}>
+          {block.time}
+        </span>
+        <button
+          type="button"
+          className="today-checkbox"
+          onClick={() => block.kind === "task"
+            ? handleTaskToggle({ id: block.taskId, title: block.title }, completed)
+            : handleHabitToggle({ id: block.habitId, name: block.title }, completed, todayKey)}
+          aria-label={`${completed ? "Mark incomplete" : "Complete"} ${block.title}`}
+          aria-checked={completed}
+          role="checkbox"
+        >
+          {completed && <Check size={14} aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          className="today-schedule-focus"
+          onClick={() => onStartFocus(block.kind === "task"
+            ? { taskId: block.taskId, title: block.title }
+            : { habitId: block.habitId, title: block.title })}
+          aria-label={`Start Focus on ${block.title}`}
+          title="Start Focus"
+          style={{ flex: 1, minWidth: 0, display: "block", padding: 0, background: "transparent", border: "none", color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer" }}
+        >
+          <span style={{
+            display: "block",
+            fontSize: "var(--type-sm)",
+            fontWeight: "var(--font-medium)",
+            color: completed ? "var(--text-dim)" : "var(--text-body)",
+            textDecoration: completed ? "line-through" : "none",
+            overflowWrap: "anywhere",
+          }}>
+            {block.title}
+          </span>
+          <span style={{ display: "block", fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
+            {kindLabel}{block.meta ? ` · ${block.meta}` : ""}{block.kind === "task" && block.overdue ? " · Overdue" : ""}{block.durationMinutes !== undefined ? ` · ${formatDuration(block.durationMinutes)}` : ""}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openScheduleModal(block.kind, block.kind === "task" ? block.taskId : block.habitId)}
+          aria-label={`Reschedule ${kindLabel.toLowerCase()}`}
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer", flexShrink: 0 }}
+        >
+          <MoreVertical size={14} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function renderScheduleModal() {
+    if (!scheduleModalOpen) return null;
+    return (
+      <div
+        className="modal-overlay"
+        onClick={closeScheduleModal}
+        style={{ position: "fixed", inset: 0, zIndex: 100, display: "grid", placeItems: "center", padding: 20, background: "var(--overlay-dim)" }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Schedule"
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: "relative", width: "min(100%, 440px)", maxHeight: "80vh", overflowY: "auto", padding: 24, background: "var(--bg-surface)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-xl)" }}
+        >
+          <button
+            onClick={closeScheduleModal}
+            aria-label="Close"
+            style={{ position: "absolute", top: 16, right: 16, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer", padding: 4 }}
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 16px" }}>
+            Schedule {schedulingItem?.type === "habit" ? "Habit" : "Task"}
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)" }}>Time (HH:MM)</label>
+              <input
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+                aria-label="Scheduled Time"
+                style={{ minHeight: 40, padding: "8px 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", fontSize: 14 }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)" }}>Duration (Minutes)</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={scheduleDuration}
+                onChange={(e) => setScheduleDuration(e.target.value)}
+                placeholder="30"
+                aria-label="Duration in Minutes"
+                style={{ minHeight: 40, padding: "8px 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", fontSize: 14 }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={closeScheduleModal}
+                style={{ padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", background: "transparent", color: "var(--text-body)", fontSize: 13, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleScheduleSave}
+                style={{ padding: "8px 12px", border: "1px solid transparent", borderRadius: "var(--radius-md)", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                Save Schedule
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const overdueCount = pendingTodayTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
-  const briefingParts: string[] = [];
-  if (overdueCount > 0) briefingParts.push(`${overdueCount} overdue`);
-  briefingParts.push(`${pendingTodayTasks.length} Tasks Open`);
-  briefingParts.push(`${todayHabits.length - completedHabitCount} Habits Left`);
-  if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
+  if (todayHabits.length === 0 && todayTasks.length === 0) {
+    return (
+      <div>
+        <style>{`.today-atelier-grid{display:grid;gap:var(--space-5);grid-template-columns:minmax(0,1fr)}@media(min-width:960px){.today-atelier-grid{grid-template-columns:minmax(0,1fr) 320px}}`}</style>
+        <header className="page-head">
+          <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.14em", margin: "0 0 8px" }}>
+            {formatFullDate(today)}
+          </p>
+          <h1 style={{ fontFamily: "var(--font-display)" }}>{greeting}, it&rsquo;s {dayName}</h1>
+          <p>A quiet day with nothing due. Begin with one small win.</p>
+        </header>
 
-  return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Today</h1>
-        <p style={styles.date}>{formatFullDate(today)}</p>
-        {totalCount > 0 && (
-          <p style={styles.briefing}>{briefingParts.join(" · ")}</p>
-        )}
-
-        <div style={styles.progressSection}>
-          <span style={styles.progressText} aria-live="polite">
-            {completedCount} / {totalCount} Completed · {progressPercent}%
-          </span>
-          <div style={styles.progressBar}>
-            <div
-              style={{
-                ...styles.progressFill,
-                width: `${progressPercent}%`,
-              }}
-            />
-          </div>
+        <div className="today-atelier-grid">
+          <section aria-label="Get started" className="atelier-group row-card" style={{ padding: "clamp(20px, 3vw, 32px)", textAlign: "center" }}>
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.4rem", fontWeight: 500, color: "var(--text-primary)", margin: "0 0 8px" }}>
+              A quiet day — plan your first win
+            </h2>
+            <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: "0 0 20px" }}>
+              Add a task for today, create a habit, or start a focus session.
+            </p>
+            <form
+              onSubmit={handleQuickTaskSubmit}
+              style={{ display: "flex", gap: 8, width: "100%", maxWidth: 420, margin: "0 auto 16px" }}
+            >
+              <input
+                ref={quickTaskInputRef}
+                value={quickTaskTitle}
+                onChange={(event) => setQuickTaskTitle(event.target.value)}
+                placeholder="Add a Task for Today"
+                aria-label="Add a Task for Today"
+                maxLength={120}
+                style={{ flex: 1, minWidth: 0, minHeight: 40, padding: "8px 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", fontSize: 14 }}
+              />
+              <button
+                type="submit"
+                disabled={!quickTaskTitle.trim()}
+                style={{ padding: "8px 16px", border: "1px solid transparent", borderRadius: "var(--radius-pill)", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+              >
+                Add
+              </button>
+            </form>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={onNavigateToHabits}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-pill)", background: "transparent", color: "var(--text-body)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                <Plus size={14} aria-hidden="true" />
+                New Habit
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartFocus()}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-pill)", background: "transparent", color: "var(--text-body)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                <Play size={14} aria-hidden="true" />
+                Start Focus
+              </button>
+              <button
+                type="button"
+                onClick={onNavigateToProjects}
+                style={{ border: "none", background: "transparent", color: "var(--color-accent)", fontSize: "var(--type-sm)", fontWeight: "var(--font-medium)", cursor: "pointer" }}
+              >
+                Open Projects →
+              </button>
+            </div>
+          </section>
+          <aside aria-label="Fresh start actions" className="atelier-group row-card" style={{ padding: "var(--space-4)" }}>
+            <h2 style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 12px" }}>
+              Explore Synchron
+            </h2>
+            <div className="today-quick-action-list" style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px" }}>
+              <button type="button" onClick={onNavigateToHabits} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <ListChecks size={13} aria-hidden="true" />
+                Configure Habits
+              </button>
+              <button type="button" onClick={onNavigateToHistory} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <HistoryIcon size={13} aria-hidden="true" />
+                View History
+              </button>
+              <button type="button" onClick={onNavigateToAnalytics} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <BarChart3 size={13} aria-hidden="true" />
+                Receive Analytics
+              </button>
+            </div>
+          </aside>
         </div>
       </div>
+    );
+  }
+
+  const ringRadius = 26;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+
+  return (
+    <div>
+      <style>{`.today-atelier-grid{display:grid;gap:var(--space-5);grid-template-columns:minmax(0,1fr)}@media(min-width:960px){.today-atelier-grid{grid-template-columns:minmax(0,1fr) 320px}}.today-habits-grid{display:grid;gap:0;grid-template-columns:minmax(0,1fr)}@media(min-width:640px){.today-habits-grid.is-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.today-habits-grid.is-grid .row-item{border-top:1px solid var(--border-color)}}`}</style>
+
+      <header className="page-head">
+        <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.14em", margin: "0 0 8px" }}>
+          {formatFullDate(today)}
+        </p>
+        <h1 style={{ fontFamily: "var(--font-display)" }}>{greeting}, it&rsquo;s {dayName}</h1>
+        <p>{briefingParts.join(" · ")}</p>
+      </header>
 
       {renderWelcomeBack()}
 
@@ -1397,244 +1069,245 @@ function Today({
 
       {renderCompletionConfirmation()}
 
-      <div style={styles.section}>
-        <p style={styles.eyebrow}>Tasks · {pendingTodayTasks.length} open</p>
-        <h2 style={styles.sectionTitle}>Today&rsquo;s Tasks</h2>
-        <form
-          style={{ display: "flex", gap: 8, marginBottom: "var(--space-3)" }}
-          onSubmit={handleQuickTaskSubmit}
-        >
-          <input
-            ref={quickTaskInputRef}
-            style={{ ...styles.scheduleFormInput, flex: 1, minWidth: 0 }}
-            value={quickTaskTitle}
-            onChange={(event) => setQuickTaskTitle(event.target.value)}
-            placeholder="Add a Task for Today"
-            aria-label="Add a Task for Today"
-            maxLength={120}
-          />
-          <button type="submit" style={styles.submitButton} disabled={!quickTaskTitle.trim()}>
-            Add
-          </button>
-        </form>
-        <div style={styles.taskList}>
-          {pendingTodayTasks.length === 0 && completedTodayTasks.length === 0 && (
-            <p style={styles.emptyText}>No tasks for today. Add one small task above whenever you&apos;re ready.</p>
-          )}
-          {freshTodayTasks.map((task) => renderTaskRow(task, false))}
-        </div>
-        {backlogTodayTasks.length > 0 && (
-          <div style={{ marginTop: "var(--space-3)" }}>
-            <button
-              type="button"
-              style={styles.secondaryButton}
-              onClick={() => setShowBacklog((current) => !current)}
-              aria-expanded={showBacklog}
-              aria-label={`${showBacklog ? "Hide" : "Show"} backlog: ${backlogTodayTasks.length} older overdue ${backlogTodayTasks.length === 1 ? "task" : "tasks"}`}
-            >
-              {showBacklog ? "Hide backlog" : `Show backlog (${backlogTodayTasks.length})`}
-            </button>
-            {showBacklog && (
-              <div style={{ ...styles.taskList, marginTop: "var(--space-2)" }}>
-                {backlogTodayTasks.map((task) => renderTaskRow(task, false))}
+      <div className="today-atelier-grid">
+        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+          <section aria-label="Today's habits" className="atelier-group">
+            <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>
+              Habits · {habitsLeft} left
+            </p>
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", fontWeight: 500, color: "var(--text-primary)", margin: "0 0 12px" }}>
+              Today's Habits
+            </h2>
+            {todayHabits.length === 0 ? (
+              <div className="row-card" style={{ padding: "var(--space-4)", textAlign: "center" }}>
+                <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: "0 0 12px" }}>
+                  No habits scheduled for today.
+                </p>
+                <button
+                  type="button"
+                  onClick={onNavigateToHabits}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: "var(--radius-pill)", border: "1px solid transparent", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  Start one small habit →
+                </button>
+              </div>
+            ) : (
+              <div className={`row-card today-habits-grid${habitsGrid ? " is-grid" : ""}`}>
+                {todayHabits.map((habit) => {
+                  const isCompleted = habit.completedDates.includes(todayKey);
+                  const streak = calculateStreak(habit, streakFreeze, dayResetHour);
+                  return (
+                    <div
+                      key={habit.id}
+                      className="today-item row-item"
+                      style={isCompleted ? { background: "var(--bg-completed)" } : undefined}
+                    >
+                      <button
+                        type="button"
+                        className="today-checkbox"
+                        onClick={() => handleHabitToggle(habit, isCompleted, todayKey)}
+                        aria-label={`Toggle ${habit.name}`}
+                        aria-checked={isCompleted}
+                        role="checkbox"
+                      >
+                        {isCompleted && <Check size={14} aria-hidden="true" />}
+                      </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3
+                          title={habit.name}
+                          style={{
+                            margin: "0 0 6px",
+                            fontSize: "var(--type-base)",
+                            fontWeight: 600,
+                            color: isCompleted ? "var(--text-dim)" : "var(--text-body)",
+                            textDecoration: isCompleted ? "line-through" : "none",
+                            overflow: "hidden",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {habit.name}
+                        </h3>
+                        <HabitMetadata habit={habit} streak={streak} />
+                      </div>
+                      {!isCompleted && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className="today-focus-button"
+                            onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
+                            aria-label={`Start Focus on ${habit.name}`}
+                            title="Start Focus"
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
+                          >
+                            <Play size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openScheduleModal("habit", habit.id)}
+                            aria-label={`${habit.scheduledTime ? "Reschedule" : "Schedule"} habit ${habit.name}`}
+                            title={habit.scheduledTime ? "Reschedule" : "Schedule time"}
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
+                          >
+                            <MoreVertical size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </div>
-        )}
-        {completedTodayTasks.length > 0 && (
-          <div style={{ marginTop: "var(--space-3)" }}>
-            <h3 style={{ ...styles.sectionTitle, fontSize: "var(--type-sm)" }}>
-              Completed ({completedTodayTasks.length})
-            </h3>
-            <div style={styles.taskList}>
-              {completedTodayTasks.map((task) => renderTaskRow(task, true))}
-            </div>
-          </div>
-        )}
-      </div>
+          </section>
 
-      <div style={styles.section}>
-        <p style={styles.eyebrow}>
-          Habits · {todayHabits.length - completedHabitCount} left
-        </p>
-        <h2 style={styles.sectionTitle}>Today's Habits</h2>
-        <div style={viewMode === "grid" ? styles.habitGridList : styles.habitList}>
-          {todayHabits.length === 0 ? (
-            <p style={styles.emptyText}>
-              No habits scheduled for today.{" "}
-              <button type="button" style={styles.textButton} onClick={onNavigateToHabits}>
-                Start one small habit →
-              </button>
+          <section aria-label="Today's tasks" className="atelier-group">
+            <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>
+              Tasks · {pendingTodayTasks.length} open
             </p>
-          ) : todayHabits.map((habit) => {
-            const isCompleted = habit.completedDates.includes(todayKey);
-            const streak = calculateStreak(habit, streakFreeze, dayResetHour);
-                    
-            return (
-              <div
-                key={habit.id}
-                className="today-item"
-                style={{
-                  ...styles.habitCard,
-                  ...(viewMode === "grid" ? styles.habitCardGrid : {}),
-                  ...(isCompleted ? styles.habitCardCompleted : {}),
-                }}
-              >
-                <button
-                  className="today-checkbox"
-                  style={{
-                    ...styles.checkbox,
-                    ...(isCompleted ? styles.checkboxChecked : {}),
-                  }}
-                  onClick={() => handleHabitToggle(habit, isCompleted, todayKey)}
-                  aria-label={`Toggle ${habit.name}`}
-                  aria-checked={isCompleted}
-                >
-                  {isCompleted && <Check size={14} color="var(--color-accent-contrast)" />}
-                </button>
-                
-                <div style={styles.habitInfo}>
-                  <h3
-                    style={{
-                      ...styles.habitName,
-                      ...(isCompleted ? styles.habitNameCompleted : {}),
-                    }}
-                  >
-                    {habit.name}
-                  </h3>
-                  <HabitMetadata habit={habit} streak={streak} />
-                </div>
-                {!isCompleted && (
-                  <>
-                    <button
-                      className="today-focus-button"
-                      style={styles.focusButton}
-                      onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-                      aria-label={`Start Focus on ${habit.name}`}
-                      title="Start Focus"
-                    >
-                      <Play size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      style={styles.focusButton}
-                      onClick={() => openScheduleModal("habit", habit.id)}
-                      aria-label={`${habit.scheduledTime ? "Reschedule" : "Schedule"} habit ${habit.name}`}
-                      title={habit.scheduledTime ? "Reschedule" : "Schedule time"}
-                    >
-                      <MoreVertical size={14} />
-                    </button>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {upcomingTimelineBlocks.length > 0 && (
-        <div style={styles.scheduleSection}>
-          <div style={styles.scheduleHeader}>
-            <h2 style={styles.sectionTitle}>Scheduled Today</h2>
-            <span style={styles.scheduleTimeSummary}>
-              {formatDuration(totalPlannedMinutes)} planned
-            </span>
-          </div>
-          <div style={styles.scheduleTimeline}>
-            {upcomingTimelineBlocks.map((block) => renderTimelineBlock(block))}
-          </div>
-        </div>
-      )}
-
-      <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>Quick Actions</h2>
-        <div className="today-quick-action-list" style={styles.quickActionList}>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={focusQuickTaskInput}>
-            <Plus size={16} />
-            Add Task
-          </button>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={() => onStartFocus()}>
-            <Play size={16} />
-            Start Focus Session
-          </button>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHabits}>
-            <ListChecks size={16} />
-            Configure Habits
-          </button>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHistory}>
-            <HistoryIcon size={16} />
-            View History
-          </button>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToAnalytics}>
-            <BarChart3 size={16} />
-            Receive Analytics
-          </button>
-        </div>
-      </div>
-
-      {scheduleModalOpen && (
-        <div style={styles.scheduleModal} onClick={closeScheduleModal}>
-          <div
-            style={styles.scheduleModalContent}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Schedule"
-          >
-            <button
-              style={styles.scheduleModalClose}
-              onClick={closeScheduleModal}
-              aria-label="Close"
-            >
-              <X size={20} />
-            </button>
-            <h2 style={styles.scheduleModalTitle}>
-              Schedule {schedulingItem?.type === 'habit' ? 'Habit' : 'Task'}
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", fontWeight: 500, color: "var(--text-primary)", margin: "0 0 12px" }}>
+              Today&rsquo;s Tasks
             </h2>
-            <div style={styles.scheduleForm}>
-              <div style={styles.scheduleFormItem}>
-                <label style={styles.scheduleFormLabel}>Time (HH:MM)</label>
+            <div className="row-card">
+              <form onSubmit={handleQuickTaskSubmit} className="row-item" style={{ gap: 8 }}>
+                <Plus size={15} aria-hidden="true" style={{ flexShrink: 0, color: "var(--text-muted)" }} />
                 <input
-                  type="time"
-                  style={styles.scheduleFormInput}
-                  value={scheduleTime}
-                  onChange={(e) => setScheduleTime(e.target.value)}
-                  aria-label="Scheduled Time"
+                  ref={quickTaskInputRef}
+                  value={quickTaskTitle}
+                  onChange={(event) => setQuickTaskTitle(event.target.value)}
+                  placeholder="Add a Task for Today"
+                  aria-label="Add a Task for Today"
+                  maxLength={120}
+                  style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", color: "var(--text-body)", fontSize: "var(--type-sm)", outline: "none" }}
                 />
-              </div>
-              <div style={styles.scheduleFormItem}>
-                <label style={styles.scheduleFormLabel}>Duration (Minutes)</label>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  style={styles.scheduleFormInput}
-                  value={scheduleDuration}
-                  onChange={(e) => setScheduleDuration(e.target.value)}
-                  placeholder="30"
-                  aria-label="Duration in Minutes"
-                />
-              </div>
-              <div style={styles.scheduleFormActions}>
                 <button
-                  type="button"
-                  style={styles.secondaryButton}
-                  onClick={closeScheduleModal}
+                  type="submit"
+                  disabled={!quickTaskTitle.trim()}
+                  style={{ padding: "7px 14px", border: "1px solid transparent", borderRadius: "var(--radius-pill)", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: quickTaskTitle.trim() ? 1 : 0.5 }}
                 >
-                  Cancel
+                  Add
                 </button>
-                <button
-                  type="button"
-                  style={styles.submitButton}
-                  onClick={handleScheduleSave}
-                >
-                  Save Schedule
-                </button>
-              </div>
+              </form>
+              {pendingTodayTasks.length === 0 && completedTodayTasks.length === 0 && (
+                <div className="row-item">
+                  <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: 0 }}>
+                    No tasks for today. Add one small task above whenever you&rsquo;re ready.
+                  </p>
+                </div>
+              )}
+              {freshTodayTasks.map((task) => renderTaskRow(task, false))}
+              {backlogTodayTasks.length > 0 && (
+                <div className="row-item" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowBacklog((current) => !current)}
+                    aria-expanded={showBacklog}
+                    aria-label={`${showBacklog ? "Hide" : "Show"} backlog: ${backlogTodayTasks.length} older overdue ${backlogTodayTasks.length === 1 ? "task" : "tasks"}`}
+                    style={{ alignSelf: "flex-start", padding: "7px 14px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-pill)", background: "transparent", color: "var(--text-body)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    {showBacklog ? "Hide backlog" : `Show backlog (${backlogTodayTasks.length})`}
+                  </button>
+                  {showBacklog && (
+                    <div className="row-card">
+                      {backlogTodayTasks.map((task) => renderTaskRow(task, false))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {completedTodayTasks.length > 0 && (
+                <>
+                  <div className="row-item" style={{ paddingTop: 14, paddingBottom: 6 }}>
+                    <h3 style={{ margin: 0, fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                      Completed ({completedTodayTasks.length})
+                    </h3>
+                  </div>
+                  {completedTodayTasks.map((task) => renderTaskRow(task, true))}
+                </>
+              )}
             </div>
-          </div>
+          </section>
         </div>
-      )}
+
+        <aside aria-label="Today overview" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <section aria-label="Progress" className="atelier-group row-card" style={{ padding: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+            <svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label={`${progressPercent}% complete`}>
+              <circle cx="36" cy="36" r={ringRadius} fill="none" stroke="var(--bg-inset)" strokeWidth="7" />
+              <circle
+                cx="36"
+                cy="36"
+                r={ringRadius}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth="7"
+                strokeLinecap="round"
+                strokeDasharray={ringCircumference}
+                strokeDashoffset={ringCircumference * (1 - progressPercent / 100)}
+                transform="rotate(-90 36 36)"
+              />
+              <text x="36" y="36" textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="700" fill="var(--text-primary)">
+                {progressPercent}%
+              </text>
+            </svg>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: "0 0 2px", fontSize: "var(--type-sm)", fontWeight: 600, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
+                {completedCount} / {totalCount} done
+              </p>
+              <p style={{ margin: 0, fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
+                {habitsLeft} {habitsLeft === 1 ? "habit" : "habits"} · {pendingTodayTasks.length} {pendingTodayTasks.length === 1 ? "task" : "tasks"} to go
+                {todayFocusTime > 0 ? ` · ${todayFocusTime}m focused` : ""}
+              </p>
+            </div>
+          </section>
+
+          {upcomingTimelineBlocks.length > 0 && (
+            <section aria-label="Schedule" className="atelier-group">
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.1rem", fontWeight: 500, color: "var(--text-primary)", margin: 0 }}>
+                  Scheduled Today
+                </h2>
+                <span style={{ fontSize: "var(--type-xs)", color: "var(--text-secondary)", fontWeight: 500 }}>
+                  {formatDuration(totalPlannedMinutes)} planned
+                </span>
+              </div>
+              <div className="row-card" style={{ padding: "4px var(--space-4)" }}>
+                {upcomingTimelineBlocks.map((block) => renderTimelineBlock(block))}
+              </div>
+            </section>
+          )}
+
+          <section aria-label="Quick actions" className="atelier-group row-card" style={{ padding: "var(--space-4)" }}>
+            <h2 style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 12px" }}>
+              Quick Actions
+            </h2>
+            <div className="today-quick-action-list" style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px" }}>
+              <button type="button" onClick={focusQuickTaskInput} aria-label="Add task" title="Add task" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <Plus size={13} aria-hidden="true" />
+                Add Task
+              </button>
+              <button type="button" onClick={() => onStartFocus()} aria-label="Start focus session" title="Start focus session" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <Play size={13} aria-hidden="true" />
+                Start Focus Session
+              </button>
+              <button type="button" onClick={onNavigateToHabits} aria-label="Configure habits" title="Configure habits" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <ListChecks size={13} aria-hidden="true" />
+                Configure Habits
+              </button>
+              <button type="button" onClick={onNavigateToHistory} aria-label="View history" title="View history" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <HistoryIcon size={13} aria-hidden="true" />
+                View History
+              </button>
+              <button type="button" onClick={onNavigateToAnalytics} aria-label="Receive analytics" title="Receive analytics" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <BarChart3 size={13} aria-hidden="true" />
+                Receive Analytics
+              </button>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      {renderScheduleModal()}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import { Check, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Play, Plus, Search, Trash2 } from "lucide-react";
 
-import { FORM_CONTROL } from "../theme";
 import type { Milestone, Project, Task } from "../types";
+import { FORM_CONTROL } from "../theme";
 import { resolveTaskContext } from "../domain/tasks";
 import { isTaskStaleBacklog } from "../domain/nextStep";
 import { getTodayKey } from "../utils/dates";
@@ -21,266 +21,23 @@ type TasksProps = {
 };
 
 type StatusFilter = "open" | "completed" | "all";
-
-const priorityStyles: Record<Task["priority"], CSSProperties> = {
-  high: {
-    color: "var(--priority-high-text)",
-    background: "var(--priority-high-bg)",
-    border: "1px solid var(--priority-high-border)",
-  },
-  medium: {
-    color: "var(--priority-medium-text)",
-    background: "var(--priority-medium-bg)",
-    border: "1px solid var(--priority-medium-border)",
-  },
-  low: {
-    color: "var(--priority-low-text)",
-    background: "var(--priority-low-bg)",
-    border: "1px solid var(--priority-low-border)",
-  },
-};
+type PriorityFilter = "all" | Task["priority"];
 
 const PRIORITY_RANK: Record<Task["priority"], number> = { high: 0, medium: 1, low: 2 };
 
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: "100%",
-    marginInline: "auto",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "var(--space-4)",
-    marginBottom: "var(--space-2)",
-  },
-  title: {
-    margin: 0,
-    color: "var(--text-primary)",
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-semibold)",
-  },
-  subtitle: {
-    margin: "0 0 var(--space-5)",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-  },
-  form: {
-    display: "grid",
-    gap: "var(--space-3)",
-    marginBottom: "var(--space-4)",
-  },
-  input: {
-    ...FORM_CONTROL,
-    width: "100%",
-    minWidth: 0,
-  },
-  compactInput: {
-    ...FORM_CONTROL,
-    width: "100%",
-    minWidth: 0,
-  },
-  addRow: {
-    display: "flex",
-    gap: 8,
-  },
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-    gap: 8,
-  },
-  fieldLabel: {
-    display: "grid",
-    gap: 5,
-    color: "var(--text-secondary)",
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  formActions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  secondaryButton: {
-    padding: "8px 12px",
-    border: "1px solid var(--border-color)",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--text-body)",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  submitButton: {
-    padding: "8px 12px",
-    border: "1px solid transparent",
-    borderRadius: 8,
-    background: "var(--color-accent)",
-    color: "var(--color-accent-contrast)",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  filterRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-    marginBottom: "var(--space-4)",
-  },
-  filterSegment: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "var(--space-1)",
-  },
-  filterButton: {
-    padding: "6px 12px",
-    background: "transparent",
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  filterButtonActive: {
-    background: "var(--accent-wash-soft)",
-    color: "var(--color-accent)",
-    fontWeight: 600,
-  },
-  projectFilter: {
-    minWidth: 160,
-    maxWidth: 260,
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    margin: 0,
-    padding: 0,
-    listStyle: "none",
-  },
-  row: {
-    display: "flex",
-    alignItems: "center",
-    gap: 9,
-    padding: "var(--space-2) 0",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  taskButton: {
-    display: "flex",
-    alignItems: "center",
-    flex: 1,
-    minWidth: 0,
-    gap: 9,
-    padding: "8px 12px",
-    border: "1px solid transparent",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--text-body)",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  taskDetails: {
-    display: "grid",
-    minWidth: 0,
-    gap: 4,
-  },
-  taskMetadata: {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    color: "var(--text-muted)",
-    fontSize: 11,
-  },
-  priorityBadge: {
-    padding: "1px 6px",
-    fontSize: 10,
-    fontWeight: 600,
-    textTransform: "capitalize",
-  },
-  overdue: {
-    color: "var(--priority-high-text)",
-    fontWeight: 600,
-  },
-  backlog: {
-    color: "var(--text-muted)",
-  },
-  context: {
-    color: "var(--text-muted)",
-  },
-  taskCheck: {
-    display: "grid",
-    placeItems: "center",
-    width: 20,
-    height: 20,
-    flex: "0 0 20px",
-    border: "1px solid var(--checkbox-border)",
-    borderRadius: 6,
-    background: "transparent",
-    color: "var(--color-accent-contrast)",
-  },
-  taskCheckCompleted: {
-    background: "var(--checkbox-checked-bg)",
-    border: "1px solid var(--checkbox-checked-border)",
-    boxShadow: "var(--checkbox-checked-shadow)",
-  },
-  iconButton: {
-    display: "grid",
-    placeItems: "center",
-    width: 30,
-    height: 30,
-    padding: 0,
-    border: "1px solid transparent",
-    borderRadius: 7,
-    background: "transparent",
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
-  focusButton: {
-    display: "grid",
-    placeItems: "center",
-    width: 30,
-    height: 30,
-    padding: 0,
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: 7,
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
-  editForm: {
-    display: "grid",
-    flex: 1,
-    minWidth: 0,
-    gap: 6,
-  },
-  empty: {
-    padding: "28px 16px",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    textAlign: "center",
-  },
-  emptyHint: {
-    display: "block",
-    marginTop: 4,
-    color: "var(--text-muted)",
-    fontSize: 12,
-  },
-  taskContextBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "2px 6px",
-    background: "var(--bg-inset)",
-    borderRadius: 4,
-    color: "var(--text-muted)",
-    fontSize: 10,
-    fontWeight: 600,
-    textTransform: "uppercase",
-  },
+// Selects build on the shared control spec so every dropdown matches inputs.
+const selectStyle: CSSProperties = { ...FORM_CONTROL, width: "auto" };
+
+const PRIORITY_DOT: Record<Task["priority"], string> = {
+  high: "var(--priority-high-text)",
+  medium: "var(--priority-medium-text)",
+  low: "var(--priority-low-text)",
+};
+
+const PRIORITY_BADGE_CLASS: Record<Task["priority"], string> = {
+  high: "ui-badge ui-badge--danger",
+  medium: "ui-badge ui-badge--warning",
+  low: "ui-badge ui-badge--subdued",
 };
 
 export default function Tasks({
@@ -314,7 +71,9 @@ export default function Tasks({
   const [editMilestoneId, setEditMilestoneId] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [projectFilter, setProjectFilter] = useState("");
+  const [query, setQuery] = useState("");
   const [pendingDeletion, setPendingDeletion] = useState<Task | null>(null);
 
   const openCount = tasks.filter((task) => !task.completed).length;
@@ -407,10 +166,13 @@ export default function Tasks({
   }
 
   const visibleTasks = useMemo(() => {
+    const needle = query.trim().toLowerCase();
     const filtered = tasks.filter((task) => {
       if (statusFilter === "open" && task.completed) return false;
       if (statusFilter === "completed" && !task.completed) return false;
+      if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
       if (projectFilter !== "" && task.projectId !== projectFilter) return false;
+      if (needle !== "" && !task.title.toLowerCase().includes(needle)) return false;
       return true;
     });
     // Overdue first, then due date, then priority, then creation order.
@@ -425,7 +187,35 @@ export default function Tasks({
       if (byPriority !== 0) return byPriority;
       return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
     });
-  }, [tasks, statusFilter, projectFilter, todayKey]);
+  }, [tasks, statusFilter, priorityFilter, projectFilter, query, todayKey]);
+
+  const groups = useMemo(() => {
+    const overdue: Task[] = [];
+    const upcoming: Task[] = [];
+    const backlog: Task[] = [];
+    const done: Task[] = [];
+    for (const task of visibleTasks) {
+      if (task.completed) {
+        done.push(task);
+        continue;
+      }
+      if (task.dueDate !== undefined && task.dueDate < todayKey) {
+        overdue.push(task);
+        continue;
+      }
+      if (task.dueDate !== undefined) {
+        upcoming.push(task);
+        continue;
+      }
+      backlog.push(task);
+    }
+    const ordered: { key: string; label: string; hint: string; items: Task[] }[] = [];
+    if (overdue.length > 0) ordered.push({ key: "overdue", label: "Overdue", hint: "Needs attention first", items: overdue });
+    if (upcoming.length > 0) ordered.push({ key: "upcoming", label: "Scheduled", hint: "Dated work in order", items: upcoming });
+    if (backlog.length > 0) ordered.push({ key: "backlog", label: "Backlog", hint: "No due date yet", items: backlog });
+    if (done.length > 0) ordered.push({ key: "done", label: "Completed", hint: "Finished work", items: done });
+    return ordered;
+  }, [visibleTasks, todayKey]);
 
   function renderContext(task: Task) {
     const { project, milestone } = resolveTaskContext(task, { projects, milestones });
@@ -434,12 +224,17 @@ export default function Tasks({
     );
     if (parts.length === 0) return null;
     return (
-      <span style={styles.context}>
-        {project && <span style={styles.taskContextBadge}>Project</span>}
-        {milestone && <span style={styles.taskContextBadge}>Milestone</span>}
-        {parts.join(" › ")}
+      <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
+        {parts.join("  ·  ")}
       </span>
     );
+  }
+
+  function dueLabel(task: Task, overdue: boolean, stale: boolean): string {
+    if (!task.dueDate) return "";
+    if (stale) return `Backlog since ${formatFullDate(task.dueDate)}`;
+    if (overdue) return `Overdue · due ${formatFullDate(task.dueDate)}`;
+    return `Due ${formatFullDate(task.dueDate)}`;
   }
 
   function renderRow(task: Task) {
@@ -450,20 +245,21 @@ export default function Tasks({
 
     if (editingTaskId === task.id) {
       return (
-        <li key={task.id} style={styles.row}>
-          <form style={styles.editForm} onSubmit={(event) => handleEditSubmit(event, task)}>
+        <li key={task.id} className="row-item" style={{ alignItems: "stretch" }}>
+          <form style={{ display: "grid", flex: 1, minWidth: 0, gap: "var(--space-2)" }} onSubmit={(event) => handleEditSubmit(event, task)}>
             <input
               autoFocus
               required
               maxLength={120}
-              style={styles.compactInput}
+              className="form-control"
               value={editTitle}
               onChange={(event) => setEditTitle(event.target.value)}
               aria-label="Task Title"
             />
-            <div style={styles.formGrid}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: "var(--space-2)" }}>
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={editProjectId}
                 onChange={(event) => setEditProjectId(event.target.value)}
                 aria-label="Linked Project (Optional)"
@@ -476,7 +272,8 @@ export default function Tasks({
                   ))}
               </select>
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={editMilestoneId}
                 onChange={(event) => setEditMilestoneId(event.target.value)}
                 aria-label="Linked Milestone (Optional)"
@@ -493,7 +290,7 @@ export default function Tasks({
               </select>
               <input
                 type="date"
-                style={styles.compactInput}
+                className="form-control"
                 value={editDueDate}
                 onChange={(event) => setEditDueDate(event.target.value)}
                 aria-label="Task Due Date"
@@ -502,7 +299,7 @@ export default function Tasks({
                 type="number"
                 min={1}
                 step={1}
-                style={styles.compactInput}
+                className="form-control"
                 value={editEstimatedMinutes}
                 onChange={(event) => setEditEstimatedMinutes(event.target.value)}
                 placeholder="Minutes"
@@ -510,7 +307,7 @@ export default function Tasks({
               />
               <input
                 type="time"
-                style={styles.compactInput}
+                className="form-control"
                 value={editScheduledTime}
                 onChange={(event) => setEditScheduledTime(event.target.value)}
                 aria-label="Scheduled Time"
@@ -519,14 +316,15 @@ export default function Tasks({
                 type="number"
                 min={1}
                 step={1}
-                style={styles.compactInput}
+                className="form-control"
                 value={editDurationMinutes}
                 onChange={(event) => setEditDurationMinutes(event.target.value)}
                 placeholder="Minutes"
                 aria-label="Duration in Minutes"
               />
               <select
-                style={styles.compactInput}
+                className="form-control"
+                style={selectStyle}
                 value={editPriority}
                 onChange={(event) => setEditPriority(event.target.value as Task["priority"])}
                 aria-label="Task Priority"
@@ -536,11 +334,11 @@ export default function Tasks({
                 <option value="low">Low</option>
               </select>
             </div>
-            <div style={styles.formActions}>
-              <button type="button" style={styles.secondaryButton} onClick={() => setEditingTaskId(null)}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)" }}>
+              <button type="button" className="ui-button ui-button--sm" onClick={() => setEditingTaskId(null)}>
                 Cancel
               </button>
-              <button type="submit" style={styles.submitButton}>Save</button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Save</button>
             </div>
           </form>
         </li>
@@ -548,104 +346,178 @@ export default function Tasks({
     }
 
     return (
-      <li key={task.id} style={styles.row}>
+      <li key={task.id} className="row-item">
         <button
           type="button"
-          style={styles.taskButton}
+          className="ring-check"
           onClick={() => onToggleTask(task.id)}
           aria-pressed={task.completed}
           aria-label={`${task.completed ? "Mark incomplete" : "Complete"} "${task.title}"`}
         >
-          <span style={{ ...styles.taskCheck, ...(task.completed ? styles.taskCheckCompleted : {}) }}>
-            {task.completed && <Check size={13} />}
-          </span>
-          <span style={styles.taskDetails}>
-            <span style={{
-              overflowWrap: "anywhere",
-              textDecoration: task.completed ? "line-through" : "none",
-            }}>
+          {task.completed && <Check size={14} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleTask(task.id)}
+          aria-label={`${task.completed ? "Mark incomplete" : "Complete"} "${task.title}"`}
+          style={{
+            display: "grid",
+            flex: 1,
+            minWidth: 0,
+            gap: 3,
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            color: "var(--text-body)",
+            textAlign: "left",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span
+              aria-hidden="true"
+              style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: PRIORITY_DOT[task.priority] }}
+            />
+            <span className="truncate-1" style={{ textDecoration: task.completed ? "line-through" : "none", color: task.completed ? "var(--text-muted)" : "var(--text-primary)", fontWeight: 600 }}>
               {task.title}
             </span>
-            <span style={styles.taskMetadata}>
-              <span style={{ ...styles.priorityBadge, ...priorityStyles[task.priority] }}>
-                {task.priority}
-              </span>
-              {task.dueDate && (
-                <time dateTime={task.dueDate} style={overdue && !stale ? styles.overdue : stale ? styles.backlog : undefined}>
-                  {stale ? `Backlog since ${formatFullDate(task.dueDate)}` : overdue ? `Overdue (due ${formatFullDate(task.dueDate)})` : `Due ${formatFullDate(task.dueDate)}`}
-                </time>
-              )}
-              {task.scheduledTime && (
-                <span>Scheduled {task.scheduledTime}</span>
-              )}
-              {(task.durationMinutes ?? task.estimatedMinutes) !== undefined && (
-                <span>{task.durationMinutes ?? task.estimatedMinutes} min</span>
-              )}
-              {renderContext(task)}
-            </span>
+          </span>
+          <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
+            <span className={PRIORITY_BADGE_CLASS[task.priority]}>{task.priority}</span>
+            {task.dueDate && (
+              <time
+                dateTime={task.dueDate}
+                style={overdue && !stale ? { color: "var(--color-danger)", fontWeight: 700 } : undefined}
+              >
+                {dueLabel(task, overdue, stale)}
+              </time>
+            )}
+            {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
+            {(task.durationMinutes ?? task.estimatedMinutes) !== undefined && (
+              <span>{task.durationMinutes ?? task.estimatedMinutes} min</span>
+            )}
+            {renderContext(task)}
           </span>
         </button>
-        <button
-          type="button"
-          style={styles.focusButton}
-          onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-          aria-label={`Start focus on "${task.title}"`}
-          title="Start Focus"
-        >
-          <Play size={14} />
-        </button>
-        <button
-          type="button"
-          style={styles.iconButton}
-          onClick={() => beginEdit(task)}
-          aria-label={`Edit "${task.title}"`}
-          title="Edit Task"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          type="button"
-          style={styles.iconButton}
-          onClick={() => setPendingDeletion(task)}
-          aria-label={`Delete "${task.title}"`}
-          title="Delete Task"
-        >
-          <Trash2 size={14} />
-        </button>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--sm"
+            style={{ minHeight: 30, padding: "4px 8px" }}
+            onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
+            aria-label={`Start focus on "${task.title}"`}
+            title="Start Focus"
+          >
+            <Play size={14} />
+          </button>
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--sm"
+            style={{ minHeight: 30, padding: "4px 8px" }}
+            onClick={() => beginEdit(task)}
+            aria-label={`Edit "${task.title}"`}
+            title="Edit Task"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--sm"
+            style={{ minHeight: 30, padding: "4px 8px" }}
+            onClick={() => setPendingDeletion(task)}
+            aria-label={`Delete "${task.title}"`}
+            title="Delete Task"
+          >
+            <Trash2 size={14} />
+          </button>
+        </span>
       </li>
     );
   }
 
-  return (
-    <section style={styles.page} aria-labelledby="tasks-title">
-      <header style={styles.header}>
-        <h1 id="tasks-title" style={styles.title}>Tasks</h1>
-      </header>
-      <p style={styles.subtitle}>Small steps count.</p>
+  const isFiltering = statusFilter !== "all" || priorityFilter !== "all" || projectFilter !== "" || query.trim() !== "";
 
-      <form style={styles.form} onSubmit={handleAddSubmit} aria-label="Add a Task">
-        <div style={styles.addRow}>
+  return (
+    <section aria-labelledby="tasks-title">
+      <header className="page-head">
+        <h1 id="tasks-title">Tasks</h1>
+        <p>{openCount} open · {completedCount} completed · Small steps count.</p>
+      </header>
+
+      <div className="page-toolbar" role="group" aria-label="Filter Tasks">
+        <span style={{ position: "relative", display: "inline-flex", alignItems: "center", flex: "1 1 180px", minWidth: 160 }}>
+          <Search size={14} aria-hidden="true" style={{ position: "absolute", left: 10, color: "var(--text-muted)" }} />
+          <input
+            className="form-control"
+            style={{ width: "100%", paddingLeft: 30 }}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search tasks"
+            aria-label="Search tasks"
+          />
+        </span>
+        <div role="group" aria-label="Completion Status" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          {(["open", "completed", "all"] as StatusFilter[]).map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={`ui-button ui-button--sm ${statusFilter === status ? "ui-button--primary" : "ui-button--ghost"}`}
+              onClick={() => setStatusFilter(status)}
+              aria-pressed={statusFilter === status}
+            >
+              {status === "open" ? `Open (${openCount})` : status === "completed" ? `Completed (${completedCount})` : `All (${tasks.length})`}
+            </button>
+          ))}
+        </div>
+        <select
+          className="form-control"
+          style={{ ...selectStyle, width: "auto" }}
+          value={priorityFilter}
+          onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
+          aria-label="Filter by Priority"
+        >
+          <option value="all">All priorities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select
+          className="form-control"
+          style={{ ...selectStyle, width: "auto", maxWidth: 220 }}
+          value={projectFilter}
+          onChange={(event) => setProjectFilter(event.target.value)}
+          aria-label="Filter by Project"
+        >
+          <option value="">All Projects</option>
+          {projects.filter((project) => project.status !== "archived").map((project) => (
+            <option key={project.id} value={project.id}>{project.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <form className="atelier-group" style={{ padding: 16, marginBottom: 16 }} onSubmit={handleAddSubmit} aria-label="Add a Task">
+        <div style={{ display: "flex", gap: 8 }}>
           <input
             required
             maxLength={120}
-            style={styles.input}
+            className="form-control"
+            style={{ flex: 1, minWidth: 0 }}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Add a Task"
+            placeholder="Add a task"
             aria-label="Task Title"
           />
-          <button type="submit" style={styles.submitButton}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Plus size={14} />
-              <span>Add</span>
-            </span>
+          <button type="submit" className="ui-button ui-button--primary ui-button--sm">
+            <Plus size={14} />
+            <span>Add</span>
           </button>
         </div>
-        <div style={styles.formGrid}>
-          <label style={styles.fieldLabel}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8, marginTop: 10 }}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Priority
             <select
-              style={styles.compactInput}
+              className="form-control"
+              style={selectStyle}
               value={priority}
               onChange={(event) => setPriority(event.target.value as Task["priority"])}
               aria-label="Priority"
@@ -655,33 +527,34 @@ export default function Tasks({
               <option value="low">Low</option>
             </select>
           </label>
-          <label style={styles.fieldLabel}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Due Date
             <input
               type="date"
-              style={styles.compactInput}
+              className="form-control"
               value={dueDate}
               onChange={(event) => setDueDate(event.target.value)}
               aria-label="Due Date"
             />
           </label>
-          <label style={styles.fieldLabel}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Estimate (min)
             <input
               type="number"
               min={1}
               step={1}
-              style={styles.compactInput}
+              className="form-control"
               value={estimatedMinutes}
               onChange={(event) => setEstimatedMinutes(event.target.value)}
               placeholder="Minutes"
               aria-label="Estimated Minutes"
             />
           </label>
-          <label style={styles.fieldLabel}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Project
             <select
-              style={styles.compactInput}
+              className="form-control"
+              style={selectStyle}
               value={projectId}
               onChange={(event) => { setProjectId(event.target.value); setMilestoneId(""); }}
               aria-label="Linked Project (Optional)"
@@ -692,10 +565,11 @@ export default function Tasks({
               ))}
             </select>
           </label>
-          <label style={styles.fieldLabel}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Milestone
             <select
-              style={styles.compactInput}
+              className="form-control"
+              style={selectStyle}
               value={milestoneId}
               onChange={(event) => setMilestoneId(event.target.value)}
               aria-label="Linked Milestone (Optional)"
@@ -709,53 +583,38 @@ export default function Tasks({
         </div>
       </form>
 
-      <div style={styles.filterRow} role="group" aria-label="Filter Tasks">
-        <div style={styles.filterSegment} role="group" aria-label="Completion Status">
-          {(["open", "completed", "all"] as StatusFilter[]).map((status) => (
+      {visibleTasks.length === 0 ? (
+        <div className="atelier-group ui-empty-state">
+          <strong>{tasks.length === 0 ? "No tasks yet" : "No tasks match your filter"}</strong>
+          <span className="atelier-sub">
+            {tasks.length === 0
+              ? "Add your first task above — just a title is enough to get started"
+              : "Try a different search, status, or priority filter"}
+          </span>
+          {isFiltering && tasks.length > 0 && (
             <button
-              key={status}
               type="button"
-              style={{ ...styles.filterButton, ...(statusFilter === status ? styles.filterButtonActive : {}) }}
-              onClick={() => setStatusFilter(status)}
-              aria-pressed={statusFilter === status}
+              className="ui-button ui-button--sm"
+              onClick={() => { setQuery(""); setStatusFilter("open"); setPriorityFilter("all"); setProjectFilter(""); }}
             >
-              {status === "open" ? `Open (${openCount})` : status === "completed" ? `Completed (${completedCount})` : `All (${tasks.length})`}
+              Clear filters
             </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 16 }}>
+          {groups.map((group) => (
+            <section key={group.key} aria-label={group.label}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, margin: "0 2px 8px" }}>
+                <h2 className="section-eyebrow">{group.label} · {group.items.length}</h2>
+                <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>{group.hint}</span>
+              </div>
+              <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {group.items.map((task) => renderRow(task))}
+              </ul>
+            </section>
           ))}
         </div>
-        <select
-          style={{ ...styles.compactInput, ...styles.projectFilter }}
-          value={projectFilter}
-          onChange={(event) => setProjectFilter(event.target.value)}
-          aria-label="Filter by Project"
-        >
-          <option value="">All Projects</option>
-          {projects.filter((project) => project.status !== "archived").map((project) => (
-            <option key={project.id} value={project.id}>{project.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {visibleTasks.length === 0 ? (
-        <p style={styles.empty}>
-          {tasks.length === 0
-            ? (
-              <>
-                No tasks yet
-                <span style={styles.emptyHint}>Add your first task above — just a title is enough to get started</span>
-              </>
-            )
-            : (
-              <>
-                No tasks match your filter
-                <span style={styles.emptyHint}>Try adjusting the filter or add a new task</span>
-              </>
-            )}
-        </p>
-      ) : (
-        <ul style={styles.list}>
-          {visibleTasks.map((task) => renderRow(task))}
-        </ul>
       )}
 
       {pendingDeletion && (

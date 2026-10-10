@@ -1,8 +1,8 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { Check, ChevronLeft, ChevronRight, History as HistoryIcon, Trash2 } from "lucide-react";
 
-import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import type { HistoryHabit, FocusSessionRecord } from "../types";
+import { FORM_CONTROL } from "../theme";
 import {
   getDateKey,
   getHabitDateKey,
@@ -14,6 +14,9 @@ import {
 
 export type { FocusSessionRecord };
 
+// Selects build on the shared control spec so every dropdown matches inputs.
+const selectStyle: CSSProperties = { ...FORM_CONTROL, flex: 1, minWidth: 0 };
+
 type HistoryProps = {
   habits: HistoryHabit[];
   focusSessions: FocusSessionRecord[];
@@ -23,253 +26,6 @@ type HistoryProps = {
   dayResetHour: number;
   weekStart: "Sunday" | "Monday";
 };
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    maxWidth: "100%",
-    width: "100%",
-    minWidth: 0,
-    boxSizing: "border-box",
-  },
-  title: {
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    margin: "0 0 4px",
-  },
-  subtitle: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    margin: "0 0 20px",
-  },
-  summaryBar: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
-    gap: "var(--space-2)",
-    margin: "var(--space-5) 0 var(--space-6)",
-  },
-  summaryCard: {
-    minWidth: 0,
-    padding: "var(--space-2) 0",
-    borderBottom: "1px solid var(--border-color)",
-    background: "transparent",
-  },
-  summaryLabel: {
-    display: "block",
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    fontWeight: 500,
-    marginBottom: 6,
-  },
-  summaryValue: {
-    display: "block",
-    color: "var(--text-primary)",
-    fontSize: "var(--type-lg)",
-    fontWeight: "var(--font-semibold)",
-    fontVariantNumeric: "tabular-nums",
-    overflowWrap: "anywhere",
-  },
-  selectWrapper: {
-    display: "flex",
-    justifyContent: "center",
-    width: "100%",
-    marginBottom: 20,
-  },
-  select: {
-    ...FORM_CONTROL,
-    width: "100%",
-    maxWidth: 420,
-    cursor: "pointer",
-    textAlign: "center",
-  },
-  calendar: {
-    ...CARD_SURFACE,
-  },
-  calendarHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 16,
-  },
-  monthLabel: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "var(--text-body)",
-  },
-  monthButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 30,
-    height: 30,
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: 20,
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    padding: 0,
-  },
-  todayButton: {
-    background: "var(--accent-wash-soft)",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-1) var(--space-3)",
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-medium)",
-    color: "var(--color-accent)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  week: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-    gap: 6,
-  },
-  weekday: {
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    fontWeight: 600,
-    textAlign: "center",
-    paddingBottom: 4,
-  },
-  day: {
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    aspectRatio: "1",
-    minWidth: 0,
-    borderRadius: 6,
-    color: "var(--text-secondary)",
-    fontSize: 13,
-  },
-  unscheduledDay: {
-    color: "var(--border-strong)",
-    background: "var(--bg-unscheduled)",
-  },
-  completedDay: {
-    color: "var(--color-accent)",
-    background: "var(--accent-wash)",
-    border: "1px solid var(--accent-border)",
-    fontWeight: 600,
-  },
-  completedDayMark: {
-    position: "absolute",
-    right: 2,
-    bottom: 2,
-    width: 8,
-    height: 8,
-    color: "var(--color-accent)",
-  },
-  today: {
-    outline: "1px solid var(--accent-border)",
-    outlineOffset: -1,
-  },
-  empty: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 8,
-    color: "var(--text-muted)",
-    textAlign: "center",
-    padding: "44px 20px",
-  },
-  emptyIcon: {
-    color: "var(--text-dim)",
-  },
-  emptyTitle: {
-    color: "var(--text-secondary)",
-    fontSize: 14,
-    fontWeight: 500,
-  },
-  emptyText: {
-    fontSize: 13,
-    margin: 0,
-  },
-  focusSessionsSection: {
-    marginTop: 32,
-  },
-  focusSessionsTitle: {
-    fontSize: 16,
-    fontWeight: 600,
-    color: "var(--text-primary)",
-    margin: "0 0 12px",
-  },
-  focusSessionsList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  focusSessionsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-    gap: "var(--space-3)",
-  },
-  focusSessionItem: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "var(--space-3)",
-    padding: "var(--space-3) 0",
-    borderBottom: "1px solid var(--border-color)",
-    background: "transparent",
-  },
-  focusSessionItemGrid: {
-    ...CARD_SURFACE,
-    borderBottom: "none",
-  },
-  focusSessionInfo: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-1)",
-    flex: 1,
-    minWidth: 0,
-  },
-  focusSessionType: {
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-medium)",
-    color: "var(--text-body)",
-  },
-  focusSessionMeta: {
-    fontSize: "var(--type-xs)",
-    color: "var(--text-secondary)",
-  },
-  focusSessionHabit: {
-    fontSize: "var(--type-xs)",
-    color: "var(--text-secondary)",
-  },
-  focusSessionDuration: {
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--color-accent)",
-    fontVariantNumeric: "tabular-nums",
-    whiteSpace: "nowrap",
-  },
-  deleteFocusSessionButton: {
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-md)",
-    width: 28,
-    height: 28,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "var(--text-dim)",
-    cursor: "pointer",
-    padding: 0,
-    transition: "color var(--transition-standard), border-color var(--transition-standard)",
-    flexShrink: 0,
-  },
-  noFocusSessions: {
-    fontSize: 13,
-    color: "var(--text-dim)",
-    textAlign: "center",
-    padding: "20px 0",
-  },
-};
-
-
 
 function History({
   habits,
@@ -306,17 +62,15 @@ function History({
     });
   }, [displayedMonth, weekStart]);
 
-  const weekdayLabels = Array.from({ length: 7 }, (_, index) =>
-    WEEKDAYS[((weekStart === "Monday" ? 1 : 0) + index) % 7],
+  const weekdayLabels = Array.from(
+    { length: 7 },
+    (_, index) => WEEKDAYS[((weekStart === "Monday" ? 1 : 0) + index) % 7],
   );
   const todayKey = getHabitDateKey(new Date(), dayResetHour);
 
-  const monthPrefix = `${displayedMonth.getFullYear()}-${String(
-    displayedMonth.getMonth() + 1,
-  ).padStart(2, "0")}`;
-  const monthCompletionCount = selectedHabit?.completedDates.filter((date) =>
-    date.startsWith(`${monthPrefix}-`),
-  ).length ?? 0;
+  const monthPrefix = `${displayedMonth.getFullYear()}-${String(displayedMonth.getMonth() + 1).padStart(2, "0")}`;
+  const monthCompletionCount =
+    selectedHabit?.completedDates.filter((date) => date.startsWith(`${monthPrefix}-`)).length ?? 0;
   const hasCompletions = (selectedHabit?.completedDates.length ?? 0) > 0;
   const monthLabel = displayedMonth.toLocaleDateString(undefined, {
     month: "long",
@@ -330,9 +84,21 @@ function History({
     (habit) => calculateStreak(habit, streakFreeze, dayResetHour) > 0,
   ).length;
   const sortedCompletionDates = habits.flatMap((habit) => habit.completedDates).sort();
-  const logDateRange = sortedCompletionDates.length > 0
-    ? `${formatFullDate(new Date(`${sortedCompletionDates[0]}T12:00:00`))} - ${formatFullDate(new Date(`${sortedCompletionDates[sortedCompletionDates.length - 1]}T12:00:00`))}`
-    : "No logs yet";
+  const logDateRange =
+    sortedCompletionDates.length > 0
+      ? `${formatFullDate(new Date(`${sortedCompletionDates[0]}T12:00:00`))} - ${formatFullDate(new Date(`${sortedCompletionDates[sortedCompletionDates.length - 1]}T12:00:00`))}`
+      : "No logs yet";
+
+  const groupedSessions = useMemo(() => {
+    const groups = new Map<string, FocusSessionRecord[]>();
+    for (const session of sortedFocusSessions) {
+      const key = getHabitDateKey(new Date(session.timestamp), dayResetHour);
+      const list = groups.get(key) ?? [];
+      list.push(session);
+      groups.set(key, list);
+    }
+    return [...groups.entries()];
+  }, [sortedFocusSessions, dayResetHour]);
 
   function formatTimestamp(timestamp: number): string {
     const date = new Date(timestamp);
@@ -344,9 +110,7 @@ function History({
   }
 
   function moveMonth(delta: number) {
-    setDisplayedMonth(
-      (current) => new Date(current.getFullYear(), current.getMonth() + delta, 1),
-    );
+    setDisplayedMonth((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
   }
 
   function jumpToToday() {
@@ -355,53 +119,64 @@ function History({
     setDisplayedMonth(new Date(today.getFullYear(), today.getMonth(), 1));
   }
 
-  return (
-    <div style={styles.page}>
-      <h1 style={styles.title}>History</h1>
-      <p style={styles.subtitle}>Review your completed habit days.</p>
+  const summaryStats = selectedHabit
+    ? [
+        { label: "Current Streak", value: String(calculateStreak(selectedHabit, streakFreeze, dayResetHour)) },
+        { label: "Total Completed Days", value: String(selectedHabit.completedDates.length) },
+        { label: "This Month", value: String(monthCompletionCount) },
+      ]
+    : [
+        { label: "Habit Completions", value: String(completedHabitDays) },
+        { label: "Active Streaks", value: String(activeStreakCount) },
+        { label: "Log Date Range", value: logDateRange },
+      ];
 
-      <div style={styles.summaryBar}>
-        {selectedHabit ? (
-          <>
-            <div style={styles.summaryCard}>
-              <span style={styles.summaryLabel}>Current Streak</span>
-              <strong className="ui-numeric" style={styles.summaryValue}>{calculateStreak(selectedHabit, streakFreeze, dayResetHour)}</strong>
-            </div>
-            <div style={styles.summaryCard}>
-              <span style={styles.summaryLabel}>Total Completed Days</span>
-              <strong className="ui-numeric" style={styles.summaryValue}>{selectedHabit.completedDates.length}</strong>
-            </div>
-            <div style={styles.summaryCard}>
-              <span style={styles.summaryLabel}>Completion Count</span>
-              <strong className="ui-numeric" style={styles.summaryValue}>{monthCompletionCount}</strong>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={styles.summaryCard}>
-              <span style={styles.summaryLabel}>Habit Completions</span>
-              <strong className="ui-numeric" style={styles.summaryValue}>{completedHabitDays}</strong>
-            </div>
-            <div style={styles.summaryCard}>
-              <span style={styles.summaryLabel}>Active Streaks</span>
-              <strong className="ui-numeric" style={styles.summaryValue}>{activeStreakCount}</strong>
-            </div>
-            <div style={styles.summaryCard}>
-              <span style={styles.summaryLabel}>Log Date Range</span>
-              <strong style={{ ...styles.summaryValue, fontSize: "var(--type-sm)" }}>{logDateRange}</strong>
-            </div>
-          </>
-        )}
+  return (
+    <div className="atelier-page">
+      <div className="page-head">
+        <p className="atelier-eyebrow">History</p>
+        <h1 className="atelier-greeting">Every day on record.</h1>
+        <p>Review your completed habit days.</p>
       </div>
 
-      <div style={styles.selectWrapper}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        {summaryStats.map((stat) => (
+          <div key={stat.label} className="ui-card" style={{ padding: "14px 16px" }}>
+            <p className="section-eyebrow" style={{ margin: "0 0 6px" }}>
+              {stat.label}
+            </p>
+            <p
+              className="ui-numeric"
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-display)",
+                fontSize: "1.5rem",
+                fontWeight: 500,
+                letterSpacing: "-0.01em",
+                color: "var(--text-primary)",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="page-toolbar">
         <select
-          style={styles.select}
+          className="ui-select"
+          style={{ ...selectStyle, flex: 1, minWidth: 0 }}
           value={effectiveSelectedHabitId}
           onChange={(event) =>
-            setSelectedHabitId(
-              event.target.value === "" ? "" : Number(event.target.value),
-            )
+            setSelectedHabitId(event.target.value === "" ? "" : Number(event.target.value))
           }
           aria-label="Select a Habit to View History"
         >
@@ -415,74 +190,92 @@ function History({
       </div>
 
       {!selectedHabit || !hasCompletions ? (
-        <div style={styles.empty}>
-          <HistoryIcon size={22} style={styles.emptyIcon} />
-          <span style={styles.emptyTitle}>
-            {selectedHabit ? "No completed days yet" : "Choose a Habit to Begin"}
-          </span>
-          <p style={styles.emptyText}>
+        <div className="ui-empty-state">
+          <HistoryIcon size={22} style={{ color: "var(--text-dim)" }} />
+          <p style={{ margin: 0, fontWeight: 500 }}>{selectedHabit ? "No completed days yet" : "Choose a Habit to Begin"}</p>
+          <p className="atelier-sub" style={{ margin: 0 }}>
             {selectedHabit
               ? "Completed days will appear here once you mark this habit done."
               : "Select an existing habit to view its completion history."}
           </p>
         </div>
       ) : (
-        <div style={styles.calendar}>
-          <div style={styles.calendarHeader}>
+        <div className="ui-card" style={{ padding: 20 }}>
+          <div
+            className="date-navigator"
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}
+          >
             <button
-              style={styles.monthButton}
+              type="button"
+              className="ui-button ui-button--sm"
               onClick={() => moveMonth(-1)}
               aria-label="Previous Month"
+              style={{ minWidth: 32, padding: "6px 8px" }}
             >
               <ChevronLeft size={16} />
             </button>
-            <span style={styles.monthLabel}>{monthLabel}</span>
-            <button
-              style={styles.monthButton}
-              onClick={() => moveMonth(1)}
-              aria-label="Next Month"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <button
-              style={styles.todayButton}
-              onClick={jumpToToday}
-              aria-label="Jump to Today"
-            >
-              Today
-            </button>
+            <span style={{ fontSize: "var(--type-sm)", fontWeight: 600 }}>{monthLabel}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                className="ui-button ui-button--sm"
+                onClick={() => moveMonth(1)}
+                aria-label="Next Month"
+                style={{ minWidth: 32, padding: "6px 8px" }}
+              >
+                <ChevronRight size={16} />
+              </button>
+              <button type="button" className="ui-button ui-button--sm" onClick={jumpToToday} aria-label="Jump to Today">
+                Today
+              </button>
+            </span>
           </div>
-          <div style={styles.week}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6 }}>
             {weekdayLabels.map((day) => (
-              <span key={day} style={styles.weekday}>
+              <span
+                key={day}
+                style={{ color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600, textAlign: "center", paddingBottom: 4 }}
+              >
                 {day}
               </span>
             ))}
             {calendarDays.map((date, index) => {
               const dateKey = date ? getDateKey(date) : `empty-${index}`;
-              const isScheduled = date
-                ? isHabitScheduledOnDate(selectedHabit, dateKey)
-                : false;
+              const isScheduled = date ? isHabitScheduledOnDate(selectedHabit, dateKey) : false;
               const isCompleted = isScheduled && completedDateSet.has(dateKey);
               const isToday = isScheduled && dateKey === todayKey;
               return (
                 <span
                   key={dateKey}
                   style={{
-                    ...styles.day,
-                    ...(date && !isScheduled ? styles.unscheduledDay : {}),
-                    ...(isCompleted ? styles.completedDay : {}),
-                    ...(isToday ? styles.today : {}),
+                    position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    aspectRatio: "1",
+                    minWidth: 0,
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "var(--type-sm)",
+                    color: isCompleted ? "var(--color-accent)" : !date || !isScheduled ? "var(--border-strong)" : "var(--text-secondary)",
+                    background: isCompleted ? "var(--accent-wash)" : !date || !isScheduled ? "var(--bg-unscheduled)" : "transparent",
+                    border: isCompleted ? "1px solid var(--accent-border)" : "1px solid transparent",
+                    fontWeight: isCompleted ? 600 : 400,
+                    outline: isToday ? "1px solid var(--accent-border)" : "none",
+                    outlineOffset: -1,
                   }}
-                  aria-label={date
-                    ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
-                    : undefined}
-                  title={date
-                    ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
-                    : undefined}
+                  aria-label={
+                    date
+                      ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
+                      : undefined
+                  }
+                  title={
+                    date
+                      ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
+                      : undefined
+                  }
                 >
                   {date?.getDate() ?? ""}
-                  {isCompleted && <Check aria-hidden="true" style={styles.completedDayMark} />}
+                  {isCompleted && <Check aria-hidden="true" size={8} style={{ position: "absolute", right: 2, bottom: 2 }} />}
                 </span>
               );
             })}
@@ -490,40 +283,79 @@ function History({
         </div>
       )}
 
-      <div style={styles.focusSessionsSection}>
-        <h3 style={styles.focusSessionsTitle}>Focus Sessions</h3>
+      <section style={{ marginTop: 24 }} aria-label="Focus sessions">
+        <h3 className="ui-section-header" style={{ fontSize: "var(--type-md)" }}>
+          Focus Sessions
+          <span className="ui-badge">{sortedFocusSessions.length}</span>
+        </h3>
         {sortedFocusSessions.length === 0 ? (
-          <p style={styles.noFocusSessions}>
+          <p style={{ fontSize: "var(--type-sm)", color: "var(--text-dim)", textAlign: "center", padding: "20px 0" }}>
             No focus sessions recorded yet. Complete a timer or pomodoro focus session to see it here.
           </p>
-        ) : (
-          <div style={{ ...styles.focusSessionsList, ...(viewMode === "grid" ? styles.focusSessionsGrid : {}) }}>
+        ) : viewMode === "grid" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
             {sortedFocusSessions.map((session) => (
-              <div
-                key={session.id}
-                style={{
-                  ...styles.focusSessionItem,
-                  ...(viewMode === "grid" ? styles.focusSessionItemGrid : {}),
-                }}
-              >
-                <div style={styles.focusSessionInfo}>
-                  <span style={styles.focusSessionType}>{session.sessionType}</span>
-                  <span style={styles.focusSessionMeta}>{formatTimestamp(session.timestamp)}</span>
-                  <span style={styles.focusSessionHabit}>{session.habitName}</span>
+              <div key={session.id} className="ui-card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ fontSize: "var(--type-sm)", fontWeight: 600 }}>{session.sessionType}</span>
+                  <span className="ui-numeric" style={{ fontSize: "var(--type-sm)", fontWeight: 700, color: "var(--color-accent)" }}>
+                    {session.durationMinutes}m
+                  </span>
                 </div>
-                <span className="ui-numeric" style={styles.focusSessionDuration}>{session.durationMinutes}m</span>
+                <p style={{ margin: "6px 0 0", fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
+                  {formatTimestamp(session.timestamp)}
+                </p>
+                <p className="truncate-1" style={{ margin: "2px 0 10px", fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
+                  {session.habitName}
+                </p>
                 <button
-                  style={styles.deleteFocusSessionButton}
+                  type="button"
+                  className="ui-button ui-button--sm ui-button--ghost"
                   onClick={() => onRequestDeleteFocusSession(session.id)}
                   aria-label={`Delete focus session ${formatTimestamp(session.timestamp)}`}
                 >
                   <Trash2 size={14} />
+                  Delete
                 </button>
               </div>
             ))}
           </div>
+        ) : (
+          <div className="atelier-group">
+            {groupedSessions.map(([dateKey, sessions]) => (
+              <div key={dateKey}>
+                <p className="section-eyebrow" style={{ margin: 0, padding: "12px 16px 4px" }}>
+                  {formatFullDate(new Date(`${dateKey}T12:00:00`))}
+                </p>
+                {sessions.map((session) => (
+                  <div key={session.id} className="atelier-group-row">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p className="truncate-1" style={{ margin: 0, fontSize: "var(--type-sm)", fontWeight: 600 }}>
+                        {session.sessionType}
+                      </p>
+                      <p style={{ margin: "2px 0 0", fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
+                        {formatTimestamp(session.timestamp)} · {session.habitName}
+                      </p>
+                    </div>
+                    <span className="ui-numeric" style={{ fontSize: "var(--type-sm)", fontWeight: 700, color: "var(--color-accent)", whiteSpace: "nowrap" }}>
+                      {session.durationMinutes}m
+                    </span>
+                    <button
+                      type="button"
+                      className="ui-button ui-button--sm ui-button--ghost"
+                      style={{ minWidth: 32, padding: "6px 8px" }}
+                      onClick={() => onRequestDeleteFocusSession(session.id)}
+                      aria-label={`Delete focus session ${formatTimestamp(session.timestamp)}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

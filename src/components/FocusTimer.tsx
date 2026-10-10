@@ -67,292 +67,258 @@ async function notifyTimerFinished() {
 }
 
 const styles: Record<string, CSSProperties> = {
-  mainSection: {
+  stage: {
+    width: "100%",
+    maxWidth: 720,
+    margin: "0 auto",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    width: "100%",
-    minWidth: 0,
-    gap: "var(--space-6)",
+    gap: "var(--space-5)",
+    padding: "var(--space-6) var(--space-4) var(--space-8)",
+    textAlign: "center",
   },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 10,
-    width: "100%",
-  },
-  title: {
-    fontSize: "var(--type-lg)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "var(--font-bold)",
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+    color: "var(--text-muted)",
     margin: 0,
   },
-  modeToggle: {
-    display: "flex",
-    gap: 4,
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-1)",
+  title: {
+    margin: 0,
+    fontFamily: "var(--font-display)",
+    fontWeight: 500,
+    letterSpacing: "-0.02em",
+    lineHeight: 1.05,
+    fontSize: "clamp(1.9rem, 4vw, 2.6rem)",
+    color: "var(--text-primary)",
   },
-  modeButton: {
-    background: "transparent",
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    padding: "var(--space-2) var(--space-4)",
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-medium)",
+  sub: {
+    margin: 0,
     color: "var(--text-secondary)",
+    fontSize: "var(--type-sm)",
+    lineHeight: 1.55,
+    maxWidth: "52ch",
+  },
+  segment: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: 4,
+    borderRadius: "var(--radius-pill)",
+    border: "1px solid var(--border-color)",
+    background: "var(--bg-surface)",
+  },
+  segmentButton: {
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-pill)",
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    padding: "7px 18px",
     cursor: "pointer",
+    lineHeight: 1.25,
   },
-  modeButtonActive: {
-    background: "var(--accent-wash-soft)",
-    color: "var(--color-accent)",
+  segmentButtonActive: {
+    background: "var(--text-primary)",
+    color: "var(--bg-primary)",
   },
-  ringWrapper: {
+  ringStage: {
     position: "relative",
-    width: "min(100%, 360px)",
-    height: "auto",
+    width: "min(100%, 340px)",
     aspectRatio: "1",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
-  ringLabel: {
-    fontSize: "var(--type-timer)",
-    flex: "0 0 auto",
-    fontWeight: 600,
-    color: "var(--text-primary)",
-    fontVariantNumeric: "tabular-nums",
-    whiteSpace: "nowrap",
+  digits: {
+    fontSize: "clamp(4rem, 12vw, 7rem)",
   },
-  timerReadout: {
-    position: "absolute",
+  phaseLine: {
+    margin: 0,
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-secondary)",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
+  dots: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    maxWidth: "100%",
+    gap: 8,
   },
-  adjustmentRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  timerAdjustButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    padding: "var(--space-2) var(--space-3)",
-    background: "var(--bg-surface)",
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
     border: "1px solid var(--border-strong)",
-    borderRadius: "var(--radius-md)",
-    color: "var(--text-body)",
+    background: "transparent",
+  },
+  dotFilled: {
+    background: "var(--color-accent)",
+    borderColor: "var(--color-accent)",
+  },
+  contextLine: {
+    margin: 0,
+    fontSize: "var(--type-sm)",
+    color: "var(--text-secondary)",
+    lineHeight: 1.55,
+    maxWidth: "56ch",
+  },
+  contextStrong: {
+    color: "var(--text-primary)",
+    fontWeight: "var(--font-semibold)",
+  },
+  contextMeta: {
+    color: "var(--text-muted)",
+    fontSize: "var(--type-xs)",
+  },
+  inlineAction: {
+    background: "transparent",
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-sm)",
+    padding: "4px 10px",
+    color: "var(--color-accent)",
     fontSize: "var(--type-sm)",
     fontWeight: "var(--font-medium)",
     cursor: "pointer",
-    transition: "color var(--transition-standard), border-color var(--transition-standard), background-color var(--transition-standard)",
   },
-  durationRow: {
+  adjustRow: {
     display: "flex",
     alignItems: "center",
-    flexWrap: "wrap",
+    justifyContent: "center",
     gap: 10,
-    minWidth: 0,
   },
-  durationGrid: {
+  adjustButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 36,
+    padding: "7px 14px",
+    background: "transparent",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-pill)",
+    color: "var(--text-secondary)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    cursor: "pointer",
+  },
+  primaryRow: {
     display: "flex",
-    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
+    flexWrap: "wrap",
     width: "100%",
   },
-  durationFieldRow: {
+  presetRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  presetPill: {
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-pill)",
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: "var(--type-sm)",
+    fontWeight: "var(--font-semibold)",
+    padding: "7px 16px",
+    cursor: "pointer",
+    lineHeight: 1.25,
+  },
+  presetPillActive: {
+    background: "var(--accent-wash-soft)",
+    border: "1px solid transparent",
+    color: "var(--color-accent)",
+  },
+  panel: {
+    width: "100%",
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-lg)",
+    padding: "var(--space-4)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "var(--space-3)",
+    textAlign: "left",
+  },
+  panelTitle: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: "var(--font-bold)",
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    color: "var(--text-muted)",
+  },
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    minWidth: 0,
+  },
+  fieldGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "var(--space-3)",
+  },
+  fieldLabel: {
+    fontSize: "var(--type-xs)",
+    fontWeight: "var(--font-semibold)",
+    color: "var(--text-secondary)",
+  },
+  select: {
+    ...FORM_CONTROL,
+    width: "100%",
+    cursor: "pointer",
+  },
+  durationGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "var(--space-3)",
+  },
+  durationField: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    flexWrap: "wrap",
     gap: 10,
-    minWidth: 0,
   },
   durationCaption: {
-    fontSize: 14,
+    fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
   },
-  durationInputField: {
+  durationInput: {
     ...FORM_CONTROL,
     flex: "0 0 96px",
     width: 96,
     minWidth: 96,
     fontVariantNumeric: "tabular-nums",
   },
-  durationInputFieldDisabled: {
+  durationInputDisabled: {
     opacity: 0.5,
     cursor: "not-allowed",
   },
-  stepPresetGrid: {
+  stepGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 6,
   },
-  presetButtonActive: {
-    background: "var(--accent-wash-soft)",
-    border: "1px solid transparent",
-    color: "var(--color-accent)",
-  },
-  controlsRow: {
-    display: "flex",
-    gap: 8,
-    width: "100%",
-    maxWidth: 420,
-  },
-  primaryButton: {
-    flex: 1,
-    background: "var(--color-accent)",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-lg)",
-    padding: "var(--space-3) var(--space-4)",
-    fontSize: "var(--type-base)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--color-accent-contrast)",
-    cursor: "pointer",
-    transition: "color var(--transition-standard), background-color var(--transition-standard), border-color var(--transition-standard), opacity var(--transition-standard), transform var(--transition-standard)",
-  },
-  primaryButtonDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  },
-  secondaryButton: {
-    flex: 1,
-    background: "transparent",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-lg)",
-    padding: "var(--space-3) var(--space-4)",
-    fontSize: "var(--type-base)",
-    fontWeight: "var(--font-medium)",
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    transition: "background-color var(--transition-standard), border-color var(--transition-standard), color var(--transition-standard)",
-  },
-  habitSelectRow: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 6,
-    width: "100%",
-  },
-  habitSelectLabel: {
-    fontSize: 13,
-    color: "var(--text-secondary)",
-  },
-  habitSelect: {
-    ...FORM_CONTROL,
-    width: "100%",
-    cursor: "pointer",
-  },
-  controlPanel: {
-    background: "transparent",
-    border: "none",
-    borderRadius: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-6)",
-    padding: "var(--space-4) 0",
-    width: "100%",
-  },
-  panelSection: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
-  panelCard: {
-    padding: 0,
-    background: "transparent",
-    border: "none",
-    borderRadius: 0,
-  },
-  panelSectionTitle: {
+  todayLine: {
     margin: 0,
+    fontSize: "var(--type-sm)",
+    color: "var(--text-secondary)",
+  },
+  todayStrong: {
     color: "var(--text-primary)",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  presetGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 8,
-  },
-  presetButton: {
-    background: "transparent",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
-    padding: "8px 10px",
-    color: "var(--text-secondary)",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  overviewGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 8,
-  },
-  overviewCard: {
-    padding: "var(--space-2) 0",
-    background: "transparent",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  overviewLabel: {
-    display: "block",
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    lineHeight: 1.35,
-  },
-  overviewValue: {
-    display: "block",
-    marginTop: 6,
-    color: "var(--color-accent)",
-    fontSize: "var(--type-lg)",
     fontWeight: "var(--font-semibold)",
     fontVariantNumeric: "tabular-nums",
-  },
-  focusContext: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
-    width: "100%",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-2) var(--space-3)",
-  },
-  focusContextTitle: {
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    margin: 0,
-  },
-  focusContextMeta: {
-    fontSize: 12,
-    color: "var(--text-secondary)",
-  },
-  focusContextRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: 13,
-    color: "var(--text-secondary)",
-  },
-  completeTaskButton: {
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-sm)",
-    padding: "4px 10px",
-    color: "var(--color-accent)",
-    fontSize: 13,
-    fontWeight: "var(--font-medium)",
-    cursor: "pointer",
   },
 };
 
@@ -419,7 +385,7 @@ function FocusTimer({
   const [pomodoroTotalMs, setPomodoroTotalMs] = useState(defaultFocusDuration * 60000);
   const [timerRunning, setTimerRunning] = useState(false);
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
-  const [, setPomodoroSession] = useState<Session>("Focus");
+  const [pomodoroSession, setPomodoroSession] = useState<Session>("Focus");
   const [selectedHabitId, setSelectedHabitId] = useState<number | "">("");
   // Legacy goal link preserved on records only; no Goal selector in the UI.
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
@@ -628,6 +594,9 @@ function FocusTimer({
     selectedTaskProject?.name,
     selectedTaskMilestone?.title,
   ].filter((part): part is string => part !== undefined && part !== "");
+  const selectedHabit = selectedHabitId === ""
+    ? undefined
+    : habits.find((habit) => habit.id === selectedHabitId);
   // Post-session completion is strictly manual: the button below is the only
   // path that completes a Task, and it renders only for the just-logged session.
   const showTaskCompleteAffordance = onCompleteTask !== undefined &&
@@ -639,7 +608,7 @@ function FocusTimer({
   function shouldLogSession(mode: Mode, session: Session, endTimestamp: number): boolean {
     const lastLogged = lastLoggedSessionRef.current;
     if (!lastLogged) return true;
-    
+
     // Don't log if it's the same session completion we already logged
     return lastLogged.mode !== mode || lastLogged.session !== session || lastLogged.endTimestamp !== endTimestamp;
   }
@@ -703,7 +672,7 @@ function FocusTimer({
     } else {
       timerEndTimestampRef.current = null;
       setTimerState(0, false);
-      
+
       // Log the completed Timer session
       if (shouldLogSession("Timer", "Focus", end)) {
         handleSessionComplete(
@@ -713,7 +682,7 @@ function FocusTimer({
         );
         markSessionLogged("Timer", "Focus", end);
       }
-      
+
       playSfx("timerComplete");
       void notifyTimerFinished();
     }
@@ -735,7 +704,7 @@ function FocusTimer({
       const sessionEndTimestamp = end;
       const sessionCompleting = currentSession;
       currentSession = currentSession === "Focus" ? "Break" : "Focus";
-      
+
       // Log completed Focus sessions only (not Break sessions)
       if (sessionCompleting === "Focus" && shouldLogSession("Pomodoro", "Focus", sessionEndTimestamp)) {
         handleSessionComplete(
@@ -745,7 +714,7 @@ function FocusTimer({
         );
         markSessionLogged("Pomodoro", "Focus", sessionEndTimestamp);
       }
-      
+
       sessionTotalMs = getSessionTotalMs(
         "Pomodoro",
         currentSession,
@@ -965,11 +934,7 @@ function FocusTimer({
   const remainingMs = mode === "Timer" ? timerRemainingMs : pomodoroRemainingMs;
   const initialDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
   const fraction = initialDurationMs > 0 ? Math.min(1, Math.max(0, remainingMs / initialDurationMs)) : 0;
-  const timerLabelFontSize = remainingMs >= 100 * 60000
-    ? "var(--type-timer-compact)"
-    : "var(--type-timer)";
   const dashOffset = CIRCUMFERENCE * (1 - fraction);
-  const ringColor = "var(--color-accent)";
 
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
@@ -994,409 +959,435 @@ function FocusTimer({
     0,
   );
   const sessionsDone = todaySessions.length;
+  const pomodoroDots = [0, 1, 2, 3];
+  const filledDots = mode === "Pomodoro" ? sessionsDone % 4 : 0;
+  const linkedLabel = selectedTask
+    ? selectedTask.title
+    : selectedHabit
+      ? selectedHabit.name
+      : "Nothing linked yet";
+  const activeMinutes = mode === "Timer" ? timerMinutes : focusMinutes;
 
   return (
-    <div className="focus-dashboard">
-      <main className="focus-main" style={styles.mainSection}>
-        <div style={styles.header}>
-          <h2 style={styles.title}>Focus Timer</h2>
-          <div style={styles.modeToggle}>
+    <div style={styles.stage}>
+      <div>
+        <p style={styles.eyebrow}>Focus</p>
+        <h1 style={styles.title}>Settle in for one session</h1>
+      </div>
+      <p style={styles.sub}>
+        A single quiet timer. Link a task, habit, milestone, or project, then press Start.
+      </p>
+
+      <div style={styles.segment} role="group" aria-label="Timer Mode">
+        <button
+          type="button"
+          style={{
+            ...styles.segmentButton,
+            ...(mode === "Timer" ? styles.segmentButtonActive : {}),
+          }}
+          onClick={() => handleModeChange("Timer")}
+          aria-pressed={mode === "Timer"}
+        >
+          Timer
+        </button>
+        <button
+          type="button"
+          style={{
+            ...styles.segmentButton,
+            ...(mode === "Pomodoro" ? styles.segmentButtonActive : {}),
+          }}
+          onClick={() => handleModeChange("Pomodoro")}
+          aria-pressed={mode === "Pomodoro"}
+        >
+          Pomodoro
+        </button>
+      </div>
+
+      <div style={styles.ringStage} role="timer" aria-label={`${formatTime(remainingMs)} remaining`} aria-live="off">
+        <svg width="100%" height="100%" viewBox="0 0 200 200" aria-hidden="true">
+          <circle
+            cx={100}
+            cy={100}
+            r={RADIUS}
+            fill="none"
+            stroke="var(--bg-inset)"
+            strokeWidth={5}
+          />
+          <circle
+            cx={100}
+            cy={100}
+            r={RADIUS}
+            fill="none"
+            stroke="var(--color-accent)"
+            strokeWidth={5}
+            strokeLinecap="round"
+            strokeDasharray={CIRCUMFERENCE}
+            strokeDashoffset={dashOffset}
+            transform="rotate(-90 100 100)"
+            style={{ transition: "stroke-dashoffset 0.25s linear" }}
+          />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span className="focus-timer-digits" style={styles.digits}>
+            {formatTime(remainingMs)}
+          </span>
+        </div>
+      </div>
+
+      {mode === "Pomodoro" && (
+        <>
+          <p style={styles.phaseLine}>
+            {pomodoroSession === "Focus" ? `Focusing · ${focusMinutes}m` : `On break · ${breakMinutes}m`}
+            {isRunning ? " · running" : isPaused ? " · paused" : ""}
+          </p>
+          <div style={styles.dots} aria-label={`${filledDots} of 4 sessions in this round`}>
+            {pomodoroDots.map((dot) => (
+              <span
+                key={dot}
+                style={{ ...styles.dot, ...(dot < filledDots ? styles.dotFilled : {}) }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <p style={styles.contextLine} aria-live="polite">
+        <span style={styles.contextStrong}>{linkedLabel}</span>
+        {selectedTask && selectedTaskContextParts.length > 0 && (
+          <span style={styles.contextMeta}> · {selectedTaskContextParts.join(" › ")}</span>
+        )}
+        {!selectedTask && selectedHabit && (
+          <span style={styles.contextMeta}> · habit</span>
+        )}
+        {showTaskCompleteAffordance && (
+          <>
+            {" · "}
             <button
-              style={{
-                ...styles.modeButton,
-                ...(mode === "Timer" ? styles.modeButtonActive : {}),
-              }}
-              onClick={() => handleModeChange("Timer")}
+              type="button"
+              style={styles.inlineAction}
+              onClick={() => onCompleteTask?.(selectedTask.id)}
+              aria-label={`Mark task ${selectedTask.title} complete`}
             >
-              Timer
+              Mark complete
             </button>
+          </>
+        )}
+        {lastSessionTaskId === selectedTask?.id && selectedTask?.completed && (
+          <span style={styles.contextMeta}> · Task completed</span>
+        )}
+      </p>
+
+      <div style={styles.primaryRow}>
+        <button
+          ref={primaryControlRef}
+          type="button"
+          className="focus-primary-control ui-button ui-button--primary"
+          onClick={isRunning ? handlePause : handleStart}
+          disabled={!isRunning && remainingMs <= 0}
+          style={{ minWidth: 160, borderRadius: "var(--radius-pill)" }}
+        >
+          {primaryButtonText}
+        </button>
+        <button
+          type="button"
+          className="ui-button ui-button--ghost"
+          onClick={handleReset}
+          style={{ borderRadius: "var(--radius-pill)" }}
+        >
+          Reset
+        </button>
+      </div>
+
+      <div style={styles.adjustRow}>
+        <button
+          type="button"
+          className="timer-adjust-button"
+          style={styles.adjustButton}
+          onClick={(event) => handleQuickAdjust(-1, event.shiftKey)}
+          aria-label={`Decrease remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
+          title={`Decrease time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
+        >
+          <Minus size={16} />
+          {quickAdjustStepMinutes}m
+        </button>
+        <button
+          type="button"
+          className="timer-adjust-button"
+          style={styles.adjustButton}
+          onClick={(event) => handleQuickAdjust(1, event.shiftKey)}
+          aria-label={`Increase remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
+          title={`Increase time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
+        >
+          <Plus size={16} />
+          {quickAdjustStepMinutes}m
+        </button>
+      </div>
+
+      <div style={styles.presetRow} role="group" aria-label="Duration Presets">
+        {DURATION_PRESETS.map((minutes) => {
+          const isActive = activeMinutes === minutes;
+          return (
             <button
+              key={minutes}
+              type="button"
               style={{
-                ...styles.modeButton,
-                ...(mode === "Pomodoro" ? styles.modeButtonActive : {}),
+                ...styles.presetPill,
+                ...(isActive ? styles.presetPillActive : {}),
               }}
-              onClick={() => handleModeChange("Pomodoro")}
+              onClick={() => handlePreset(minutes)}
+              disabled={isRunning}
+              aria-pressed={isActive}
             >
-              Pomodoro
+              {minutes}m
             </button>
-          </div>
-          {selectedTask && (
-            <div style={styles.focusContext} aria-live="polite">
-              <p style={styles.focusContextTitle}>
-                {isRunning ? "Focusing on" : "Linked task"}: {selectedTask.title}
-              </p>
-              {selectedTaskContextParts.length > 0 && (
-                <span style={styles.focusContextMeta}>
-                  {selectedTaskContextParts.join(" › ")}
-                </span>
-              )}
-              {showTaskCompleteAffordance && (
-                <span style={styles.focusContextRow}>
-                  Session logged.
-                  <button
-                    type="button"
-                    style={styles.completeTaskButton}
-                    onClick={() => onCompleteTask?.(selectedTask.id)}
-                    aria-label={`Mark task ${selectedTask.title} complete`}
-                  >
-                    Mark complete
-                  </button>
-                </span>
-              )}
-              {lastSessionTaskId === selectedTask.id && selectedTask.completed && (
-                <span style={styles.focusContextMeta}>Task Completed</span>
-              )}
-            </div>
-          )}
-        </div>
+          );
+        })}
+      </div>
 
-        <div style={styles.ringWrapper}>
-          <svg width="100%" height="100%" viewBox="0 0 200 200">
-            <circle
-              cx={100}
-              cy={100}
-              r={RADIUS}
-              fill="none"
-              stroke="var(--border-strong)"
-              strokeWidth={10}
+      <section style={styles.panel} aria-label="Linked context">
+        <h2 style={styles.panelTitle}>Link this session</h2>
+        <div style={styles.fieldGrid}>
+          <div style={styles.field}>
+            <label style={styles.fieldLabel} htmlFor="project-select">
+              Project (optional)
+            </label>
+            <select
+              id="project-select"
+              style={styles.select}
+              value={selectedProjectId}
+              onChange={(event) => handleProjectChange(event.target.value)}
+              disabled={isRunning}
+              aria-label="Select a Project to Link This Session to"
+            >
+              <option value="">No project</option>
+              {(projects ?? []).filter((project) => project.status !== "archived").map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={styles.field}>
+            <label style={styles.fieldLabel} htmlFor="milestone-select">
+              Milestone (optional)
+            </label>
+            <select
+              id="milestone-select"
+              style={styles.select}
+              value={selectedMilestoneId}
+              onChange={(event) => handleMilestoneChange(event.target.value)}
+              disabled={isRunning}
+              aria-label="Select a Milestone to Link This Session to"
+            >
+              <option value="">No milestone</option>
+              {availableMilestones.map((milestone) => (
+                <option key={milestone.id} value={milestone.id}>
+                  {milestone.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div style={styles.fieldGrid}>
+          <div style={styles.field}>
+            <label style={styles.fieldLabel} htmlFor="task-select">
+              Task (optional)
+            </label>
+            <select
+              id="task-select"
+              style={styles.select}
+              value={selectedTaskId}
+              onChange={(event) => handleTaskChange(event.target.value)}
+              disabled={isRunning}
+              aria-label="Select Task"
+            >
+              <option value="">No task</option>
+              {availableTasks.filter((task) => !task.completed).map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={styles.field}>
+            <label style={styles.fieldLabel} htmlFor="habit-select">
+              Habit (optional)
+            </label>
+            <select
+              id="habit-select"
+              style={styles.select}
+              value={selectedHabitId}
+              onChange={(event) =>
+                setSelectedHabitId(
+                  event.target.value === "" ? "" : Number(event.target.value),
+                )
+              }
+              disabled={isRunning}
+              aria-label="Select a Habit to Focus On"
+            >
+              <option value="">General focus</option>
+              {habits.map((habit) => (
+                <option key={habit.id} value={habit.id}>
+                  {habit.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section style={styles.panel} aria-label="Duration settings">
+        <h2 style={styles.panelTitle}>Duration</h2>
+        {mode === "Timer" ? (
+          <div style={styles.durationField}>
+            <label style={styles.durationCaption} htmlFor="focus-timer-duration">
+              Timer (minutes)
+            </label>
+            <input
+              id="focus-timer-duration"
+              type="number"
+              min={1}
+              max={MAX_DURATION_MINUTES}
+              step={1}
+              style={{
+                ...styles.durationInput,
+                ...(isRunning ? styles.durationInputDisabled : {}),
+              }}
+              value={timerDurationDraft ?? String(timerMinutes)}
+              disabled={isRunning}
+              onFocus={() => setTimerDurationDraft(String(timerMinutes))}
+              onChange={(event) => {
+                const value = event.target.value;
+                setTimerDurationDraft(value);
+                if (isValidMinuteInput(value)) handleTimerDurationChange(value);
+              }}
+              onBlur={() => {
+                const value = clampMinutes(timerDurationDraft ?? String(timerMinutes), timerMinutes);
+                handleTimerDurationChange(String(value));
+                setTimerDurationDraft(null);
+              }}
             />
-            <circle
-              cx={100}
-              cy={100}
-              r={RADIUS}
-              fill="none"
-              stroke={ringColor}
-              strokeWidth={10}
-              strokeLinecap="round"
-              strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
-              transform="rotate(-90 100 100)"
-              style={{ transition: "stroke-dashoffset 0.25s linear" }}
-            />
-          </svg>
-          <div style={styles.timerReadout}>
-            <span style={{ ...styles.ringLabel, fontSize: timerLabelFontSize }}>
-              {formatTime(remainingMs)}
-            </span>
           </div>
-        </div>
-
-        <div style={styles.adjustmentRow}>
-          <button
-            type="button"
-            className="timer-adjust-button"
-            style={styles.timerAdjustButton}
-            onClick={(event) => handleQuickAdjust(-1, event.shiftKey)}
-            aria-label={`Decrease remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
-            title={`Decrease time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
-          >
-            <Minus size={16} />
-            {quickAdjustStepMinutes}m
-          </button>
-          <button
-            type="button"
-            className="timer-adjust-button"
-            style={styles.timerAdjustButton}
-            onClick={(event) => handleQuickAdjust(1, event.shiftKey)}
-            aria-label={`Increase remaining time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"}`}
-            title={`Increase time by ${quickAdjustStepMinutes} minute${quickAdjustStepMinutes === 1 ? "" : "s"} (Shift: 1 minute)`}
-          >
-            <Plus size={16} />
-            {quickAdjustStepMinutes}m
-          </button>
-        </div>
-
-        <div style={styles.controlsRow}>
-          <button
-            ref={primaryControlRef}
-            className="focus-primary-control"
-            style={{
-              ...styles.primaryButton,
-              ...(!isRunning && remainingMs <= 0 ? styles.primaryButtonDisabled : {}),
-            }}
-            onClick={isRunning ? handlePause : handleStart}
-            disabled={!isRunning && remainingMs <= 0}
-          >
-            {primaryButtonText}
-          </button>
-          <button className="focus-secondary-control" style={styles.secondaryButton} onClick={handleReset}>
-            Reset
-          </button>
-        </div>
-      </main>
-
-      <aside className="focus-control-panel" style={styles.controlPanel}>
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="project-select">
-            Link to Project (Optional)
-          </label>
-          <select
-            id="project-select"
-            style={styles.habitSelect}
-            value={selectedProjectId}
-            onChange={(event) => handleProjectChange(event.target.value)}
-            disabled={isRunning}
-            aria-label="Select a Project to Link This Session to"
-          >
-            <option value="">No Project</option>
-            {(projects ?? []).filter((project) => project.status !== "archived").map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="milestone-select">
-            Link to Milestone (Optional)
-          </label>
-          <select
-            id="milestone-select"
-            style={styles.habitSelect}
-            value={selectedMilestoneId}
-            onChange={(event) => handleMilestoneChange(event.target.value)}
-            disabled={isRunning}
-            aria-label="Select a Milestone to Link This Session to"
-          >
-            <option value="">No Milestone</option>
-            {availableMilestones.map((milestone) => (
-              <option key={milestone.id} value={milestone.id}>
-                {milestone.title}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="task-select">
-            Select Task (Optional)
-          </label>
-          <select
-            id="task-select"
-            style={styles.habitSelect}
-            value={selectedTaskId}
-            onChange={(event) => handleTaskChange(event.target.value)}
-            disabled={isRunning}
-            aria-label="Select Task"
-          >
-            <option value="">No Task</option>
-            {availableTasks.filter((task) => !task.completed).map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={styles.panelSection}>
-          <label style={styles.habitSelectLabel} htmlFor="habit-select">
-            Focus On (Optional)
-          </label>
-          <select
-            id="habit-select"
-            style={styles.habitSelect}
-            value={selectedHabitId}
-            onChange={(event) =>
-              setSelectedHabitId(
-                event.target.value === "" ? "" : Number(event.target.value),
-              )
-            }
-            disabled={isRunning}
-            aria-label="Select a Habit to Focus On"
-          >
-            <option value="">General Focus</option>
-            {habits.map((habit) => (
-              <option key={habit.id} value={habit.id}>
-                {habit.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={{ ...styles.panelSection, ...styles.panelCard }}>
-          <h3 style={styles.panelSectionTitle}>Quick Duration</h3>
-          <div style={styles.presetGrid}>
-            {DURATION_PRESETS.map((minutes) => (
-              <button
-                key={minutes}
-                type="button"
-                style={styles.presetButton}
-                onClick={() => handlePreset(minutes)}
-                disabled={isRunning}
-              >
-                {minutes}m
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ ...styles.panelSection, ...styles.panelCard }}>
-          <h3 style={styles.panelSectionTitle}>Duration Settings</h3>
-          {mode === "Timer" ? (
-            <div style={styles.durationRow}>
-              <label style={styles.durationCaption} htmlFor="focus-timer-duration">
-                Timer (Minutes)
+        ) : (
+          <div style={styles.durationGrid}>
+            <div style={styles.durationField}>
+              <label style={styles.durationCaption} htmlFor="focus-duration">
+                Focus (minutes)
               </label>
               <input
-                id="focus-timer-duration"
+                id="focus-duration"
                 type="number"
                 min={1}
                 max={MAX_DURATION_MINUTES}
                 step={1}
                 style={{
-                  ...styles.durationInputField,
-                  ...(isRunning ? styles.durationInputFieldDisabled : {}),
+                  ...styles.durationInput,
+                  ...(isRunning ? styles.durationInputDisabled : {}),
                 }}
-                value={timerDurationDraft ?? String(timerMinutes)}
+                value={focusDurationDraft ?? String(focusMinutes)}
                 disabled={isRunning}
-                onFocus={() => setTimerDurationDraft(String(timerMinutes))}
+                onFocus={() => setFocusDurationDraft(String(focusMinutes))}
                 onChange={(event) => {
                   const value = event.target.value;
-                  setTimerDurationDraft(value);
-                  if (isValidMinuteInput(value)) handleTimerDurationChange(value);
+                  setFocusDurationDraft(value);
+                  if (isValidMinuteInput(value)) handleFocusDurationChange(value);
                 }}
                 onBlur={() => {
-                  const value = clampMinutes(timerDurationDraft ?? String(timerMinutes), timerMinutes);
-                  handleTimerDurationChange(String(value));
-                  setTimerDurationDraft(null);
+                  const value = clampMinutes(focusDurationDraft ?? String(focusMinutes), focusMinutes);
+                  handleFocusDurationChange(String(value));
+                  setFocusDurationDraft(null);
                 }}
               />
             </div>
-          ) : (
-            <div style={styles.durationGrid}>
-              <div style={styles.durationFieldRow}>
-                <label style={styles.durationCaption} htmlFor="focus-duration">
-                  Focus (Minutes)
-                </label>
-                <input
-                  id="focus-duration"
-                  type="number"
-                  min={1}
-                  max={MAX_DURATION_MINUTES}
-                  step={1}
-                  style={{
-                    ...styles.durationInputField,
-                    ...(isRunning ? styles.durationInputFieldDisabled : {}),
-                  }}
-                  value={focusDurationDraft ?? String(focusMinutes)}
-                  disabled={isRunning}
-                  onFocus={() => setFocusDurationDraft(String(focusMinutes))}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setFocusDurationDraft(value);
-                    if (isValidMinuteInput(value)) handleFocusDurationChange(value);
-                  }}
-                  onBlur={() => {
-                    const value = clampMinutes(focusDurationDraft ?? String(focusMinutes), focusMinutes);
-                    handleFocusDurationChange(String(value));
-                    setFocusDurationDraft(null);
-                  }}
-                />
-              </div>
-              <div style={styles.durationFieldRow}>
-                <label style={styles.durationCaption} htmlFor="break-duration">
-                  Break (Minutes)
-                </label>
-                <input
-                  id="break-duration"
-                  type="number"
-                  min={1}
-                  max={MAX_DURATION_MINUTES}
-                  step={1}
-                  style={{
-                    ...styles.durationInputField,
-                    ...(isRunning ? styles.durationInputFieldDisabled : {}),
-                  }}
-                  value={breakDurationDraft ?? String(breakMinutes)}
-                  disabled={isRunning}
-                  onFocus={() => setBreakDurationDraft(String(breakMinutes))}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setBreakDurationDraft(value);
-                    if (isValidMinuteInput(value)) handleBreakDurationChange(value);
-                  }}
-                  onBlur={() => {
-                    const value = clampMinutes(breakDurationDraft ?? String(breakMinutes), breakMinutes);
-                    handleBreakDurationChange(String(value));
-                    setBreakDurationDraft(null);
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ ...styles.panelSection, ...styles.panelCard }}>
-          <h3 style={styles.panelSectionTitle}>Quick Adjustment</h3>
-          <div style={styles.durationFieldRow}>
-            <label style={styles.durationCaption} htmlFor="quick-adjust-step">
-              Adjust Step (Minutes)
-            </label>
-            <input
-              id="quick-adjust-step"
-              type="number"
-              min={1}
-              max={180}
-              step={1}
-              style={styles.durationInputField}
-              value={quickAdjustStepDraft}
-              onFocus={() => {
-                quickAdjustStepInputFocusedRef.current = true;
-              }}
-              onChange={(event) => {
-                const value = event.target.value;
-                setQuickAdjustStepDraft(value);
-                const minutes = Number(value);
-                if (Number.isInteger(minutes) && minutes >= 1 && minutes <= 180) {
-                  onQuickAdjustStepChange(minutes);
-                }
-              }}
-              onBlur={() => {
-                quickAdjustStepInputFocusedRef.current = false;
-                const minutes = Number(quickAdjustStepDraft);
-                if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
-                  setQuickAdjustStepDraft(String(quickAdjustStepMinutes));
-                }
-              }}
-              aria-label="Adjust Step in Minutes"
-            />
-          </div>
-          <div style={styles.stepPresetGrid} role="group" aria-label="Quick Adjustment Presets">
-            {QUICK_ADJUST_PRESETS.map((minutes) => (
-              <button
-                key={minutes}
-                type="button"
+            <div style={styles.durationField}>
+              <label style={styles.durationCaption} htmlFor="break-duration">
+                Break (minutes)
+              </label>
+              <input
+                id="break-duration"
+                type="number"
+                min={1}
+                max={MAX_DURATION_MINUTES}
+                step={1}
                 style={{
-                  ...styles.presetButton,
-                  ...(quickAdjustStepMinutes === minutes ? styles.presetButtonActive : {}),
+                  ...styles.durationInput,
+                  ...(isRunning ? styles.durationInputDisabled : {}),
                 }}
-                onClick={() => {
-                  setQuickAdjustStepDraft(String(minutes));
-                  onQuickAdjustStepChange(minutes);
+                value={breakDurationDraft ?? String(breakMinutes)}
+                disabled={isRunning}
+                onFocus={() => setBreakDurationDraft(String(breakMinutes))}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setBreakDurationDraft(value);
+                  if (isValidMinuteInput(value)) handleBreakDurationChange(value);
                 }}
-                aria-pressed={quickAdjustStepMinutes === minutes}
-              >
-                {minutes}m
-              </button>
-            ))}
+                onBlur={() => {
+                  const value = clampMinutes(breakDurationDraft ?? String(breakMinutes), breakMinutes);
+                  handleBreakDurationChange(String(value));
+                  setBreakDurationDraft(null);
+                }}
+              />
+            </div>
           </div>
+        )}
+        <div style={styles.durationField}>
+          <label style={styles.durationCaption} htmlFor="quick-adjust-step">
+            Adjust step (minutes)
+          </label>
+          <input
+            id="quick-adjust-step"
+            type="number"
+            min={1}
+            max={180}
+            step={1}
+            style={styles.durationInput}
+            value={quickAdjustStepDraft}
+            onFocus={() => {
+              quickAdjustStepInputFocusedRef.current = true;
+            }}
+            onChange={(event) => {
+              const value = event.target.value;
+              setQuickAdjustStepDraft(value);
+              const minutes = Number(value);
+              if (Number.isInteger(minutes) && minutes >= 1 && minutes <= 180) {
+                onQuickAdjustStepChange(minutes);
+              }
+            }}
+            onBlur={() => {
+              quickAdjustStepInputFocusedRef.current = false;
+              const minutes = Number(quickAdjustStepDraft);
+              if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
+                setQuickAdjustStepDraft(String(quickAdjustStepMinutes));
+              }
+            }}
+            aria-label="Adjust Step in Minutes"
+          />
         </div>
+        <div style={styles.stepGrid} role="group" aria-label="Quick Adjustment Presets">
+          {QUICK_ADJUST_PRESETS.map((minutes) => (
+            <button
+              key={minutes}
+              type="button"
+              style={{
+                ...styles.presetPill,
+                ...(quickAdjustStepMinutes === minutes ? styles.presetPillActive : {}),
+              }}
+              onClick={() => {
+                setQuickAdjustStepDraft(String(minutes));
+                onQuickAdjustStepChange(minutes);
+              }}
+              aria-pressed={quickAdjustStepMinutes === minutes}
+            >
+              {minutes}m
+            </button>
+          ))}
+        </div>
+      </section>
 
-        <div style={styles.panelSection}>
-          <h3 style={styles.panelSectionTitle}>Daily Overview</h3>
-          <div style={styles.overviewGrid}>
-            <div style={styles.overviewCard}>
-              <span style={styles.overviewLabel}>Total Focused Today</span>
-              <strong style={styles.overviewValue}>{focusedTodayMinutes}m</strong>
-            </div>
-            <div style={styles.overviewCard}>
-              <span style={styles.overviewLabel}>Sessions Done</span>
-              <strong style={styles.overviewValue}>{sessionsDone}</strong>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <p style={styles.todayLine}>
+        Today: <span style={styles.todayStrong}>{focusedTodayMinutes}m</span> across{" "}
+        <span style={styles.todayStrong}>{sessionsDone}</span> session{sessionsDone === 1 ? "" : "s"}
+      </p>
     </div>
   );
 }

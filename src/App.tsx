@@ -186,13 +186,13 @@ const typeBadgeBase: CSSProperties = {
 
 const styles: Record<string, CSSProperties> = {
   h1: {
-    fontSize: 22,
-    fontWeight: 600,
+    fontSize: "var(--type-xl)",
+    fontWeight: "var(--font-semibold)",
     color: "var(--text-primary)",
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
     marginBottom: 20,
   },
@@ -229,7 +229,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
     background: "transparent",
     border: "1px solid var(--border-color)",
-    borderRadius: 20,
+    borderRadius: "var(--radius-pill)",
     padding: "7px 12px",
     color: "var(--text-secondary)",
     fontSize: 12,
@@ -305,7 +305,7 @@ const styles: Record<string, CSSProperties> = {
     width: 28,
     height: 28,
     padding: 0,
-    borderRadius: 14,
+    borderRadius: "var(--radius-pill)",
     border: "1px solid var(--border-strong)",
     background: "transparent",
     color: "var(--text-muted)",
@@ -320,7 +320,7 @@ const styles: Record<string, CSSProperties> = {
   addButton: {
     background: "transparent",
     border: "1px solid var(--border-color)",
-    borderRadius: 8,
+    borderRadius: "var(--radius-md)",
     padding: "10px 18px",
     color: "var(--text-body)",
     fontSize: 14,
@@ -361,8 +361,9 @@ const styles: Record<string, CSSProperties> = {
   },
   habitGridList: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
     gap: "var(--space-3)",
+    alignItems: "stretch",
   },
   habitGridCard: {
     ...CARD_SURFACE,
@@ -371,27 +372,36 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: "var(--space-3)",
     minWidth: 0,
+    minHeight: 188,
+    height: "100%",
     padding: "var(--space-4)",
-    transition: "border-color var(--transition-standard), transform var(--transition-standard)",
+    transition: "border-color var(--transition-standard), background-color var(--transition-standard)",
   },
   gridCardTop: {
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
+    minHeight: 52,
   },
   gridCardName: {
     overflow: "hidden",
     color: "var(--text-primary)",
     fontSize: 15,
     fontWeight: 600,
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    lineHeight: 1.35,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    minHeight: 40,
   },
   gridCardMiddle: {
     display: "flex",
     alignItems: "center",
     gap: "var(--space-2)",
+    flex: 1,
   },
   gridProgressTrack: {
     height: "var(--space-1)",
@@ -412,10 +422,14 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 10,
     width: "100%",
-    minHeight: 40,
+    minHeight: 52,
+    marginTop: "auto",
+    paddingTop: "var(--space-3)",
+    borderTop: "1px solid var(--border-color)",
   },
   habitName: {
     fontSize: "var(--type-sm)",
+    fontWeight: 600,
     color: "var(--text-body)",
     wordBreak: "break-word",
     overflowWrap: "break-word",
@@ -442,19 +456,22 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid var(--accent-border-soft)",
   },
   priorityOptional: {
-    color: "var(--text-secondary)",
+    color: "var(--text-muted)",
     background: "var(--color-priority-neutral-wash)",
     border: "1px solid var(--border-color)",
+    fontWeight: "var(--font-regular)",
   },
   dailyBadge: {
     ...typeBadgeBase,
-    color: "var(--text-secondary)",
-    background: "transparent",
+    fontWeight: "var(--font-regular)",
+    color: "var(--text-muted)",
+    background: "var(--color-priority-neutral-wash)",
     border: "1px solid var(--border-color)",
   },
   offDayBadge: {
     ...typeBadgeBase,
-    color: "var(--text-dim)",
+    fontWeight: "var(--font-regular)",
+    color: "var(--text-muted)",
     background: "transparent",
     border: "1px solid var(--border-color)",
   },
@@ -610,7 +627,7 @@ const styles: Record<string, CSSProperties> = {
   saveButton: {
     background: "var(--accent-wash-soft)",
     border: "1px solid transparent",
-    borderRadius: 20,
+    borderRadius: "var(--radius-md)",
     padding: "8px 16px",
     fontSize: 12,
     fontWeight: 500,
@@ -621,7 +638,7 @@ const styles: Record<string, CSSProperties> = {
   cancelButton: {
     background: "transparent",
     border: "1px solid var(--border-color)",
-    borderRadius: 20,
+    borderRadius: "var(--radius-md)",
     padding: "8px 16px",
     fontSize: 12,
     fontWeight: 500,
@@ -636,11 +653,11 @@ const styles: Record<string, CSSProperties> = {
     padding: "24px 0",
   },
   sectionHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 600,
-    color: "var(--text-secondary)",
+    color: "var(--text-muted)",
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 1.1,
     margin: "24px 0 8px",
   },
   timerCenter: {
@@ -657,10 +674,10 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     minHeight: 22,
     fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-medium)",
-    color: "var(--color-category)",
-    background: "var(--color-category-wash)",
-    border: "1px solid var(--color-category-border)",
+    fontWeight: "var(--font-regular)",
+    color: "var(--text-muted)",
+    background: "var(--color-priority-neutral-wash)",
+    border: "1px solid var(--border-color)",
     borderRadius: "var(--radius-md)",
     padding: "2px var(--space-2)",
     whiteSpace: "nowrap",
@@ -762,7 +779,7 @@ const styles: Record<string, CSSProperties> = {
   settingsSubheading: {
     margin: "var(--space-4) 0 var(--space-2)",
     color: "var(--text-primary)",
-    fontSize: 13,
+    fontSize: "var(--type-sm)",
     fontWeight: 600,
   },
   settingsDescription: {
@@ -2283,6 +2300,7 @@ function App() {
         <div className="habit-info-cluster">
           <div className="habit-cell-name">
             <span
+              title={habit.name}
               style={{
                 ...styles.habitName,
                 ...(doneOnSelectedDate || completed ? styles.habitNameDone : {}),
@@ -2418,8 +2436,8 @@ function App() {
         style={{ ...styles.habitGridCard, ...(isArchived ? { opacity: 0.65 } : {}) }}
       >
         <div style={styles.gridCardTop}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={styles.gridCardName} title={habit.name}>{habit.name}</div>
+          <div className="habit-grid-card-title-zone" style={{ minWidth: 0, flex: 1 }}>
+            <div className="habit-card-title" style={styles.gridCardName} title={habit.name}>{habit.name}</div>
             {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
             {habit.projectId !== undefined && (
               <span style={styles.categoryBadge}>
@@ -2449,9 +2467,10 @@ function App() {
           <StreakBadge className="my-habits-streak" streak={streak} />
         </div>
 
-        <div style={styles.gridCardBottom}>
+        <div className="habit-grid-card-footer" style={styles.gridCardBottom}>
           <button
             type="button"
+            title={habit.name}
             style={{
               ...styles.habitCompletionButton,
               ...(doneOnSelectedDate ? styles.toggleButtonDone : {}),
@@ -2554,6 +2573,16 @@ function App() {
     <div className="app-shell">
       <div className="app-body">
         <nav className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`} aria-label="Main Navigation">
+          <div className="sidebar-brand" aria-hidden={sidebarCollapsed}>
+            <span className="sidebar-brand-mark">S</span>
+            {!sidebarCollapsed && (
+              <span className="sidebar-brand-text">
+                <span className="sidebar-brand-name">Synchron</span>
+                <br />
+                <span className="sidebar-brand-sub">Atelier</span>
+              </span>
+            )}
+          </div>
           <button
             className="sidebar-collapse"
             onClick={toggleSidebar}
@@ -2564,6 +2593,8 @@ function App() {
             {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
           <div className="sidebar-primary" role="group" aria-label="Workspace">
+            <p className="sidebar-section-label" aria-hidden="true">Execution</p>
+            <div className="sidebar-group" role="group" aria-label="Execution">
             <button
               className={`sidebar-item ${view === "Today" ? "active" : ""}`}
               onClick={() => navigateToView("Today")}
@@ -2594,6 +2625,9 @@ function App() {
             <span>Tasks</span>
             <span className="sidebar-shortcut">{shortcutKey}3</span>
           </button>
+            </div>
+            <p className="sidebar-section-label" aria-hidden="true">Workspace</p>
+            <div className="sidebar-group" role="group" aria-label="Workspace">
 <button
               className={`sidebar-item ${view === "Timer" ? "active" : ""}`}
               onClick={() => navigateToView("Timer")}
@@ -2614,6 +2648,9 @@ function App() {
               <span>Projects</span>
               <span className="sidebar-shortcut">{shortcutKey}5</span>
             </button>
+            </div>
+            <p className="sidebar-section-label" aria-hidden="true">Insights</p>
+            <div className="sidebar-group" role="group" aria-label="Insights">
           <button
             className={`sidebar-item ${view === "History" ? "active" : ""}`}
             onClick={() => navigateToView("History")}
@@ -2634,9 +2671,11 @@ function App() {
             <span>Analytics</span>
             <span className="sidebar-shortcut">{shortcutKey}7</span>
           </button>
+            </div>
           </div>
           <div className="sidebar-spacer" />
-          <div className="sidebar-utility" role="group" aria-label="Preferences">
+          <div className="sidebar-utility" role="group" aria-label="System">
+            <p className="sidebar-section-label" aria-hidden="true">System</p>
             <button
               className={`sidebar-item ${view === "Settings" ? "active" : ""}`}
               onClick={() => navigateToView("Settings")}
@@ -2703,8 +2742,11 @@ function App() {
           </div>
 
           <div style={{ display: view === "Habits" ? "block" : "none" }}>
-            <h1 style={styles.h1}>My Habits</h1>
-            <p style={styles.subtitle}>Small steps count.</p>
+            <div className="page-head">
+              <p className="atelier-eyebrow">Practice</p>
+              <h1>My Habits</h1>
+              <p>Small steps, kept daily. Design the repetition; the streak follows.</p>
+            </div>
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <button
@@ -2775,7 +2817,7 @@ function App() {
             )}
 
             <div className="category-section">
-              <div className="category-tabs" role="group" aria-label="Filter Habits by Category">
+              <div className="category-tabs habits-toolbar" role="group" aria-label="Filter Habits by Category">
                 {categoryTabs.map((tab) => (
                   <button
                     key={tab}

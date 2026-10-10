@@ -1,7 +1,19 @@
-import { useState, useRef, type CSSProperties } from "react";
-import { ArrowRight, ArrowLeft, Sparkles, Check, BookOpen, Dumbbell, Book, Sprout, CalendarDays, Play, BarChart3 } from "lucide-react";
-import { CARD_SURFACE, FORM_CONTROL } from "../theme";
+import { useState, useRef } from "react";
+import {
+  ArrowRight,
+  ArrowLeft,
+  Sparkles,
+  Check,
+  BookOpen,
+  Dumbbell,
+  Book,
+  Sprout,
+  CalendarDays,
+  Play,
+  BarChart3,
+} from "lucide-react";
 import type { Habit, Priority, FrequencyType } from "../types";
+import { FORM_CONTROL } from "../theme";
 
 type Step = "welcome" | "focus" | "habit" | "ready";
 
@@ -27,8 +39,6 @@ const HABIT_SUGGESTIONS: Record<string, string[]> = {
   other: ["Start a Morning Routine", "Practice a Hobby", "Stay Hydrated"],
 };
 
-// The daily loop, in product terms: Today brings the plan together,
-// Focus executes it, Complete records it, Feedback shows what to adjust.
 const LOOP_STEPS = [
   {
     icon: CalendarDays,
@@ -52,225 +62,7 @@ const LOOP_STEPS = [
   },
 ];
 
-const styles: Record<string, CSSProperties> = {
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "var(--bg-surface)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "var(--space-4)",
-    zIndex: 1000,
-  },
-  container: {
-    ...CARD_SURFACE,
-    background: "var(--bg-surface)",
-    maxWidth: 500,
-    width: "100%",
-    padding: "var(--space-6)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-5)",
-  },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-    textAlign: "center",
-  },
-  eyebrow: {
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--color-accent)",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    margin: 0,
-    textAlign: "center",
-  },
-  title: {
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-bold)",
-    color: "var(--text-primary)",
-    margin: 0,
-  },
-  description: {
-    fontSize: "var(--type-base)",
-    color: "var(--text-secondary)",
-    margin: 0,
-    lineHeight: 1.5,
-  },
-  focusGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: "var(--space-3)",
-  },
-  focusCard: {
-    background: "transparent",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-lg)",
-    padding: "var(--space-4)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "var(--space-2)",
-    cursor: "pointer",
-    transition: "border-color var(--transition-standard), background-color var(--transition-standard)",
-  },
-  focusCardSelected: {
-    borderColor: "transparent",
-    background: "var(--accent-wash-soft)",
-  },
-  focusIcon: {
-    width: 32,
-    height: 32,
-  },
-  focusLabel: {
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-medium)",
-    color: "var(--text-body)",
-  },
-  input: {
-    ...FORM_CONTROL,
-    width: "100%",
-  },
-  select: {
-    ...FORM_CONTROL,
-    width: "100%",
-    cursor: "pointer",
-  },
-  suggestions: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  suggestionButton: {
-    background: "transparent",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-2) var(--space-3)",
-    color: "var(--text-secondary)",
-    fontSize: "var(--type-sm)",
-    cursor: "pointer",
-    textAlign: "left",
-    transition: "background-color var(--transition-standard), border-color var(--transition-standard)",
-  },
-  suggestionButtonHover: {
-    background: "var(--bg-raised)",
-    borderColor: "var(--border-color)",
-  },
-  actions: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "var(--space-3)",
-    marginTop: "var(--space-2)",
-  },
-  button: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "var(--space-2)",
-    padding: "var(--space-3) var(--space-4)",
-    borderRadius: "var(--radius-lg)",
-    fontSize: "var(--type-base)",
-    fontWeight: "var(--font-semibold)",
-    cursor: "pointer",
-    transition: "background-color var(--transition-standard), border-color var(--transition-standard), color var(--transition-standard)",
-  },
-  primaryButton: {
-    background: "var(--color-accent)",
-    border: "1px solid transparent",
-    color: "var(--color-accent-contrast)",
-  },
-  secondaryButton: {
-    background: "transparent",
-    border: "1px solid var(--border-color)",
-    color: "var(--text-secondary)",
-  },
-  skipButton: {
-    background: "transparent",
-    border: "none",
-    color: "var(--text-muted)",
-    fontSize: "var(--type-sm)",
-    padding: "var(--space-2)",
-    cursor: "pointer",
-  },
-  stepIndicator: {
-    display: "flex",
-    gap: "var(--space-2)",
-    justifyContent: "center",
-  },
-  stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    background: "var(--border-strong)",
-    transition: "background-color var(--transition-standard)",
-  },
-  stepDotActive: {
-    background: "var(--color-accent)",
-  },
-  readyIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 64,
-    height: 64,
-    borderRadius: "50%",
-    background: "var(--accent-wash)",
-    color: "var(--color-accent)",
-    margin: "0 auto",
-  },
-  loopList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-    margin: 0,
-    padding: 0,
-    listStyle: "none",
-  },
-  loopItem: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "var(--space-3)",
-    padding: "var(--space-3)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
-    background: "transparent",
-  },
-  loopIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 32,
-    height: 32,
-    flexShrink: 0,
-    borderRadius: "var(--radius-md)",
-    background: "var(--accent-wash-soft)",
-    color: "var(--color-accent)",
-  },
-  loopText: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    minWidth: 0,
-  },
-  loopTitle: {
-    fontSize: "var(--type-sm)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    margin: 0,
-  },
-  loopDescription: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    margin: 0,
-    lineHeight: 1.5,
-  },
-};
+const STEP_ORDER: Step[] = ["welcome", "focus", "habit", "ready"];
 
 function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) {
   const [step, setStep] = useState<Step>("welcome");
@@ -329,28 +121,27 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
     setHabitName(suggestion);
   };
 
-  const getStepNumber = () => {
-    const stepNumbers: Record<Step, number> = {
-      welcome: 1,
-      focus: 2,
-      habit: 3,
-      ready: 4,
-    };
-    return stepNumbers[step];
-  };
-
-  const totalSteps = 4;
+  const stepIndex = STEP_ORDER.indexOf(step);
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.container}>
-        <div style={styles.stepIndicator}>
-          {Array.from({ length: totalSteps }).map((_, i) => (
-            <div
-              key={i}
+    <div className="modal-overlay">
+      <div
+        className="ui-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Onboarding"
+        style={{ width: "min(100%, 480px)", padding: 28, display: "flex", flexDirection: "column", gap: 20 }}
+      >
+        <div style={{ display: "flex", gap: 6, justifyContent: "center" }} aria-label={`Step ${stepIndex + 1} of 4`}>
+          {STEP_ORDER.map((item, i) => (
+            <span
+              key={item}
               style={{
-                ...styles.stepDot,
-                ...(i + 1 === getStepNumber() ? styles.stepDotActive : {}),
+                width: i === stepIndex ? 24 : 8,
+                height: 8,
+                borderRadius: 4,
+                background: i <= stepIndex ? "var(--color-accent)" : "var(--border-strong)",
+                transition: "all var(--transition-standard)",
               }}
             />
           ))}
@@ -358,29 +149,25 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
 
         {step === "welcome" && (
           <>
-            <div style={styles.header}>
-              <p style={styles.eyebrow}>How Synchron works</p>
-              <h1 style={styles.title}>Turn plans into daily action</h1>
-              <p style={styles.description}>
-                Capture tasks and habits, focus on the work, and complete it.
-                Today brings it all together — streaks and feedback show what to adjust next.
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
+              <p className="atelier-eyebrow" style={{ margin: 0 }}>
+                How Synchron works
+              </p>
+              <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.7rem, 4vw, 2.2rem)" }}>
+                Turn plans into daily action
+              </h1>
+              <p className="atelier-sub" style={{ margin: 0 }}>
+                Capture tasks and habits, focus on the work, and complete it. Today brings it all together — streaks
+                and feedback show what to adjust next.
               </p>
             </div>
-            <div style={styles.actions}>
-              <button
-                type="button"
-                style={{ ...styles.button, ...styles.skipButton }}
-                onClick={handleSkip}
-              >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <button type="button" className="ui-button ui-button--ghost" onClick={handleSkip}>
                 Skip
               </button>
-              <button
-                type="button"
-                style={{ ...styles.button, ...styles.primaryButton }}
-                onClick={handleNext}
-              >
+              <button type="button" className="ui-button ui-button--primary" onClick={handleNext}>
                 Get Started
-                <ArrowRight size={18} />
+                <ArrowRight size={16} />
               </button>
             </div>
           </>
@@ -388,90 +175,98 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
 
         {step === "focus" && (
           <>
-            <div style={styles.header}>
-              <p style={styles.eyebrow}>Step 1 · Your focus</p>
-              <h1 style={styles.title}>What do you want?</h1>
-              <p style={styles.description}>
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
+              <p className="atelier-eyebrow" style={{ margin: 0 }}>
+                Step 1 · Your focus
+              </p>
+              <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 1.9rem)" }}>
+                What do you want?
+              </h1>
+              <p className="atelier-sub" style={{ margin: 0 }}>
                 Pick an area — your first habit will support it.
               </p>
             </div>
-            <div style={styles.focusGrid}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
               {FOCUS_OPTIONS.map((option) => {
                 const Icon = option.icon;
+                const selected = selectedFocus === option.id;
                 return (
                   <button
                     key={option.id}
                     type="button"
-                    style={{
-                      ...styles.focusCard,
-                      ...(selectedFocus === option.id ? styles.focusCardSelected : {}),
-                    }}
+                    className="ui-card"
                     onClick={() => setSelectedFocus(option.id)}
-                    aria-pressed={selectedFocus === option.id}
+                    aria-pressed={selected}
+                    style={{
+                      padding: 16,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 8,
+                      cursor: "pointer",
+                      background: selected ? "var(--accent-wash-soft)" : undefined,
+                      borderColor: selected ? "var(--accent-border-soft)" : undefined,
+                    }}
                   >
-                    <Icon style={styles.focusIcon} />
-                    <span style={styles.focusLabel}>{option.label}</span>
+                    <Icon size={24} style={{ color: selected ? "var(--color-accent)" : "var(--text-secondary)" }} />
+                    <span style={{ fontSize: "var(--type-sm)", fontWeight: 600 }}>{option.label}</span>
                   </button>
                 );
               })}
             </div>
-            <div style={styles.actions}>
-              <button
-                type="button"
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                onClick={handleBack}
-              >
-                <ArrowLeft size={18} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <button type="button" className="ui-button" onClick={handleBack}>
+                <ArrowLeft size={16} />
                 Back
               </button>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                <button
-                  type="button"
-                  style={{ ...styles.button, ...styles.skipButton }}
-                  onClick={handleSkip}
-                >
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button type="button" className="ui-button ui-button--ghost" onClick={handleSkip}>
                   Skip
                 </button>
-                <button
-                  type="button"
-                  style={{ ...styles.button, ...styles.primaryButton }}
-                  onClick={handleNext}
-                >
+                <button type="button" className="ui-button ui-button--primary" onClick={handleNext}>
                   Continue
-                  <ArrowRight size={18} />
+                  <ArrowRight size={16} />
                 </button>
-              </div>
+              </span>
             </div>
           </>
         )}
 
         {step === "habit" && (
           <>
-            <div style={styles.header}>
-              <p style={styles.eyebrow}>Step 2 · Your first habit</p>
-              <h1 style={styles.title}>What will you do repeatedly?</h1>
-              <p style={styles.description}>
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
+              <p className="atelier-eyebrow" style={{ margin: 0 }}>
+                Step 2 · Your first habit
+              </p>
+              <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 1.9rem)" }}>
+                What will you do repeatedly?
+              </h1>
+              <p className="atelier-sub" style={{ margin: 0 }}>
                 Habits handle the recurring actions. One-off wins belong in Tasks.
               </p>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                <label className="section-eyebrow" style={{ display: "block", marginBottom: 6 }} htmlFor="onboarding-habit-name">
                   Habit Name
                 </label>
                 <input
-                  style={styles.input}
+                  id="onboarding-habit-name"
+                  className="ui-input"
+                  style={{ width: "100%" }}
                   value={habitName}
                   onChange={(e) => setHabitName(e.target.value)}
                   placeholder="e.g., Exercise for 30 minutes"
                 />
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                <label className="section-eyebrow" style={{ display: "block", marginBottom: 6 }} htmlFor="onboarding-priority">
                   Priority
                 </label>
                 <select
-                  style={styles.select}
+                  id="onboarding-priority"
+                  className="ui-select"
+                  style={{ ...FORM_CONTROL, width: "100%" }}
                   value={habitPriority}
                   onChange={(e) => setHabitPriority(e.target.value as Priority)}
                 >
@@ -480,11 +275,13 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                <label className="section-eyebrow" style={{ display: "block", marginBottom: 6 }} htmlFor="onboarding-frequency">
                   Frequency
                 </label>
                 <select
-                  style={styles.select}
+                  id="onboarding-frequency"
+                  className="ui-select"
+                  style={{ ...FORM_CONTROL, width: "100%" }}
                   value={habitFrequency}
                   onChange={(e) => setHabitFrequency(e.target.value as FrequencyType)}
                 >
@@ -495,15 +292,16 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
               </div>
               {selectedFocus && HABIT_SUGGESTIONS[selectedFocus] && (
                 <div>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                  <p className="section-eyebrow" style={{ margin: "0 0 6px" }}>
                     Suggestions
-                  </label>
-                  <div style={styles.suggestions}>
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {HABIT_SUGGESTIONS[selectedFocus].map((suggestion) => (
                       <button
                         key={suggestion}
                         type="button"
-                        style={styles.suggestionButton}
+                        className="ui-button"
+                        style={{ justifyContent: "flex-start" }}
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
@@ -513,75 +311,93 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
                 </div>
               )}
             </div>
-            <div style={styles.actions}>
-              <button
-                type="button"
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                onClick={handleBack}
-              >
-                <ArrowLeft size={18} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <button type="button" className="ui-button" onClick={handleBack}>
+                <ArrowLeft size={16} />
                 Back
               </button>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                <button
-                  type="button"
-                  style={{ ...styles.button, ...styles.skipButton }}
-                  onClick={handleSkip}
-                >
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button type="button" className="ui-button ui-button--ghost" onClick={handleSkip}>
                   Skip
                 </button>
                 <button
                   type="button"
-                  style={{ ...styles.button, ...styles.primaryButton }}
+                  className="ui-button ui-button--primary"
                   onClick={handleCreateHabit}
                   disabled={isCreating}
                 >
                   {isCreating ? "Creating..." : "Create Habit"}
-                  {!isCreating && <Check size={18} />}
+                  {!isCreating && <Check size={16} />}
                 </button>
-              </div>
+              </span>
             </div>
           </>
         )}
 
         {step === "ready" && (
           <>
-            <div style={styles.header}>
-              <div style={styles.readyIcon}>
-                <CalendarDays size={32} />
-              </div>
-              <p style={styles.eyebrow}>Step 3 · Your daily loop</p>
-              <h1 style={styles.title}>Your habit is on Today</h1>
-              <p style={styles.description}>
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+              <span
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  background: "var(--accent-wash)",
+                  color: "var(--color-accent)",
+                }}
+              >
+                <CalendarDays size={30} />
+              </span>
+              <p className="atelier-eyebrow" style={{ margin: 0 }}>
+                Step 3 · Your daily loop
+              </p>
+              <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 1.9rem)" }}>
+                Your habit is on Today
+              </h1>
+              <p className="atelier-sub" style={{ margin: 0 }}>
                 Complete it, or start a Focus session on it. Then repeat — that loop is the whole product.
               </p>
             </div>
-            <ul style={styles.loopList}>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
               {LOOP_STEPS.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <li key={item.title} style={styles.loopItem}>
-                    <span style={styles.loopIcon}>
+                  <li key={item.title} className="atelier-group-row" style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", alignItems: "flex-start" }}>
+                    <span
+                      style={{
+                        display: "grid",
+                        placeItems: "center",
+                        width: 32,
+                        height: 32,
+                        flexShrink: 0,
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--accent-wash-soft)",
+                        color: "var(--color-accent)",
+                      }}
+                    >
                       <Icon size={16} />
                     </span>
-                    <span style={styles.loopText}>
-                      <span style={styles.loopTitle}>{item.title}</span>
-                      <span style={styles.loopDescription}>{item.description}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: "var(--type-sm)", fontWeight: 600 }}>{item.title}</span>
+                      <span className="atelier-sub" style={{ display: "block" }}>
+                        {item.description}
+                      </span>
                     </span>
                   </li>
                 );
               })}
             </ul>
-            <div style={styles.actions}>
-              <button
-                type="button"
-                style={{ ...styles.button, ...styles.primaryButton, width: "100%" }}
-                onClick={onNavigateToToday}
-              >
-                Go to Today
-                <CalendarDays size={18} />
-              </button>
-            </div>
+            <button
+              type="button"
+              className="ui-button ui-button--primary"
+              style={{ width: "100%" }}
+              onClick={onNavigateToToday}
+            >
+              Go to Today
+              <CalendarDays size={16} />
+            </button>
           </>
         )}
       </div>

@@ -1,19 +1,7 @@
 import type { CSSProperties } from "react";
 
-// Restrained Synchron surface system.
-//
-// Philosophy (reference: Streak Freeze active state on My Habits):
-// quiet base, subtle surface shift, restrained accent wash, accent
-// text/icon when active, minimal border, no shadow, no glow.
-//
-// Levels:
-//   Base       -> application background (var(--bg-primary))
-//   Raised     -> genuinely separated content (var(--bg-surface))
-//   Interactive-> hover/selected washes, never glow
-//   Overlay    -> dialogs/popovers only (stronger border + popover shadow)
-//
-// CARD_SURFACE is the single "raised" recipe. It is deliberately flat:
-// solid background, 1px subtle border, no translucency, no shadow.
+// Synchron Atelier surface system: warm ink/paper, ember accent,
+// serif display numerals, hairline grouped lists, pill actions.
 export const CARD_SURFACE: CSSProperties = {
   background: "var(--bg-surface)",
   border: "1px solid var(--border-color)",
@@ -21,12 +9,7 @@ export const CARD_SURFACE: CSSProperties = {
   padding: "var(--space-4)",
 };
 
-// ONE canonical Synchron form-control specification. Every standard
-// text/date/time/number/search input and every select inherits this exact
-// geometry and surface, so all controls render as one component family.
-// Fixed height (never min-height alone) keeps browser-native date, number,
-// and select internals from changing the outer box. Visual reference: the
-// Tasks page Priority / Goal / Project / Milestone controls.
+// Canonical form-control spec: 40px pill-soft controls, one family.
 export const FORM_CONTROL: CSSProperties = {
   boxSizing: "border-box",
   height: "var(--control-height)",

@@ -1,96 +1,5 @@
-import { X } from "lucide-react";
-import { type CSSProperties } from "react";
+import { X, Keyboard } from "lucide-react";
 import type { ShortcutGroup, KeyboardShortcutsModalProps } from "../types";
-
-const styles: Record<string, CSSProperties> = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 100,
-    display: "grid",
-    placeItems: "center",
-    padding: 20,
-    background: "var(--overlay-dim)",
-  },
-  modal: {
-    width: "min(100%, 520px)",
-    maxHeight: "80vh",
-    padding: 28,
-    background: "var(--bg-surface)",
-    border: "1px solid var(--border-color)",
-    borderRadius: 12,
-    boxShadow: "var(--shadow-popover)",
-    overflowY: "auto",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  title: {
-    margin: 0,
-    color: "var(--text-primary)",
-    fontSize: 20,
-    fontWeight: 600,
-  },
-  closeButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 32,
-    height: 32,
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: 8,
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    padding: 0,
-    transition: "all 0.15s ease",
-  },
-  group: {
-    marginBottom: 20,
-  },
-  groupTitle: {
-    margin: "0 0 12",
-    color: "var(--text-body)",
-    fontSize: 13,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  shortcut: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "10px 0",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  shortcutDescription: {
-    color: "var(--text-secondary)",
-    fontSize: 14,
-  },
-  keys: {
-    display: "flex",
-    gap: 4,
-    alignItems: "center",
-  },
-  key: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 28,
-    height: 28,
-    padding: "0 8px",
-    background: "var(--bg-inset)",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 6,
-    color: "var(--text-primary)",
-    fontSize: 12,
-    fontWeight: 500,
-    fontFamily: "ui-monospace, monospace",
-  },
-};
 
 const shortcutGroups: ShortcutGroup[] = [
   {
@@ -119,9 +28,7 @@ const shortcutGroups: ShortcutGroup[] = [
   },
   {
     title: "Timer",
-    shortcuts: [
-      { keys: "Space", description: "Start or pause the timer" },
-    ],
+    shortcuts: [{ keys: "Space", description: "Start or pause the timer" }],
   },
   {
     title: "General",
@@ -143,37 +50,87 @@ function KeyboardShortcutsModal({ onClose, shortcutKey }: KeyboardShortcutsModal
   }));
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
-          <h2 style={styles.title}>Keyboard Shortcuts</h2>
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="ui-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard Shortcuts"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(100%, 520px)", maxHeight: "80vh", padding: 28, overflowY: "auto" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                display: "grid",
+                placeItems: "center",
+                width: 36,
+                height: 36,
+                borderRadius: "var(--radius-md)",
+                background: "var(--accent-wash-soft)",
+                color: "var(--color-accent)",
+              }}
+            >
+              <Keyboard size={18} />
+            </span>
+            <div>
+              <p className="atelier-eyebrow" style={{ margin: 0 }}>
+                Reference
+              </p>
+              <h2 className="atelier-greeting" style={{ margin: 0, fontSize: "1.4rem" }}>
+                Keyboard Shortcuts
+              </h2>
+            </div>
+          </div>
           <button
-            style={styles.closeButton}
+            type="button"
+            className="ui-button ui-button--sm ui-button--ghost"
+            style={{ minWidth: 32, padding: "6px 8px" }}
             onClick={onClose}
             aria-label="Close"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {displayGroups.map((group, groupIndex) => (
-          <div key={groupIndex} style={styles.group}>
-            <h3 style={styles.groupTitle}>{group.title}</h3>
-            {group.shortcuts.map((shortcut, shortcutIndex) => (
-              <div key={shortcutIndex} style={styles.shortcut}>
-                <span style={styles.shortcutDescription}>
-                  {shortcut.description}
-                </span>
-                <div style={styles.keys}>
-                  {shortcut.keys.split(" ").map((key, keyIndex) => (
-                    <span key={keyIndex} style={styles.key}>
-                      {key}
-                    </span>
-                  ))}
+        {displayGroups.map((group) => (
+          <section key={group.title} style={{ marginTop: 16 }} aria-label={group.title}>
+            <h3 className="section-eyebrow" style={{ margin: "0 0 4px" }}>
+              {group.title}
+            </h3>
+            <div className="atelier-group">
+              {group.shortcuts.map((shortcut) => (
+                <div key={shortcut.description} className="atelier-group-row" style={{ justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--text-secondary)", fontSize: 14 }}>{shortcut.description}</span>
+                  <span style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                    {shortcut.keys.split(" ").map((key, keyIndex) => (
+                      <kbd
+                        key={keyIndex}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: 28,
+                          height: 28,
+                          padding: "0 8px",
+                          background: "var(--bg-inset)",
+                          border: "1px solid var(--border-strong)",
+                          borderRadius: 6,
+                          color: "var(--text-primary)",
+                          fontSize: 12,
+                          fontWeight: 500,
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     </div>
