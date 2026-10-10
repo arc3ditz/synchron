@@ -1145,6 +1145,12 @@ function App() {
   const [filterPriority, setFilterPriority] = useState<"All" | "Mandatory" | "Optional">("All");
   const [filterFrequency, setFilterFrequency] = useState<"All" | "daily" | "weekdays" | "weekends">("All");
   const [filterStatus, setFilterStatus] = useState<"All" | "Active" | "Archived" | "Completed Today" | "Incomplete Today">("All");
+  // Lightweight client-side text query so long lists stay findable without
+  // new filters or metadata. Case-insensitive substring on the habit name.
+  const [habitSearch, setHabitSearch] = useState("");
+  // Advanced creation settings (priority, category, goal link) stay out of
+  // the primary path: Name + Frequency is all a basic habit needs.
+  const [showHabitOptions, setShowHabitOptions] = useState(false);
 
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1810,6 +1816,7 @@ function App() {
     setFilterPriority("All");
     setFilterFrequency("All");
     setFilterStatus("All");
+    setHabitSearch("");
   };
 
   function rememberCategory(category: string) {
@@ -1907,13 +1914,16 @@ function App() {
     const habit = habits.find((h) => h.id === id);
     const isCurrentlyComplete = habit?.completedDates.includes(targetDateKey) ?? false;
 
-    const updatedHabits: Habit[] = habits.map((h): Habit => {
+    // Functional update so rapid successive toggles compose against the
+    // latest state instead of a stale closure snapshot (which dropped a
+    // toggle). The per-item decision re-derives inside the updater;
+    // markHabitComplete/Incomplete are idempotent no-ops on no-change.
+    setHabits((current) => current.map((h): Habit => {
       if (h.id !== id) return h;
-      return isCurrentlyComplete
+      return h.completedDates.includes(targetDateKey)
         ? markHabitIncomplete(h, targetDateKey)
         : markHabitComplete(h, targetDateKey);
-    });
-    setHabits(updatedHabits);
+    }));
 
     // Play habit complete sound only when marking complete (not unmarking)
     if (!isCurrentlyComplete) {
@@ -2057,7 +2067,12 @@ function App() {
     setHabits(habits.map((habit) => (habit.id === id ? activeHabit : habit)));
   }
 
-  const filteredHabits = habits.filter((habit) => matchesCategory(habit) && applyPropertyFilters(habit));
+  const searchQuery = habitSearch.trim().toLowerCase();
+  const filteredHabits = habits.filter((habit) =>
+    matchesCategory(habit) &&
+    applyPropertyFilters(habit) &&
+    (searchQuery === "" || habit.name.toLowerCase().includes(searchQuery))
+  );
   const activeHabits = filteredHabits.filter(
     (habit) => !habit.isArchived && isHabitScheduledOnDate(habit, selectedDateKey),
   );
@@ -2781,6 +2796,14 @@ function App() {
                   className="category-settings"
                   style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}
                 >
+                  <input
+                    style={{ ...styles.input, width: 150, flex: "0 1 150px" }}
+                    value={habitSearch}
+                    onChange={(event) => setHabitSearch(event.target.value)}
+                    placeholder="Search habits"
+                    aria-label="Search habits"
+                    maxLength={120}
+                  />
                   <div ref={filterPopoverRef} style={{ position: "relative" }}>
                     <button
                       type="button"
@@ -2955,14 +2978,27 @@ function App() {
               )}
             </div>
 
-            <div style={{ ...styles.inputRow, justifyContent: "center", margin: "12px auto", maxWidth: 500 }}>
+            {/* Primary creation path: Name + Frequency only. Everything else
+                lives behind More options so a basic habit saves in one step. */}
+            <div style={{ ...styles.inputRow, justifyContent: "center", margin: "12px auto", maxWidth: 640 }}>
               <input
                 ref={newHabitInputRef}
-                style={styles.input}
+                style={{ ...styles.input, flex: 2 }}
                 value={newHabit}
                 onChange={(event) => setNewHabit(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") addHabit();
+                }}
                 placeholder="Add a Habit"
+                aria-label="New habit name"
               />
+              {renderFrequencyControls(
+                newFrequencyType,
+                setNewFrequencyType,
+                newCustomDays,
+                setNewCustomDays,
+                styles.habitPropertySelect,
+              )}
               <button
                 style={styles.addButton}
                 onClick={addHabit}
@@ -2971,59 +3007,72 @@ function App() {
               </button>
             </div>
 
-            <div style={{ ...styles.optionsRow, justifyContent: "center", margin: "12px 0 32px" }}>
-              <select
-                style={styles.habitPropertySelect}
-                value={newPriority}
-                onChange={(event) =>
-                  setNewPriority(event.target.value as Priority)
-                }
-                aria-label="Priority"
-              >
-                <option value="Optional">Optional</option>
-                <option value="Mandatory">Mandatory</option>
-              </select>
-              {renderFrequencyControls(
-                newFrequencyType,
-                setNewFrequencyType,
-                newCustomDays,
-                setNewCustomDays,
-                styles.habitPropertySelect,
-              )}
-              {renderCategorySelect(
-                newCategory,
-                setNewCategory,
-                newCategoryName,
-                setNewCategoryName,
-                styles.habitPropertySelect,
-                styles.categoryInput,
-              )}
-              <select
-                style={styles.habitPropertySelect}
-                value={newGoalId}
-                onChange={(event) => setNewGoalId(event.target.value)}
-                aria-label="Linked Goal (optional)"
-                title="Link this habit to a goal it supports (optional)"
-              >
-                <option value="">No Goal — standalone habit</option>
-                {goals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>{goal.title}</option>
-                ))}
-              </select>
-            </div>
+            {showHabitOptions ? (
+              <div style={{ ...styles.optionsRow, justifyContent: "center", margin: "12px 0 32px" }}>
+                <select
+                  style={styles.habitPropertySelect}
+                  value={newPriority}
+                  onChange={(event) =>
+                    setNewPriority(event.target.value as Priority)
+                  }
+                  aria-label="Priority"
+                >
+                  <option value="Optional">Optional</option>
+                  <option value="Mandatory">Mandatory</option>
+                </select>
+                {renderCategorySelect(
+                  newCategory,
+                  setNewCategory,
+                  newCategoryName,
+                  setNewCategoryName,
+                  styles.habitPropertySelect,
+                  styles.categoryInput,
+                )}
+                <select
+                  style={styles.habitPropertySelect}
+                  value={newGoalId}
+                  onChange={(event) => setNewGoalId(event.target.value)}
+                  aria-label="Linked Goal (optional)"
+                  title="Link this habit to a goal it supports (optional)"
+                >
+                  <option value="">No Goal — standalone habit</option>
+                  {goals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>{goal.title}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  style={{ ...styles.addButton, background: "transparent", border: "1px solid transparent", color: "var(--text-secondary)", fontSize: 12 }}
+                  onClick={() => setShowHabitOptions(false)}
+                >
+                  Fewer options
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "center", margin: "0 0 32px" }}>
+                <button
+                  type="button"
+                  style={{ ...styles.addButton, background: "transparent", border: "1px solid transparent", color: "var(--text-secondary)", fontSize: 12 }}
+                  onClick={() => setShowHabitOptions(true)}
+                  aria-expanded={false}
+                >
+                  More options
+                </button>
+              </div>
+            )}
 
             {activeHabits.length === 0 && offDayHabits.length === 0 ? (
               <p style={styles.empty}>
-                {activeFilterCount > 0
+                {activeFilterCount > 0 || searchQuery !== ""
                   ? "No habits match these filters."
                   : habits.length === 0
-                  ? "No habits yet — add your first one above."
+                  ? "No habits yet — name your first small habit above. Frequency, category, and goals can come later."
                   : currentCategory !== ALL_CATEGORIES && !habits.some(matchesCategory)
                   ? `No habits in ${currentCategory} yet.`
                   : archivedHabits.length > 0
                   ? "No active habits. Show archived habits below to restore them."
                   : "No habits active on this date."}
-                {activeFilterCount > 0 && (
+                {(activeFilterCount > 0 || searchQuery !== "") && (
                   <button
                     style={{
                       ...styles.addButton,

@@ -870,14 +870,12 @@ function FocusTimer({
     if (!autoStartAction) return;
 
     // handleStart closes over the current mode: commit Timer first so a stale
-    // Pomodoro closure cannot start instead.
+    // Pomodoro closure cannot start instead. Applied synchronously so the
+    // one-shot request survives frame cancellations (e.g. an instant tab
+    // switch); the effect re-runs on mode change and starts exactly once.
     if (mode !== "Timer") {
-      const modeFrameId = window.requestAnimationFrame(() => {
-        setMode("Timer");
-      });
-      return () => {
-        window.cancelAnimationFrame(modeFrameId);
-      };
+      setMode("Timer");
+      return;
     }
 
     const durationMinutes = Math.max(1, Math.min(MAX_DURATION_MINUTES, autoStartAction.durationMinutes ?? defaultFocusDuration));

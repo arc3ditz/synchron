@@ -69,9 +69,33 @@ function toSkippedHabitSet(value?: ReadonlySet<number> | readonly number[]): Rea
   return value instanceof Set ? value : new Set(value);
 }
 
-function validScheduledMinutes(scheduledTime?: string): number | null {
-  if (!scheduledTime) return null;
+function validScheduledMinutes(scheduledTime?: unknown): number | null {
+  if (typeof scheduledTime !== "string") return null;
+  if (!scheduledTime.trim()) return null;
   return timeToMinutes(scheduledTime);
+}
+
+/**
+ * Strict "YYYY-MM-DD" calendar-key validation. Lexicographic date compares
+ * elsewhere treat "" / "  " / malformed strings as real dates ("" sorts
+ * before any todayKey, so it reads as overdue). Only validated keys may
+ * support urgency claims ("Overdue", "Due today", backlog) or be echoed.
+ */
+function isValidDateKey(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const roundTrip = new Date(y, m - 1, d);
+  return roundTrip.getFullYear() === y && roundTrip.getMonth() === m - 1 && roundTrip.getDate() === d;
+}
+
+function validDueDate(task: Pick<Task, "dueDate">): string | undefined {
+  return isValidDateKey(task.dueDate) ? task.dueDate : undefined;
+}
+
+function isOverdueByKey(dueDate: string | undefined, todayKey: string): boolean {
+  return dueDate !== undefined && dueDate < todayKey;
 }
 
 function taskDuration(task: Task): number | undefined {
@@ -99,10 +123,11 @@ function overdueAgeDays(dueDate: string, todayKey: string): number {
  * STALE_OVERDUE_DAYS. Display-only — never hides, deletes, or reschedules.
  */
 export function isTaskStaleBacklog(task: Task, todayKey: string): boolean {
+  const dueDate = validDueDate(task);
   return (
-    task.dueDate !== undefined &&
+    dueDate !== undefined &&
     isTaskOverdue(task, todayKey) &&
-    overdueAgeDays(task.dueDate, todayKey) > STALE_OVERDUE_DAYS
+    overdueAgeDays(dueDate, todayKey) > STALE_OVERDUE_DAYS
   );
 }
 
@@ -192,8 +217,9 @@ type RankedCandidate = RankedTask | RankedHabit;
  */
 function categoryRankForTask(task: Task, todayKey: string, lookup: ParentLookup): number {
   if (isTaskStaleBacklog(task, todayKey)) return 6;
-  if (isTaskOverdue(task, todayKey)) return 0;
-  if (task.dueDate !== undefined && task.dueDate === todayKey) return 1;
+  const dueDate = validDueDate(task);
+  if (isOverdueByKey(dueDate, todayKey)) return 0;
+  if (dueDate !== undefined && dueDate === todayKey) return 1;
   if (taskContextKind(task, lookup) !== "none") return 3;
   return 4;
 }
@@ -234,8 +260,8 @@ function compareRanked(a: RankedCandidate, b: RankedCandidate, todayKey: string)
     const bDuration = taskDuration(b.task) ?? Number.POSITIVE_INFINITY;
     if (aDuration !== bDuration) return aDuration - bDuration;
 
-    const aDue = a.task.dueDate ?? "\uffff";
-    const bDue = b.task.dueDate ?? "\uffff";
+    const aDue = validDueDate(a.task) ?? "\uffff";
+    const bDue = validDueDate(b.task) ?? "\uffff";
     if (aDue !== bDue) return aDue < bDue ? -1 : 1;
 
     const aSched = validScheduledMinutes(a.task.scheduledTime) ?? Number.POSITIVE_INFINITY;
@@ -272,11 +298,12 @@ function compareRanked(a: RankedCandidate, b: RankedCandidate, todayKey: string)
 }
 
 function taskReason(task: Task, todayKey: string, contextKind: TaskContextKind): string {
-  if (isTaskOverdue(task, todayKey) && task.dueDate !== undefined) {
+  const dueDate = validDueDate(task);
+  if (dueDate !== undefined && isOverdueByKey(dueDate, todayKey)) {
     const stale = isTaskStaleBacklog(task, todayKey) ? " · backlog" : "";
-    return `Overdue since ${task.dueDate} · ${task.priority} priority${stale}`;
+    return `Overdue since ${dueDate} · ${task.priority} priority${stale}`;
   }
-  if (task.dueDate !== undefined && task.dueDate === todayKey) {
+  if (dueDate !== undefined && dueDate === todayKey) {
     return `Due today · ${task.priority} priority`;
   }
   if (task.scheduledTime !== undefined && validScheduledMinutes(task.scheduledTime) !== null) {
@@ -304,15 +331,16 @@ function toRecommendation(
 ): NextStepTaskRecommendation | NextStepHabitRecommendation {
   if (winner.type === "task") {
     const task = winner.task;
+    const dueDate = validDueDate(task);
     const recommendation: NextStepTaskRecommendation = {
       kind: "task",
       taskId: task.id,
       title: task.title,
       reason: taskReason(task, todayKey, winner.contextKind),
       priority: task.priority,
-      overdue: isTaskOverdue(task, todayKey),
+      overdue: isOverdueByKey(dueDate, todayKey),
     };
-    if (task.dueDate !== undefined) recommendation.dueDate = task.dueDate;
+    if (dueDate !== undefined) recommendation.dueDate = dueDate;
     if (task.scheduledTime !== undefined && validScheduledMinutes(task.scheduledTime) !== null) {
       recommendation.scheduledTime = task.scheduledTime;
     }
@@ -387,17 +415,18 @@ function rankCandidates(input: NextStepInput): {
     !task.completed &&
     isTaskParentEligible(task, lookup) &&
     !skippedTaskIds.has(task.id) &&
-    (isTaskDueTodayOrOverdue(task, input.todayKey) ||
+    ((validDueDate(task) !== undefined && isTaskDueTodayOrOverdue(task, input.todayKey)) ||
       validScheduledMinutes(task.scheduledTime) !== null ||
       task.milestoneId !== undefined)
   );
 
-  const eligibleHabits = input.habits.filter((habit) =>
-    !habit.isArchived &&
-    isHabitScheduledOnDate(habit, input.todayKey) &&
-    !habit.completedDates.includes(input.todayKey) &&
-    !skippedHabitIds.has(habit.id)
-  );
+  const eligibleHabits = input.habits.filter((habit) => {
+    const completedDates = Array.isArray(habit.completedDates) ? habit.completedDates : [];
+    return !habit.isArchived &&
+      isHabitScheduledOnDate(habit, input.todayKey) &&
+      !completedDates.includes(input.todayKey) &&
+      !skippedHabitIds.has(habit.id);
+  });
 
   const ranked: RankedCandidate[] = [
     ...eligibleTasks.map((task): RankedTask => ({

@@ -260,3 +260,56 @@ test("selection is deterministic with stable tie-breaking", () => {
   assert.deepEqual(first, second);
   assert.equal(first.taskId, "a");
 });
+
+test("invalid dueDate values never confer urgency and fall back honestly", () => {
+  for (const dueDate of ["", "  ", "not-a-date", "2026-1-1", "2026-13-40", "2026-02-30"]) {
+    const rec = recommendNextStep(input({
+      tasks: [makeTask({ id: "bad-date", title: "Bad date", dueDate })],
+    }));
+    assert.equal(rec.kind, "none", `dueDate ${JSON.stringify(dueDate)} must not be eligible`);
+  }
+});
+
+test("invalid dueDate is never echoed on scheduled work", () => {
+  const rec = recommendNextStep(input({
+    tasks: [makeTask({
+      id: "sched",
+      title: "Blocked",
+      dueDate: "2026-13-40",
+      scheduledTime: "09:30",
+      priority: "medium",
+    })],
+  }));
+  assert.equal(rec.kind, "task");
+  assert.equal(rec.overdue, false);
+  assert.equal(rec.dueDate, undefined);
+  assert.ok(!("dueDate" in rec) || rec.dueDate === undefined);
+  assert.match(rec.reason, /Scheduled 09:30/);
+  assert.doesNotMatch(rec.reason, /Overdue|Due today|backlog/);
+});
+
+test("non-string scheduledTime is ignored, never crashes or claims a schedule", () => {
+  const taskRec = recommendNextStep(input({
+    tasks: [makeTask({ id: "num-time", title: "Num", dueDate: "2026-11-01", scheduledTime: 930 })],
+    habits: [makeHabit({ id: 11, name: "Daily read" })],
+  }));
+  assert.equal(taskRec.kind, "habit");
+  assert.equal(taskRec.habitId, 11);
+
+  const habitRec = recommendNextStep(input({
+    habits: [makeHabit({ id: 12, name: "Timed", scheduledTime: 930 })],
+  }));
+  assert.equal(habitRec.kind, "habit");
+  assert.equal(habitRec.scheduledTime, undefined);
+  assert.doesNotMatch(habitRec.reason, /Scheduled/);
+});
+
+test("habits with missing completedDates are treated as incomplete, never crash", () => {
+  for (const completedDates of [undefined, null]) {
+    const rec = recommendNextStep(input({
+      habits: [{ ...makeHabit({ id: 13, name: "Legacy" }), completedDates }],
+    }));
+    assert.equal(rec.kind, "habit");
+    assert.equal(rec.habitId, 13);
+  }
+});

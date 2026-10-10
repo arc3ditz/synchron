@@ -787,7 +787,7 @@ export default function Tasks({
             ? (
               <>
                 No tasks yet
-                <span style={styles.emptyHint}>Add your first task above to get started</span>
+                <span style={styles.emptyHint}>Add your first task above — just a title is enough to get started</span>
               </>
             )
             : (

@@ -231,3 +231,88 @@ test("App never resets goals, habits, tasks, or progress for the welcome", () =>
   assert.ok(!/new Notification|push notification|backend|fetch\(/.test(domainSource),
     "no push notifications or backend services in the welcome domain");
 });
+
+// --- Long absences: calm banner at any distance, history untouched ---
+
+test("weeks-long gaps still show one calm welcome with the exact distance", () => {
+  for (const gap of [7, 30, 60, 365]) {
+    const decision = shouldShowWelcomeBack({
+      habits: [habitWith([daysAgo(gap)])],
+      focusSessions: [],
+      lastSeenKey: daysAgo(gap),
+      todayKey: TODAY,
+    });
+    assert.equal(decision.show, true, `${gap} days away must welcome back`);
+    assert.equal(decision.daysAway, gap);
+    assert.equal(decision.lastActivityKey, daysAgo(gap));
+  }
+});
+
+test("returning with zero incomplete work still resumes gracefully", () => {
+  // No habits, no sessions — only the last-seen day proves the gap.
+  const decision = shouldShowWelcomeBack({
+    habits: [],
+    focusSessions: [],
+    lastSeenKey: daysAgo(10),
+    todayKey: TODAY,
+  });
+  assert.equal(decision.show, true);
+  assert.equal(decision.daysAway, 10);
+  const copy = `${getWelcomeBackTitle()} ${getWelcomeBackSubtitle()}`;
+  assert.doesNotMatch(copy, /fail|streak|behind|missed|overdue|catch.?up|lost|fall/i);
+});
+
+test("heavy old history never changes the decision or deletes anything", () => {
+  const manyOldDates = Array.from({ length: 60 }, (_, i) => daysAgo(90 - i));
+  const heavy = shouldShowWelcomeBack({
+    habits: [habitWith(manyOldDates)],
+    focusSessions: [sessionOn(daysAgo(45))],
+    lastSeenKey: daysAgo(90),
+    todayKey: TODAY,
+  });
+  const light = shouldShowWelcomeBack({
+    habits: [],
+    focusSessions: [],
+    lastSeenKey: daysAgo(45),
+    todayKey: TODAY,
+  });
+  // Recency wins: the most recent old habit date is the signal; old
+  // entries are read-only and change nothing by themselves.
+  assert.equal(heavy.lastActivityKey, daysAgo(31));
+  assert.equal(light.lastActivityKey, daysAgo(45));
+  assert.equal(heavy.show, true);
+  // The domain has no task surface at all: nothing to delete, reschedule,
+  // force-complete, or convert missed habits into.
+  assert.ok(!/task/i.test(domainSource.replace(/contact/i, "")), "welcome domain never touches tasks");
+  assert.ok(!/reschedul|delete|complete\(|archiv/i.test(domainSource), "no mutations of any kind in the domain");
+});
+
+test("null habits and sessions fall back to the last-seen signal", () => {
+  const decision = shouldShowWelcomeBack({
+    habits: null,
+    focusSessions: null,
+    lastSeenKey: daysAgo(10),
+    todayKey: TODAY,
+  });
+  assert.equal(decision.show, true);
+  assert.equal(decision.daysAway, 10);
+});
+
+test("a future last-seen day cannot strand or guilt the user", () => {
+  const decision = shouldShowWelcomeBack({
+    habits: [habitWith([TODAY])],
+    focusSessions: [],
+    lastSeenKey: shiftDateKey(TODAY, 5),
+    todayKey: TODAY,
+  });
+  assert.equal(decision.show, false, "future signals are ignored, not acted on");
+  assert.equal(decision.daysAway, 0, "distance never goes negative");
+});
+
+test("welcome dismissal is in-session only and never persisted", () => {
+  assert.ok(todaySource.includes("const [welcomeDismissed, setWelcomeDismissed] = useState(false)"));
+  const welcome = todaySource.match(/function renderWelcomeBack\(\)[\s\S]*?\n  \}/);
+  assert.ok(welcome && welcome[0].includes("setWelcomeDismissed(true)"));
+  assert.ok(!/saveStorageData\([^)]*[Ww]elcome[^)]*\)/.test(todaySource), "dismissal writes no storage");
+  assert.ok(!/saveStorageData\([^)]*[Dd]ismiss/.test(todaySource), "dismissal writes no storage");
+});

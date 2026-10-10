@@ -742,7 +742,7 @@ export default function Goals({
         {activeGoals.length === 0 ? (
           <div style={styles.empty}>
             No active goals yet
-            <span style={styles.emptyHint}>Create a goal to start planning your work</span>
+            <span style={styles.emptyHint}>Create one small goal to start — projects and checkpoints are optional and can wait</span>
           </div>
         ) : activeGoals.map((goal) => {
           const goalWork = selectGoalWork(goal, { projects, milestones, tasks, habits });
@@ -896,7 +896,7 @@ export default function Goals({
                 {goalProjects.length === 0 ? (
                   <div style={styles.emptyWithHint}>
                     No projects yet
-                    <span style={styles.emptyHint}>Break this goal into smaller projects</span>
+                    <span style={styles.emptyHint}>Optional: group work into a project when this grows</span>
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -998,7 +998,7 @@ export default function Goals({
                   {goalMilestones.length === 0 ? (
                   <div style={styles.emptyWithHint}>
                     No milestones yet
-                    <span style={styles.emptyHint}>Define key checkpoints to track progress</span>
+                    <span style={styles.emptyHint}>Optional: add a checkpoint when you&apos;re ready</span>
                   </div>
                 ) : (
                   <div style={styles.milestoneList}>

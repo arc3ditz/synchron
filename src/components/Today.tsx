@@ -792,6 +792,11 @@ function Today({
   // uncompleting moves it back) without re-sorting or refetching, and the
   // stable array identities keep downstream memos (Next Up, counts) from
   // recomputing on unrelated renders.
+  // One memoized, order-preserving partition of today's already-sorted
+  // tasks. Completing a task moves it from pending to completed (and
+  // uncompleting moves it back) without re-sorting or refetching, and the
+  // stable array identities keep downstream memos (Next Up, counts) from
+  // recomputing on unrelated renders.
   const { pendingTodayTasks, completedTodayTasks } = useMemo(() => {
     const pending: Task[] = [];
     const completed: Task[] = [];
@@ -801,6 +806,20 @@ function Today({
     }
     return { pendingTodayTasks: pending, completedTodayTasks: completed };
   }, [todayTasks]);
+
+  // Quiet backlog grouping: stale overdue stays fully visible and counted,
+  // but collapsed behind one toggle so a large old backlog cannot greet the
+  // user as a wall above today's fresh work. Presentation only — ordering,
+  // counts, and data are untouched.
+  const [showBacklog, setShowBacklog] = useState(false);
+  const { freshTodayTasks, backlogTodayTasks } = useMemo(() => {
+    const fresh: Task[] = [];
+    const backlog: Task[] = [];
+    for (const task of pendingTodayTasks) {
+      (isTaskStaleBacklog(task, todayKey) ? backlog : fresh).push(task);
+    }
+    return { freshTodayTasks: fresh, backlogTodayTasks: backlog };
+  }, [pendingTodayTasks, todayKey]);
 
   const quickTaskInputRef = useRef<HTMLInputElement>(null);
   function focusQuickTaskInput() {
@@ -984,12 +1003,17 @@ function Today({
   function completeNextStep() {
     if (nextStep.kind === "task") {
       const task = tasks.find((item) => item.id === nextStep.taskId);
+      // Idempotent guard: a stale recommendation (deleted item) or an
+      // already-completed item must never toggle back open, play a phantom
+      // sound, or show a completion confirmation for nothing changed.
+      if (!task || task.completed) return;
       // The hero only ever recommends incomplete work, so this is always a
       // completion; route through the shared wrapper for the calm confirm.
-      handleTaskToggle(task ?? { id: nextStep.taskId, title: nextStep.title } as Task, false);
+      handleTaskToggle(task, false);
     } else if (nextStep.kind === "habit") {
       const habit = habits.find((item) => item.id === nextStep.habitId);
-      handleHabitToggle(habit ?? { id: nextStep.habitId, name: nextStep.title } as Habit, false, todayKey);
+      if (!habit || habit.completedDates.includes(todayKey)) return;
+      handleHabitToggle(habit, false, todayKey);
     }
   }
 
@@ -1001,6 +1025,17 @@ function Today({
   // Sound stays with the existing App handlers (per gesture, settings-aware);
   // Today adds no new sounds.
   const [lastCompletion, setLastCompletion] = useState<{ itemKey: string; message: string } | null>(null);
+
+  // Optimistic-toggle guard: a click's `completed` flag comes from render
+  // props, so rapid double-clicks before the store refresh would otherwise
+  // toggle twice (complete → reopen) while still showing "Done" and sounding
+  // twice. Repeats on the same item are ignored until tasks/habits refresh,
+  // which lands within a frame — deliberate unmarking still works the moment
+  // the new state arrives.
+  const pendingToggleRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    pendingToggleRef.current.clear();
+  }, [tasks, habits]);
 
   useEffect(() => {
     if (lastCompletion === null) return;
@@ -1015,6 +1050,8 @@ function Today({
 
   function handleTaskToggle(task: Pick<Task, "id" | "title">, completed: boolean) {
     const itemKey = `task:${task.id}`;
+    if (pendingToggleRef.current.has(itemKey)) return;
+    pendingToggleRef.current.add(itemKey);
     if (completed) {
       if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
       onToggleTask(task.id);
@@ -1026,6 +1063,8 @@ function Today({
 
   function handleHabitToggle(habit: Pick<Habit, "id" | "name">, isCompleted: boolean, dateKey: string) {
     const itemKey = `habit:${habit.id}`;
+    if (pendingToggleRef.current.has(itemKey)) return;
+    pendingToggleRef.current.add(itemKey);
     if (isCompleted) {
       if (lastCompletion?.itemKey === itemKey) setLastCompletion(null);
       onToggleHabit(habit.id, dateKey);
@@ -1513,10 +1552,28 @@ function Today({
         </form>
         <div style={styles.taskList}>
           {pendingTodayTasks.length === 0 && completedTodayTasks.length === 0 && (
-            <p style={styles.emptyText}>No tasks for today.</p>
+            <p style={styles.emptyText}>No tasks for today. Add one small task above whenever you&apos;re ready.</p>
           )}
-          {pendingTodayTasks.map((task) => renderTaskRow(task, false))}
+          {freshTodayTasks.map((task) => renderTaskRow(task, false))}
         </div>
+        {backlogTodayTasks.length > 0 && (
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => setShowBacklog((current) => !current)}
+              aria-expanded={showBacklog}
+              aria-label={`${showBacklog ? "Hide" : "Show"} backlog: ${backlogTodayTasks.length} older overdue ${backlogTodayTasks.length === 1 ? "task" : "tasks"}`}
+            >
+              {showBacklog ? "Hide backlog" : `Show backlog (${backlogTodayTasks.length})`}
+            </button>
+            {showBacklog && (
+              <div style={{ ...styles.taskList, marginTop: "var(--space-2)" }}>
+                {backlogTodayTasks.map((task) => renderTaskRow(task, false))}
+              </div>
+            )}
+          </div>
+        )}
         {completedTodayTasks.length > 0 && (
           <div style={{ marginTop: "var(--space-3)" }}>
             <h3 style={{ ...styles.sectionTitle, fontSize: "var(--type-sm)" }}>
@@ -1536,7 +1593,12 @@ function Today({
         <h2 style={styles.sectionTitle}>Today's Habits</h2>
         <div style={viewMode === "grid" ? styles.habitGridList : styles.habitList}>
           {todayHabits.length === 0 ? (
-            <p style={styles.emptyText}>No habits scheduled for today.</p>
+            <p style={styles.emptyText}>
+              No habits scheduled for today.{" "}
+              <button type="button" style={styles.textButton} onClick={onNavigateToHabits}>
+                Start one small habit →
+              </button>
+            </p>
           ) : todayHabits.map((habit) => {
             const isCompleted = habit.completedDates.includes(todayKey);
             const streak = calculateStreak(habit, streakFreeze, dayResetHour);
