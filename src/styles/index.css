@@ -330,3 +330,15 @@ input.form-control[type="number"]::-webkit-inner-spin-button, input.form-control
 .habit-card-title { font-weight: var(--font-semibold); line-height: 1.35; }
 .truncate-1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .section-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-text-muted); }
+
+/* Increased-contrast appearance: stronger edges and text, same hues.
+   (HIG Color: every custom color needs an increased-contrast variant.) */
+@media (prefers-contrast: more) {
+  :root, :root[data-theme="light"] {
+    --color-border: var(--color-border-strong);
+    --color-text-secondary: var(--color-text-body);
+    --color-text-muted: var(--color-text-body);
+  }
+  .atelier-group, .ui-card, .ui-panel, .row-card { border-width: 1.5px; }
+  .ui-button--ghost { border-color: var(--color-border-strong); }
+}

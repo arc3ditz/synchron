@@ -140,7 +140,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notificationFrequency: "balanced",
   habitReminders: true,
   incompleteHabitReminders: true,
-  theme: "dark",
+  theme: "system",
   onboardingCompleted: false,
 };
 const FOCUS_DURATION_PRESETS = [15, 25, 45, 60];
@@ -970,7 +970,9 @@ function loadAppSettings(): AppSettings {
     incompleteHabitReminders: typeof parsed.incompleteHabitReminders === "boolean"
       ? parsed.incompleteHabitReminders
       : DEFAULT_SETTINGS.incompleteHabitReminders,
-    theme: parsed.theme === "light" ? "light" : "dark",
+    theme: parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
+      ? parsed.theme
+      : "system",
     viewMode: parsed.viewMode === "list" ? "list" : "grid",
     onboardingCompleted: typeof parsed.onboardingCompleted === "boolean"
       ? parsed.onboardingCompleted
@@ -1234,7 +1236,19 @@ function App() {
   }, [appSettings.soundAlerts, appSettings.sfxVolume, appSettings.sfxEnabled]);
 
   useLayoutEffect(() => {
-    document.documentElement.setAttribute("data-theme", appSettings.theme);
+    // "system" follows the OS appearance live; explicit choices win.
+    // (HIG Dark Mode: no app-only appearance that fights the system.)
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      const resolved = appSettings.theme === "system"
+        ? (media.matches ? "light" : "dark")
+        : appSettings.theme;
+      document.documentElement.setAttribute("data-theme", resolved);
+    };
+    apply();
+    if (appSettings.theme !== "system") return;
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
   }, [appSettings.theme]);
 
   useEffect(() => {
@@ -3390,10 +3404,10 @@ function App() {
                   <div style={styles.settingsRow}>
                     <div>
                       <span style={styles.settingsLabel}>Appearance</span>
-                      <span style={styles.settingsDescription}>Choose your preferred color theme.</span>
+                      <span style={styles.settingsDescription}>Follow the system, or pick a theme.</span>
                     </div>
                     <div className="settings-segment" style={styles.settingsSegment} role="group" aria-label="Appearance Theme">
-                      {(["light", "dark"] as Theme[]).map((theme) => (
+                      {(["system", "light", "dark"] as Theme[]).map((theme) => (
                         <button
                           key={theme}
                           type="button"
@@ -3401,7 +3415,7 @@ function App() {
                           onClick={() => setAppSettings((current) => ({ ...current, theme }))}
                           aria-pressed={appSettings.theme === theme}
                         >
-                          {theme === "dark" ? "Dark" : "Light"}
+                          {theme === "system" ? "System" : theme === "dark" ? "Dark" : "Light"}
                         </button>
                       ))}
                     </div>

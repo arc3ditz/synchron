@@ -196,7 +196,7 @@ function History({
           <p className="atelier-sub" style={{ margin: 0 }}>
             {selectedHabit
               ? "Completed days will appear here once you mark this habit done."
-              : "Select an existing habit to view its completion history."}
+              : "Select a habit to view its completion history."}
           </p>
         </div>
       ) : (

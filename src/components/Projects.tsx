@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { Check, ChevronLeft, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { Milestone, Project, Task } from "../types";

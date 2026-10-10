@@ -3,7 +3,7 @@ export type Priority = "Mandatory" | "Optional";
 export type HabitType = "Daily";
 export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
-export type Theme = "dark" | "light";
+export type Theme = "dark" | "light" | "system";
 export type NotificationFrequency = "conservative" | "balanced" | "frequent";
 export type View = "Today" | "Habits" | "Tasks" | "Timer" | "Projects" | "History" | "Analytics" | "Settings";
 
