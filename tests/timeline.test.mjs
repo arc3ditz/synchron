@@ -11,9 +11,8 @@ const at = (day, hour, minute = 0) => new Date(2025, 4, day, hour, minute).getTi
 const NOW = new Date(2025, 4, 14, 12, 0);
 
 const baseInput = {
-  goals: [{ id: "goal-1", title: "Get Fit" }],
-  milestones: [{ id: "m-1", title: "Milestone", goalId: "goal-1" }],
-  projects: [],
+  milestones: [{ id: "m-1", title: "Milestone", projectId: "project-1" }],
+  projects: [{ id: "project-1", name: "Get Fit" }],
   todayKey: "2025-05-14",
   dayResetHour: 0,
   now: NOW,
@@ -39,7 +38,7 @@ const task = (overrides = {}) => ({
   completed: false,
   priority: "high",
   dueDate: "2025-05-14",
-  goalId: "goal-1",
+  projectId: "project-1",
   ...overrides,
 });
 

@@ -1,6 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import {
-  Target,
   Clock,
   Flame,
   Calendar,
@@ -11,7 +10,7 @@ import {
 } from "lucide-react";
 
 import { CARD_SURFACE, FORM_CONTROL } from "../theme";
-import type { Habit, Task, Goal, TimeHorizon, FocusSessionRecord } from "../types";
+import type { Habit, Task, TimeHorizon, FocusSessionRecord } from "../types";
 import {
   WEEKDAYS,
 } from "../utils/dates";
@@ -23,7 +22,6 @@ import {
   getHabitFocusMinutes,
   getTimeOfDayInsights,
   getWeekdayFrictionMetrics,
-  getGoalFocusAllocation,
   generateActionableInsights,
   TOP_PERFORMING_THRESHOLD,
   NEEDS_ATTENTION_THRESHOLD,
@@ -33,7 +31,6 @@ import {
 type AnalyticsProps = {
   habits: Habit[];
   tasks: Task[];
-  goals: Goal[];
   focusSessions: FocusSessionRecord[];
   streakFreeze: boolean;
   dayResetHour: number;
@@ -428,31 +425,6 @@ const styles: Record<string, CSSProperties> = {
     height: 8,
     borderRadius: "50%",
   },
-  // Goal allocation styles
-  goalAllocationItem: {
-    marginBottom: 12,
-  },
-  goalAllocationHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-    gap: 8,
-    minWidth: 0,
-  },
-  goalAllocationName: {
-    fontSize: 13,
-    color: "var(--text-body)",
-    fontWeight: 500,
-    flex: 1,
-    minWidth: 0,
-    overflowWrap: "anywhere",
-  },
-  goalAllocationPercent: {
-    fontSize: 13,
-    color: "var(--accent-teal)",
-    fontWeight: 600,
-  },
   // Friction day styles
   frictionDayBadge: {
     display: "inline-flex",
@@ -483,7 +455,6 @@ function formatSessionCount(count: number): string {
 function Analytics({
   habits,
   tasks,
-  goals,
   focusSessions,
   streakFreeze,
   dayResetHour,
@@ -502,8 +473,8 @@ function Analytics({
     }), [habits, tasks, focusSessions, timeHorizon, weekStart, dayResetHour, streakFreeze]);
 
   const actionableInsights = useMemo(
-    () => generateActionableInsights(dataset, goals),
-    [dataset, goals],
+    () => generateActionableInsights(dataset),
+    [dataset],
   );
 
   const habitPerformance = useMemo(() => {
@@ -529,10 +500,6 @@ function Analytics({
   const weekdayFriction = useMemo(() => {
     return getWeekdayFrictionMetrics(dataset);
   }, [dataset]);
-
-  const goalFocusAllocation = useMemo(() => {
-    return getGoalFocusAllocation(dataset.focusSessions, goals);
-  }, [dataset, goals]);
 
   const habitStats = useMemo(() => {
     const habitMinutes = getHabitFocusMinutes(dataset);
@@ -783,50 +750,6 @@ function Analytics({
                 })}
               </div>
             </>
-          )}
-        </div>
-
-        {/* Goal Focus Allocation Widget */}
-        <div style={styles.panel}>
-          <h3 style={styles.panelTitle}>
-            <Target size={18} />
-            Goal Focus Allocation
-          </h3>
-          {goalFocusAllocation.allocations.length === 0 && goalFocusAllocation.unlinkedMinutes === 0 ? (
-            <p style={styles.empty}>No reliable data for this period.</p>
-          ) : (
-            <div style={styles.performanceSection}>
-              {goalFocusAllocation.allocations.map((allocation, index) => (
-                <div
-                  key={allocation.goalId}
-                  style={{
-                    ...styles.goalAllocationItem,
-                    ...(index === goalFocusAllocation.allocations.length - 1 ? { marginBottom: 0 } : {}),
-                  }}
-                >
-                  <div style={styles.goalAllocationHeader}>
-                    <span style={styles.goalAllocationName}>{allocation.goalTitle}</span>
-                    <span style={styles.goalAllocationPercent}>{allocation.percentage.toFixed(0)}%</span>
-                  </div>
-                  <div style={styles.progressBar}>
-                    <div style={{ ...styles.progressFill, width: `${allocation.percentage}%` }} />
-                  </div>
-                </div>
-              ))}
-              {goalFocusAllocation.unlinkedMinutes > 0 && (
-                <div style={styles.goalAllocationItem}>
-                  <div style={styles.goalAllocationHeader}>
-                    <span style={styles.goalAllocationName}>Unlinked Focus</span>
-                    <span style={{ ...styles.goalAllocationPercent, color: "var(--text-secondary)" }}>
-                      {goalFocusAllocation.unlinkedPercentage.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div style={styles.progressBar}>
-                    <div style={{ ...styles.progressFill, width: `${goalFocusAllocation.unlinkedPercentage}%`, background: "var(--border-color)" }} />
-                  </div>
-                </div>
-              )}
-            </div>
           )}
         </div>
 

@@ -49,10 +49,10 @@ function input(overrides = {}) {
   };
 }
 
-function activeGoalContext() {
-  const goals = [{ id: "g", title: "G", status: "active", createdAt: "2026-01-01" }];
-  const milestones = [{ id: "m", goalId: "g", title: "M", completed: false }];
-  return { goals, milestones };
+function activeProjectContext() {
+  const projects = [{ id: "p", name: "P", status: "active", createdAt: "2026-01-01" }];
+  const milestones = [{ id: "m", projectId: "p", title: "M", completed: false }];
+  return { projects, milestones };
 }
 
 // --- Goal / project associations order eligible contextual work ---
@@ -61,13 +61,13 @@ function activeGoalContext() {
 // or time block stays out, exactly as Today lists it): among eligible
 // time-blocked tasks, anchored ones outrank standalone ones.
 
-test("goal-linked scheduled task outranks a standalone scheduled task", () => {
-  const goals = [{ id: "g", title: "G", status: "active", createdAt: "2026-01-01" }];
+test("project-linked scheduled task outranks a standalone scheduled task", () => {
+  const projects = [{ id: "p", name: "P", status: "active", createdAt: "2026-01-01" }];
   const rec = recommendNextStep(input({
-    goals,
+    projects,
     tasks: [
       makeTask({
-        id: "linked", title: "Linked", goalId: "g", dueDate: "2026-11-01",
+        id: "linked", title: "Linked", projectId: "p", dueDate: "2026-11-01",
         scheduledTime: "09:30", priority: "medium",
       }),
       makeTask({
@@ -101,9 +101,9 @@ test("project-linked scheduled task outranks a standalone scheduled task", () =>
 });
 
 test("milestone-linked task keeps its milestone reason and beats standalone", () => {
-  const { goals, milestones } = activeGoalContext();
+  const { projects, milestones } = activeProjectContext();
   const rec = recommendNextStep(input({
-    goals,
+    projects,
     milestones,
     tasks: [
       makeTask({ id: "linked", title: "Linked", milestoneId: "m", priority: "medium" }),
@@ -120,47 +120,48 @@ test("milestone-linked task keeps its milestone reason and beats standalone", ()
 
 test("taskContextKind resolves links against existing entities only", () => {
   const lookup = {
-    goalsById: new Map([["g", { id: "g", title: "G", status: "active" }]]),
     projectsById: new Map([["p", { id: "p", name: "P", status: "active" }]]),
     milestonesById: new Map([["m", { id: "m", title: "M", completed: false }]]),
   };
   assert.equal(taskContextKind(makeTask({ milestoneId: "m" }), lookup), "milestone");
-  assert.equal(taskContextKind(makeTask({ goalId: "g" }), lookup), "goal");
   assert.equal(taskContextKind(makeTask({ projectId: "p" }), lookup), "project");
   assert.equal(taskContextKind(makeTask({}), lookup), "none");
   // Dangling references are standalone, never invented associations.
+  // Legacy goalId links never anchor on their own.
   assert.equal(taskContextKind(makeTask({ goalId: "missing" }), lookup), "none");
+  assert.equal(taskContextKind(makeTask({ goalId: "g" }), lookup), "none");
   assert.equal(taskContextKind(makeTask({ projectId: "missing" }), lookup), "none");
   assert.equal(taskContextKind(makeTask({ milestoneId: "missing" }), lookup), "none");
   // Finished parents don't anchor either.
   const doneLookup = {
-    goalsById: new Map([["g", { id: "g", title: "G", status: "completed" }]]),
     projectsById: new Map([["p", { id: "p", name: "P", status: "archived" }]]),
     milestonesById: new Map(),
   };
-  assert.equal(taskContextKind(makeTask({ goalId: "g" }), doneLookup), "none");
   assert.equal(taskContextKind(makeTask({ projectId: "p" }), doneLookup), "none");
 });
 
 test("dangling links get no boost and never invent a milestone reason", () => {
-  // A dangling milestone id alone is not relevance: without a due date or
-  // time block the task stays out of Today entirely.
-  const irrelevant = recommendNextStep(input({
+  // A dangling milestone id is treated as standalone work: the task is
+  // recommendable as available work, but never as milestone-anchored work.
+  const danglingSolo = recommendNextStep(input({
     tasks: [makeTask({ id: "dangling", title: "Dangling", milestoneId: "missing" })],
   }));
-  assert.equal(irrelevant.kind, "none");
+  assert.equal(danglingSolo.kind, "task");
+  assert.equal(danglingSolo.taskId, "dangling");
+  assert.match(danglingSolo.reason, /Available task/);
+  assert.doesNotMatch(danglingSolo.reason, /milestone/i);
 
-  // With a time block it is relevant, but standalone: a goal-linked task
+  // With a time block it is relevant, but standalone: a project-linked task
   // still wins, and its own reason claims only the schedule it has.
-  const goals = [{ id: "g", title: "G", status: "active", createdAt: "2026-01-01" }];
+  const projects = [{ id: "p", name: "P", status: "active", createdAt: "2026-01-01" }];
   const ranked = recommendNextStep(input({
-    goals,
+    projects,
     tasks: [
       makeTask({
         id: "dangling", title: "Dangling", milestoneId: "missing",
         dueDate: "2026-11-01", scheduledTime: "09:30", priority: "medium",
       }),
-      makeTask({ id: "linked", title: "Linked", goalId: "g", dueDate: "2026-11-01", scheduledTime: "10:30", priority: "medium" }),
+      makeTask({ id: "linked", title: "Linked", projectId: "p", dueDate: "2026-11-01", scheduledTime: "10:30", priority: "medium" }),
     ],
   }));
   assert.equal(ranked.kind, "task");
@@ -236,9 +237,9 @@ test("smaller habit effort wins; unknown effort never outranks known", () => {
 });
 
 test("linked task without estimates carries no invented duration", () => {
-  const { goals, milestones } = activeGoalContext();
+  const { projects, milestones } = activeProjectContext();
   const rec = recommendNextStep(input({
-    goals,
+    projects,
     milestones,
     tasks: [makeTask({ id: "linked", title: "Linked", milestoneId: "m", priority: "medium" })],
   }));
@@ -288,9 +289,9 @@ test("stale boundary: 7-day overdue is fresh, 8-day overdue is backlog", () => {
 // --- Determinism with the new signals ---
 
 test("ranking with links, effort, and history is deterministic", () => {
-  const { goals, milestones } = activeGoalContext();
+  const { projects, milestones } = activeProjectContext();
   const base = input({
-    goals,
+    projects,
     milestones,
     tasks: [
       makeTask({ id: "b", title: "B", milestoneId: "m", priority: "medium", estimatedMinutes: 30 }),

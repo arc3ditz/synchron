@@ -33,22 +33,23 @@ export function deleteTask(tasks: Task[], taskId: string): Task[] {
   return tasks.filter((task) => task.id !== taskId);
 }
 
-export function filterTasksByGoal(tasks: Task[], goalId: string): Task[] {
-  return tasks.filter((task) => task.goalId === goalId);
-}
-
 export function filterTasksByMilestone(tasks: Task[], milestoneId: string): Task[] {
   return tasks.filter((task) => task.milestoneId === milestoneId);
 }
 
 export function filterTasksForFocusSelection(
   tasks: Task[],
-  goalId: string,
+  _goalId: string,
   milestoneId: string,
+  projectId?: string,
 ): Task[] {
   if (milestoneId) return filterTasksByMilestone(tasks, milestoneId);
-  if (!goalId) return [];
-  return tasks.filter((task) => task.goalId === goalId && !task.milestoneId);
+  if (projectId) return tasks.filter((task) => task.projectId === projectId && !task.milestoneId);
+  if (_goalId) {
+    const byGoal = tasks.filter((task) => task.goalId === _goalId && !task.milestoneId);
+    if (byGoal.length > 0) return byGoal;
+  }
+  return tasks;
 }
 
 const TASK_PRIORITY_RANK: Record<Task["priority"], number> = {
@@ -71,21 +72,18 @@ export function isTaskDueTodayOrOverdue(task: Pick<Task, "dueDate">, todayKey: s
 
 /**
  * Single Today membership definition for Tasks: due today or overdue, or
- * attached to an active Milestone. Completed Tasks stay included so Today can
- * show (and reopen) what was finished; callers split pending/completed.
- * Future-due Tasks without an active Milestone stay out of Today.
+ * attached to an active (incomplete) Milestone. Completed Tasks stay included
+ * so Today can show (and reopen) what was finished; callers split
+ * pending/completed. Future-due Tasks without an active Milestone stay out of
+ * Today. Milestones no longer require a Goal link.
  */
 export function selectTodayTasks(
   tasks: Task[],
-  input: { milestones: Pick<Milestone, "id" | "goalId" | "completed">[]; activeGoalIds: ReadonlySet<string>; todayKey: string },
+  input: { milestones: Pick<Milestone, "id" | "completed">[]; todayKey: string; activeGoalIds?: ReadonlySet<string> },
 ): Task[] {
   const activeMilestoneIds = new Set(
     input.milestones
-      .filter((milestone) =>
-        !milestone.completed &&
-        milestone.goalId !== undefined &&
-        input.activeGoalIds.has(milestone.goalId),
-      )
+      .filter((milestone) => !milestone.completed)
       .map((milestone) => milestone.id),
   );
   return tasks.filter((task) =>
@@ -117,21 +115,23 @@ export function sortTodayTasks<T extends Pick<Task, "dueDate" | "priority" | "cr
 }
 
 export interface TaskContext {
-  goal?: { id: string; title: string };
   project?: { id: string; name: string };
   milestone?: { id: string; title: string };
+  /** Legacy Goal link preserved for historical records; not displayed in new UI. */
+  goal?: { id: string; title: string };
 }
 
 /**
  * Resolve a Task's display hierarchy without duplicating relationship info:
- * the Milestone remains the source of truth for Project/Goal inheritance
+ * the Milestone remains the source of truth for Project inheritance
  * (see relationships.ts), so context falls back through the Milestone when
- * the Task itself carries no direct link.
+ * the Task itself carries no direct link. Legacy `goalId` links are resolved
+ * only when a goals list is supplied (backward compatibility).
  */
 export function resolveTaskContext(
   task: Pick<Task, "goalId" | "projectId" | "milestoneId">,
   input: {
-    goals: { id: string; title: string }[];
+    goals?: { id: string; title: string }[];
     projects?: { id: string; name: string }[];
     milestones: { id: string; title: string; goalId?: string; projectId?: string }[];
   },
@@ -144,7 +144,7 @@ export function resolveTaskContext(
     ? input.projects?.find((item) => item.id === projectId)
     : undefined;
   const goalId = task.goalId ?? milestone?.goalId;
-  const goal = goalId !== undefined
+  const goal = goalId !== undefined && input.goals
     ? input.goals.find((item) => item.id === goalId)
     : undefined;
   return { goal, project, milestone };

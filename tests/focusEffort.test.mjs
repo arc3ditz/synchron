@@ -96,7 +96,7 @@ test("active timer state survives tab changes", () => {
 
 // --- Lifecycle: early stop and pause never complete or log ---
 
-test("auto-start commits synchronously and clears exactly once", () => {
+test("auto-start switches to Timer mode safely and clears exactly once", () => {
   const effect = timerSource.match(/if \(!autoStartAction\) return;[\s\S]*?onAutoStartHandled\?\.\(\);/);
   assert.ok(effect, "one-shot effect intact");
   assert.ok(effect[0].includes('setMode("Timer")'), "Pomodoro-safe mode commit before start");

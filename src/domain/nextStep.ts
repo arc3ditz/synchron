@@ -1,5 +1,5 @@
 import type { Goal, Habit, Milestone, Project, Task } from "../types";
-import { isTaskDueTodayOrOverdue, isTaskOverdue, selectTodayTasks } from "./tasks.ts";
+import { isTaskDueTodayOrOverdue, isTaskOverdue } from "./tasks.ts";
 import { timeToMinutes } from "./timeline.ts";
 import { diffInDays, isHabitScheduledOnDate } from "../utils/dates.ts";
 
@@ -43,9 +43,10 @@ export type NextStepRecommendation =
 export interface NextStepInput {
   habits: Habit[];
   tasks: Task[];
-  goals: Goal[];
   milestones: Milestone[];
   projects?: Project[];
+  /** Legacy Goal list ignored; retained for backward-compatible callers. */
+  goals?: Goal[];
   /** Local calendar day "YYYY-MM-DD". Caller derives it (e.g. getTodayKey) so selection stays deterministic. */
   todayKey: string;
   /** Explicitly skipped work for this session. Skipped items are hidden when an alternative exists. */
@@ -136,7 +137,8 @@ export function isTaskStaleBacklog(task: Task, todayKey: string): boolean {
  * organizational parent. Dangling references are treated as standalone
  * (see normalizeRelationships): only links to existing entities can exclude.
  */
-export interface ParentLookup {  goalsById: Map<string, Goal>;
+export interface ParentLookup {
+  goalsById?: Map<string, Goal>;
   projectsById: Map<string, Project>;
   milestonesById: Map<string, Milestone>;
 }
@@ -153,13 +155,24 @@ function isTaskParentEligible(task: Task, lookup: ParentLookup): boolean {
     return false;
   }
 
-  const goalIds = [task.goalId, milestone?.goalId, project?.goalId];
-  for (const goalId of goalIds) {
-    if (goalId === undefined) continue;
-    const goal = lookup.goalsById.get(goalId);
-    if (goal !== undefined && goal.status !== "active") return false;
-  }
   return true;
+}
+
+/**
+ * Habit eligibility mirrors tasks: a habit linked to a finished
+ * (`completed`/`archived`) Project is excluded from recommendations so ending
+ * a Project never leaves a stale "temporary" habit as the top suggestion.
+ * Dangling `projectId` links (no such Project) are treated as standalone and
+ * stay eligible — see `alignHabit` for storage-boundary detachment.
+ */
+function isHabitParentEligible(
+  habit: Pick<Habit, "projectId">,
+  lookup: ParentLookup,
+): boolean {
+  if (habit.projectId === undefined) return true;
+  const project = lookup.projectsById.get(habit.projectId);
+  if (project === undefined) return true;
+  return project.status !== "completed" && project.status !== "archived";
 }
 
 const TASK_PRIORITY_RANK: Record<Task["priority"], number> = { high: 0, medium: 1, low: 2 };
@@ -171,15 +184,11 @@ const TASK_PRIORITY_RANK: Record<Task["priority"], number> = { high: 0, medium: 
  * Exported for tests: ranking uses it to prefer anchored contextual work,
  * and only anchored work, over standalone time blocks.
  */
-export type TaskContextKind = "milestone" | "goal" | "project" | "none";
+export type TaskContextKind = "milestone" | "project" | "none";
 
 export function taskContextKind(task: Task, lookup: ParentLookup): TaskContextKind {
   if (task.milestoneId !== undefined && lookup.milestonesById.has(task.milestoneId)) {
     return "milestone";
-  }
-  if (task.goalId !== undefined) {
-    const goal = lookup.goalsById.get(task.goalId);
-    if (goal !== undefined && goal.status === "active") return "goal";
   }
   if (task.projectId !== undefined) {
     const project = lookup.projectsById.get(task.projectId);
@@ -210,7 +219,7 @@ type RankedCandidate = RankedTask | RankedHabit;
  * stale backlog (overdue more than STALE_OVERDUE_DAYS) is demoted below
  * today's habits so a large old backlog cannot dominate every recommendation.
  * Mandatory habits outrank merely contextual tasks; among contextual tasks,
- * ones anchored to an active goal, project, or milestone outrank standalone
+ * ones anchored to an active project or milestone outrank standalone
  * time blocks with no planning link; optional habits still outrank stale
  * backlog. Ranks are sparse (0,1,2,3,4,5,6) so a future split never
  * renumbers existing tiers.
@@ -310,11 +319,10 @@ function taskReason(task: Task, todayKey: string, contextKind: TaskContextKind):
     return `Scheduled ${task.scheduledTime} · ${task.priority} priority`;
   }
   // Context label mirrors the resolved link only: dangling references fall
-  // to "Available today" rather than claiming a milestone that isn't there.
+  // to "Available task" rather than claiming a milestone that isn't there.
   if (contextKind === "milestone") return `Active milestone · ${task.priority} priority`;
-  if (contextKind === "goal") return `Linked goal · ${task.priority} priority`;
   if (contextKind === "project") return `Linked project · ${task.priority} priority`;
-  return `Available today · ${task.priority} priority`;
+  return `Available task · ${task.priority} priority`;
 }
 
 function habitReason(habit: Habit): string {
@@ -381,48 +389,32 @@ function rankCandidates(input: NextStepInput): {
   skippedHabitIds: ReadonlySet<number>;
 } {
   const projects = input.projects ?? [];
-  const goalsById = new Map(input.goals.map((goal) => [goal.id, goal]));
   const projectsById = new Map(projects.map((project) => [project.id, project]));
   const milestonesById = new Map(input.milestones.map((milestone) => [milestone.id, milestone]));
-  const lookup = { goalsById, projectsById, milestonesById };
+  const lookup: ParentLookup = { projectsById, milestonesById };
   const skippedTaskIds = toSkippedTaskSet(input.skippedTaskIds);
   const skippedHabitIds = toSkippedHabitSet(input.skippedHabitIds);
 
-  const activeGoalIds = new Set(
-    input.goals.filter((goal) => goal.status === "active").map((goal) => goal.id),
-  );
-
-  // Reuse Today's membership definition as the relevance base: due today or
-  // overdue, or attached to an active milestone. Completed items stay
-  // included here and are excluded below so reopen semantics stay shared.
-  const todayRelevantById = new Map(
-    selectTodayTasks(input.tasks, {
-      milestones: input.milestones,
-      activeGoalIds,
-      todayKey: input.todayKey,
-    }).map((task) => [task.id, task]),
-  );
-
-  // Reuse schedule validation: a time-blocked task is relevant today even
-  // when it has a future due date or no milestone context.
-  for (const task of input.tasks) {
-    if (!todayRelevantById.has(task.id) && validScheduledMinutes(task.scheduledTime) !== null) {
-      todayRelevantById.set(task.id, task);
-    }
-  }
-
-  const eligibleTasks = [...todayRelevantById.values()].filter((task) =>
+  // Engine eligibility is deliberately separate from Today's due-today list
+  // (see selectTodayTasks): planning is optional, so an incomplete task with
+  // no due date, scheduled time, or milestone link is still recommendable.
+  // Completed items and work under finished parents stay excluded, and
+  // future-dated work without a schedule or milestone link stays out — a
+  // recommendation never claims urgency its data does not support.
+  const eligibleTasks = input.tasks.filter((task) =>
     !task.completed &&
     isTaskParentEligible(task, lookup) &&
     !skippedTaskIds.has(task.id) &&
     ((validDueDate(task) !== undefined && isTaskDueTodayOrOverdue(task, input.todayKey)) ||
       validScheduledMinutes(task.scheduledTime) !== null ||
-      task.milestoneId !== undefined)
+      task.milestoneId !== undefined ||
+      task.dueDate === undefined)
   );
 
   const eligibleHabits = input.habits.filter((habit) => {
     const completedDates = Array.isArray(habit.completedDates) ? habit.completedDates : [];
     return !habit.isArchived &&
+      isHabitParentEligible(habit, lookup) &&
       isHabitScheduledOnDate(habit, input.todayKey) &&
       !completedDates.includes(input.todayKey) &&
       !skippedHabitIds.has(habit.id);
@@ -463,25 +455,24 @@ export function listNextStepCandidates(
  *
  * Tier order (first match wins): fresh overdue (0) → due today (1) →
  * mandatory habit when preferred (2) → contextual task anchored to an
- * active goal, project, or milestone (3) → standalone time block (4) →
- * other habits due today (5) → stale backlog (6). Within a tier: priority,
- * then known effort (smaller first; unknown never invented), then due date
- * / scheduled time, then habit recency (longest-ago-done first), then
- * creation order and id.
+ * active project or milestone (3) → standalone time block or
+ * available undated task (4) → other habits due today (5) → stale
+ * backlog (6). Within a tier: priority, then known effort (smaller first;
+ * unknown never invented), then due date / scheduled time, then habit
+ * recency (longest-ago-done first), then creation order and id.
  *
- * Reuses existing domain logic (selectTodayTasks / isTaskOverdue /
- * isTaskDueTodayOrOverdue / isHabitScheduledOnDate / timeToMinutes /
- * diffInDays) instead of duplicating business rules. Pure and clock-free:
- * the caller supplies todayKey, so the same input always yields the same
- * output. No network, no LLM, no new storage; skips are caller-supplied and
- * in-memory only.
+ * Reuses existing domain logic (isTaskOverdue / isTaskDueTodayOrOverdue /
+ * isHabitScheduledOnDate / timeToMinutes / diffInDays) instead of
+ * duplicating business rules. Pure and clock-free: the caller supplies
+ * todayKey, so the same input always yields the same output. No network,
+ * no LLM, no new storage; skips are caller-supplied and in-memory only.
  *
  * Limitations (deliberate, not intelligence):
- * - Anchoring never widens eligibility: it only orders tasks already
- *   relevant today (due, scheduled, or milestone-linked, reusing Today's
- *   membership), so a recommendation always appears in Today's own lists.
- *   A goal-linked task with no due date or time block stays out — surfacing
- *   it would invent urgency Today itself doesn't claim.
+ * - Eligibility is wider than Today's own lists on purpose: an incomplete
+ *   task with no due date, schedule, or milestone link is recommendable as
+ *   available work ("Available task"), while Today's lists keep showing
+ *   only due, scheduled, or milestone-linked work. A recommendation therefore
+ *   claims urgency ("Overdue", "Due today") only when its data supports it.
  * - Task recency is not ranked: tasks carry no completion timestamp, so
  *   "recently completed task" cannot be derived reliably. Completed tasks
  *   are only ever excluded, never boosted or demoted by recency.
@@ -492,8 +483,8 @@ export function listNextStepCandidates(
  *   and its item mapping is ambiguous, so recency comes from habit
  *   completedDates only.
  * - Durations, due dates, and links are only echoed when present and valid;
- *   nothing is estimated or inferred. With no due, scheduled, linked, or
- *   habit work, the engine returns the honest "none" fallback.
+ *   nothing is estimated or inferred. With no available tasks or habits,
+ *   the engine returns the honest "none" fallback.
  */
 export function recommendNextStep(input: NextStepInput): NextStepRecommendation {
   const { ranked, skippedTaskIds, skippedHabitIds } = rankCandidates(input);
@@ -506,7 +497,7 @@ export function recommendNextStep(input: NextStepInput): NextStepRecommendation 
       title: "No next step — everything for today is done",
       reason: anythingSkipped
         ? "No remaining incomplete habits or tasks after hiding skipped items."
-        : "No incomplete habits or tasks are due or scheduled today.",
+        : "No incomplete habits or tasks are available right now.",
     };
   }
 

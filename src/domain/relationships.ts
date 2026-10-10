@@ -1,4 +1,5 @@
 import type { Goal, Habit, Milestone, Project, Task } from "../types";
+// Goal is referenced only in the optional legacy overload of normalizeRelationships/alignProject.
 
 export interface NormalizedRelationships {
   projects: Project[];
@@ -7,46 +8,50 @@ export interface NormalizedRelationships {
 }
 
 /**
- * Domain-level validation/normalization for Goal → Project → Milestone → Task
+ * Domain-level validation/normalization for Project → Milestone → Task
  * relationships. Never fabricates relationships and never deletes entities;
  * invalid references are detached (set to undefined) and valid ones preserved.
+ * Legacy `goalId` fields are preserved verbatim for backward compatibility
+ * (no new Goal links are created by the UI).
  */
 export function normalizeRelationships(
-  goals: Goal[],
-  projects: Project[],
-  milestones: Milestone[],
-  tasks: Task[],
+  goals: Goal[] | Project[],
+  projects: Project[] | Milestone[],
+  milestones: Milestone[] | Task[],
+  tasks?: Task[],
 ): NormalizedRelationships {
-  const goalIds = new Set(goals.map((goal) => goal.id));
-  const projectIds = new Set(projects.map((project) => project.id));
+  // Backward-compatible overload: normalizeRelationships(projects, milestones, tasks)
+  // or the legacy normalizeRelationships(goals, projects, milestones, tasks).
+  let normProjects: Project[];
+  let normMilestones: Milestone[];
+  let normTasks: Task[];
+  if (tasks === undefined) {
+    normProjects = goals as Project[];
+    normMilestones = projects as Milestone[];
+    normTasks = milestones as Task[];
+  } else {
+    normProjects = projects as Project[];
+    normMilestones = milestones as Milestone[];
+    normTasks = tasks;
+  }
+  const projectIds = new Set(normProjects.map((project) => project.id));
 
-  const normalizedProjects = projects.map((project) => {
-    if (project.goalId !== undefined && !goalIds.has(project.goalId)) {
-      return { ...project, goalId: undefined };
-    }
-    return project;
-  });
+  const normalizedProjects = normProjects.map((project) => project);
+
   const normalizedProjectById = new Map(normalizedProjects.map((project) => [project.id, project]));
 
-  const normalizedMilestones = milestones.map((milestone) => {
+  const normalizedMilestones = normMilestones.map((milestone) => {
     if (milestone.projectId !== undefined) {
       const project = normalizedProjectById.get(milestone.projectId);
       if (!project) {
-        // Milestone points to a nonexistent Project: detach it. Its own
-        // goalId must still reference an existing Goal.
+        // Milestone points to a nonexistent Project: detach it.
+        // Legacy goalId is preserved verbatim.
         return {
           ...milestone,
           projectId: undefined,
-          goalId: milestone.goalId !== undefined && goalIds.has(milestone.goalId)
-            ? milestone.goalId
-            : undefined,
         };
       }
-      // A Milestone with a Project must be consistent with that Project's Goal.
-      return { ...milestone, goalId: project.goalId };
-    }
-    if (milestone.goalId !== undefined && !goalIds.has(milestone.goalId)) {
-      return { ...milestone, goalId: undefined };
+      return milestone;
     }
     return milestone;
   });
@@ -54,10 +59,10 @@ export function normalizeRelationships(
     normalizedMilestones.map((milestone) => [milestone.id, milestone]),
   );
 
-  const normalizedTasks = tasks.map((task) => {
+  const normalizedTasks = normTasks.map((task) => {
     let milestoneId = task.milestoneId;
     let projectId = task.projectId;
-    let goalId = task.goalId;
+    const goalId = task.goalId;
 
     const milestone = milestoneId !== undefined ? normalizedMilestoneById.get(milestoneId) : undefined;
     if (milestoneId !== undefined && !milestone) {
@@ -65,20 +70,14 @@ export function normalizeRelationships(
     }
 
     if (milestone) {
-      // A Task under a Milestone resolves its Project/Goal through that
+      // A Task under a Milestone resolves its Project through that
       // Milestone, so it can never contradict the Milestone's hierarchy.
+      // Legacy goalId is preserved verbatim.
       if (milestone.projectId !== undefined) {
         projectId = milestone.projectId;
       }
-      if (milestone.goalId !== undefined) {
-        goalId = milestone.goalId;
-      }
     } else if (projectId !== undefined && !projectIds.has(projectId)) {
       projectId = undefined;
-    }
-
-    if (goalId !== undefined && !goalIds.has(goalId)) {
-      goalId = undefined;
     }
 
     if (
@@ -99,19 +98,17 @@ export function normalizeRelationships(
 }
 
 /**
- * Align a single Project with existing Goals. Detaches a Goal reference that
- * no longer exists; never deletes anything.
+ * Align a single Project. Legacy `goalId` is preserved verbatim; no new
+ * Goal links are created.
  */
-export function alignProject(project: Project, goals: Goal[]): Project {
-  if (project.goalId !== undefined && !goals.some((goal) => goal.id === project.goalId)) {
-    return { ...project, goalId: undefined };
-  }
+export function alignProject(project: Project, ..._rest: unknown[]): Project {
+  void _rest;
   return project;
 }
 
 /**
- * Align a single Milestone with its Project: a Milestone inside a Project must
- * resolve to that Project's Goal. Independent Milestones are left alone.
+ * Align a single Milestone with its Project existence. Legacy `goalId` is
+ * preserved verbatim. Independent Milestones are left alone.
  */
 export function alignMilestone(milestone: Milestone, projects: Project[]): Milestone {
   if (milestone.projectId === undefined) return milestone;
@@ -119,8 +116,7 @@ export function alignMilestone(milestone: Milestone, projects: Project[]): Miles
   if (!project) {
     return { ...milestone, projectId: undefined };
   }
-  if (milestone.goalId === project.goalId) return milestone;
-  return { ...milestone, goalId: project.goalId };
+  return milestone;
 }
 
 /**
@@ -131,7 +127,7 @@ export function alignMilestone(milestone: Milestone, projects: Project[]): Miles
 export function alignTask(task: Task, milestones: Milestone[], projects: Project[]): Task {
   let milestoneId = task.milestoneId;
   let projectId = task.projectId;
-  let goalId = task.goalId;
+  const goalId = task.goalId;
 
   if (milestoneId !== undefined) {
     const milestone = milestones.find((candidate) => candidate.id === milestoneId);
@@ -140,9 +136,6 @@ export function alignTask(task: Task, milestones: Milestone[], projects: Project
     } else {
       if (milestone.projectId !== undefined) {
         projectId = milestone.projectId;
-      }
-      if (milestone.goalId !== undefined) {
-        goalId = milestone.goalId;
       }
     }
   }
@@ -162,66 +155,42 @@ export function alignTask(task: Task, milestones: Milestone[], projects: Project
 }
 
 /**
- * Keep child relationships consistent immediately after a Project's Goal
- * changes. Milestones of the Project and Tasks of the Project (or of its
- * Milestones) resolve to the Project's new Goal — or are cleared when the
- * Project becomes independent. No entity is deleted and no new relationship
- * is fabricated beyond the inherited Goal resolution.
+ * Align a single Habit with Project existence. Dangling `projectId` links are
+ * detached (set to undefined) so the habit becomes standalone; valid links
+ * and legacy `goalId` fields are preserved verbatim. Never deletes the habit
+ * or its history.
  */
-export function propagateProjectGoalChange(
-  milestones: Milestone[],
-  tasks: Task[],
-  project: Project,
-): { milestones: Milestone[]; tasks: Task[] } {
-  const projectMilestoneIds = new Set(
-    milestones.filter((milestone) => milestone.projectId === project.id).map((milestone) => milestone.id),
-  );
+export function alignHabit(habit: Habit, projects: Project[]): Habit {
+  if (habit.projectId === undefined) return habit;
+  const project = projects.find((candidate) => candidate.id === habit.projectId);
+  if (!project) {
+    return { ...habit, projectId: undefined };
+  }
+  return habit;
+}
 
-  const nextMilestones = milestones.map((milestone) => {
-    if (milestone.projectId !== project.id) return milestone;
-    if (milestone.goalId === project.goalId) return milestone;
-    return { ...milestone, goalId: project.goalId };
-  });
-
-  const nextTasks = tasks.map((task) => {
-    const belongsToProject = task.projectId === project.id;
-    const belongsToProjectMilestone = task.milestoneId !== undefined &&
-      projectMilestoneIds.has(task.milestoneId);
-    if (!belongsToProject && !belongsToProjectMilestone) return task;
-    const projectId = belongsToProjectMilestone ? project.id : task.projectId;
-    if (task.goalId === project.goalId && projectId === task.projectId) return task;
-    return { ...task, projectId, goalId: project.goalId };
-  });
-
-  return { milestones: nextMilestones, tasks: nextTasks };
+/**
+ * Normalize Habit → Project links at the storage boundary. Same detach (not
+ * delete) semantics as Milestones/Tasks.
+ */
+export function normalizeHabitProjectLinks(habits: Habit[], projects: Project[]): Habit[] {
+  return habits.map((habit) => alignHabit(habit, projects));
 }
 
 /**
  * Keep a Milestone's Tasks consistent immediately after the Milestone moves
- * between Projects/Goals. Each child Task re-resolves its Project/Goal
- * through the updated Milestone (see alignTask) so no stale reference
- * survives the move and progress cannot count the Task under both the old
- * and new parents. `milestones` must already contain the updated Milestone.
- * No entity is deleted and no new relationship is fabricated beyond
- * inherited resolution.
+ * between Projects. Each child Task re-resolves its Project through the
+ * updated Milestone (see alignTask) so no stale reference survives the move.
+ * `milestones` must already contain the updated Milestone. Legacy `goalId`
+ * fields are preserved verbatim.
  */
 export function propagateMilestoneMove(
   tasks: Task[],
-  milestone: Pick<Milestone, "id" | "goalId" | "projectId">,
+  milestone: Pick<Milestone, "id" | "projectId"> & Partial<Pick<Milestone, "goalId">>,
   milestones: Milestone[],
   projects: Project[],
 ): Task[] {
   return tasks.map((task) =>
     task.milestoneId === milestone.id ? alignTask(task, milestones, projects) : task,
-  );
-}
-
-/**
- * Detach Habits linked to a deleted Goal without deleting the Habits.
- * Unrelated Habits are returned untouched.
- */
-export function detachHabitsFromDeletedGoal(habits: Habit[], goalId: string): Habit[] {
-  return habits.map((habit) =>
-    habit.goalId === goalId ? { ...habit, goalId: undefined } : habit,
   );
 }

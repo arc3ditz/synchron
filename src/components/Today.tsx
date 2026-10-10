@@ -1,15 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, Target, History as HistoryIcon, BarChart3 } from "lucide-react";
+import { Check, ListChecks, Play, Plus, Clock, MoreVertical, X, History as HistoryIcon, BarChart3 } from "lucide-react";
 import { CARD_SURFACE, FORM_CONTROL } from "../theme";
 import StreakBadge from "./StreakBadge";
-import type { FocusSessionRecord, Goal, Habit, Milestone, Project, Task } from "../types";
+import type { FocusSessionRecord, Habit, Milestone, Project, Task } from "../types";
 import {
   getTodayKey,
   isHabitScheduledOnDate,
   calculateStreak,
   formatFullDate,
 } from "../utils/dates";
-import { calculateGoalProgress } from "../domain/goals";
 import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
 import { listNextStepCandidates, nextStepKey, recommendNextStep, isTaskStaleBacklog } from "../domain/nextStep";
 import { getWelcomeBackSubtitle, getWelcomeBackTitle } from "../domain/welcomeBack";
@@ -22,7 +21,6 @@ type TodayProps = {
   viewMode: "grid" | "list";
   habits: Habit[];
   tasks: Task[];
-  goals: Goal[];
   milestones: Milestone[];
   projects?: Project[];
   focusSessions: FocusSessionRecord[];
@@ -30,12 +28,12 @@ type TodayProps = {
   onToggleTask: (id: string) => void;
   onAddTask: (data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onQuickTaskFocusReady?: (focus: (() => void) | null) => void;
-  onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
+  onStartFocus: (entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }) => void;
   // Low-friction start for the hero recommendation: links the item on the
   // existing Focus Timer with a short commitment and auto-starts it.
   onQuickFocus: (entity: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number }) => void;
   onNavigateToHabits: () => void;
-  onNavigateToGoals: () => void;
+  onNavigateToProjects: () => void;
   onNavigateToHistory: () => void;
   onNavigateToAnalytics: () => void;
   streakFreeze: boolean;
@@ -333,20 +331,6 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-muted)",
     overflowWrap: "anywhere",
   },
-  goalTag: {
-    display: "inline-flex",
-    alignItems: "center",
-    width: "fit-content",
-    maxWidth: "100%",
-    padding: "var(--space-1) var(--space-2)",
-    border: "1px solid transparent",
-    borderRadius: "var(--radius-md)",
-    background: "var(--accent-wash)",
-    color: "var(--color-accent)",
-    fontSize: "var(--type-xs)",
-    fontWeight: "var(--font-medium)",
-    overflowWrap: "anywhere",
-  },
   milestoneTag: {
     display: "inline-flex",
     alignItems: "center",
@@ -631,49 +615,9 @@ const styles: Record<string, CSSProperties> = {
     paddingTop: 16,
     borderTop: "1px solid var(--border-color)",
   },
-  // Goal context section (relevant Goals only; rendered by renderGoalProgressSnapshot)
-  goalProgressSection: {
-    marginBottom: "var(--space-6)",
-  },
-  goalProgressList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  goalProgressItem: {
-    padding: "var(--space-2) 0",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  goalProgressHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  goalProgressTitle: {
-    fontSize: 14,
-    fontWeight: 500,
-    color: "var(--text-body)",
-  },
-  goalProgressPercent: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "var(--accent-teal)",
-  },
-  goalProgressBar: {
-    height: 6,
-    background: "var(--bg-inset)",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  goalProgressFill: {
-    height: "100%",
-    background: "var(--accent-teal)",
-    transition: "width 0.3s ease",
-  },
 };
 
-function HabitMetadata({ habit, streak, goalTitle }: { habit: Habit; streak: number; goalTitle?: string }) {
+function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
   return (
     <div style={styles.habitMeta}>
       <span
@@ -687,7 +631,6 @@ function HabitMetadata({ habit, streak, goalTitle }: { habit: Habit; streak: num
         {habit.priority}
       </span>
       {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
-      {goalTitle && <span style={styles.goalTag}>{goalTitle}</span>}
       <StreakBadge streak={streak} />
     </div>
   );
@@ -697,7 +640,6 @@ function Today({
   viewMode,
   habits,
   tasks,
-  goals,
   milestones,
   projects,
   focusSessions,
@@ -708,7 +650,7 @@ function Today({
   onStartFocus,
   onQuickFocus,
   onNavigateToHabits,
-  onNavigateToGoals,
+  onNavigateToProjects,
   onNavigateToHistory,
   onNavigateToAnalytics,
   streakFreeze,
@@ -721,7 +663,7 @@ function Today({
   const todayKey = getTodayKey(dayResetHour);
   const today = useMemo(() => new Date(), []);
   // Session-only dismissal: hides the calm welcome for this mount without
-  // touching goals, habits, tasks, or progress.
+  // touching habits, tasks, or progress.
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [schedulingItem, setSchedulingItem] = useState<{ type: 'habit' | 'task'; id: string | number } | null>(null);
@@ -737,13 +679,9 @@ function Today({
     );
   }, [habits, todayKey]);
 
-  const activeGoalIds = useMemo(
-    () => new Set(goals.filter((goal) => goal.status === "active").map((goal) => goal.id)),
-    [goals],
-  );
   const todayTasks = useMemo(
-    () => sortTodayTasks(selectTodayTasks(tasks, { milestones, activeGoalIds, todayKey }), todayKey),
-    [tasks, milestones, activeGoalIds, todayKey],
+    () => sortTodayTasks(selectTodayTasks(tasks, { milestones, todayKey }), todayKey),
+    [tasks, milestones, todayKey],
   );
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
 
@@ -754,7 +692,6 @@ function Today({
     () => buildDailyTimeline({
       habits: todayHabits,
       tasks: todayTasks,
-      goals,
       milestones,
       projects,
       focusSessions,
@@ -762,7 +699,7 @@ function Today({
       dayResetHour,
       now: today,
     }),
-    [todayHabits, todayTasks, goals, milestones, projects, focusSessions, todayKey, dayResetHour, today],
+    [todayHabits, todayTasks, milestones, projects, focusSessions, todayKey, dayResetHour, today],
   );
 
   // Completed tasks drop out of the upcoming schedule the moment they are
@@ -842,12 +779,12 @@ function Today({
     setQuickTaskTitle("");
   }
 
-  // Single quiet "why" line for a Task: Goal → Project → Milestone in
+  // Single quiet "why" line for a Task: Project → Milestone in
   // planning-model order, skipping levels the Task has no link to.
   // Returns null when the Task is standalone so the row stays clean.
   function taskChain(task: Task): string | null {
-    const { goal, project, milestone } = resolveTaskContext(task, { goals, projects, milestones });
-    const parts = [goal?.title, project?.name, milestone?.title].filter(
+    const { project, milestone } = resolveTaskContext(task, { projects, milestones });
+    const parts = [project?.name, milestone?.title].filter(
       (part): part is string => part !== undefined && part !== "",
     );
     return parts.length > 0 ? parts.join(" › ") : null;
@@ -931,12 +868,11 @@ function Today({
   const nextStepBaseInput = useMemo(() => ({
     habits,
     tasks,
-    goals,
     milestones,
     projects,
     todayKey,
     preferMandatoryHabits: showMandatoryHabitsInImportantItems,
-  }), [habits, tasks, goals, milestones, projects, todayKey, showMandatoryHabitsInImportantItems]);
+  }), [habits, tasks, milestones, projects, todayKey, showMandatoryHabitsInImportantItems]);
 
   // Session-only skip/choice state: no new storage, so skips never persist
   // beyond this mount. Completing, deleting, or invalidating the underlying
@@ -1096,20 +1032,6 @@ function Today({
     );
   }
 
-  // Goal Progress Snapshot
-  const activeGoals = useMemo(() => {
-    return goals.filter((goal) => goal.status === "active");
-  }, [goals]);
-
-  const goalProgressData = useMemo(() => {
-    return activeGoals.map((goal) => {
-      const progress = calculateGoalProgress(goal, milestones, tasks, habits, streakFreeze, dayResetHour, projects);
-      return {
-        goal,
-        progress,
-      };
-    });
-  }, [activeGoals, milestones, tasks, habits, streakFreeze, dayResetHour, projects]);
 
   // One hero card driven by the Next Step engine: title, truthful reason,
   // and duration only when the underlying item actually carries one. Start
@@ -1169,9 +1091,6 @@ function Today({
       : undefined;
     const chain = linkedTask ? taskChain(linkedTask) : null;
     const streak = linkedHabit ? calculateStreak(linkedHabit, streakFreeze, dayResetHour) : 0;
-    const habitGoalTitle = linkedHabit?.goalId
-      ? goals.find((goal) => goal.id === linkedHabit.goalId)?.title
-      : undefined;
     return (
       <section aria-label="Next step" aria-live="polite" data-testid="next-step" style={styles.nextUp}>
         <div style={styles.nextUpInfo}>
@@ -1191,7 +1110,6 @@ function Today({
             <div style={{ ...styles.nextUpMeta, marginTop: 6 }}>
               <span>{linkedHabit.priority}</span>
               {linkedHabit.category && <span>{linkedHabit.category}</span>}
-              {habitGoalTitle && <span>{habitGoalTitle}</span>}
               <StreakBadge streak={streak} />
             </div>
           )}
@@ -1252,54 +1170,6 @@ function Today({
     );
   }
 
-  function renderGoalProgressSnapshot() {
-    // Context, not a second Goals page: only Goals connected to today's work.
-    const relevantGoalIds = new Set<string>();
-    for (const task of todayTasks) {
-      const { goal } = resolveTaskContext(task, { goals, projects, milestones });
-      if (goal) {
-        relevantGoalIds.add(goal.id);
-      } else if (task.goalId) {
-        relevantGoalIds.add(task.goalId);
-      } else if (task.milestoneId) {
-        const milestoneGoalId = milestones.find((item) => item.id === task.milestoneId)?.goalId;
-        if (milestoneGoalId) relevantGoalIds.add(milestoneGoalId);
-      }
-    }
-    for (const habit of todayHabits) {
-      if (habit.goalId) relevantGoalIds.add(habit.goalId);
-    }
-    const relevant = goalProgressData.filter(({ goal }) => relevantGoalIds.has(goal.id));
-    if (relevant.length === 0) return null;
-
-    return (
-      <div style={styles.goalProgressSection}>
-        <p style={styles.eyebrow}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Target size={14} />
-            <span>Working toward</span>
-          </span>
-        </p>
-        <div style={styles.goalProgressList}>
-          {relevant.map(({ goal, progress }) => (
-            <div key={goal.id} style={styles.goalProgressItem}>
-              <div style={styles.goalProgressHeader}>
-                <span style={styles.goalProgressTitle}>{goal.title}</span>
-                <span style={styles.goalProgressPercent}>{progress.percent}%</span>
-              </div>
-              <div style={styles.goalProgressBar}>
-                <div style={{ ...styles.goalProgressFill, width: `${progress.percent}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-        <button type="button" style={styles.textButton} onClick={onNavigateToGoals}>
-          Open Goals →
-        </button>
-      </div>
-    );
-  }
-
   function renderTimelineBlock(block: TimelineBlock) {
     if (block.kind === "session") {
       return (
@@ -1312,7 +1182,6 @@ function Today({
             onClick={() => onStartFocus({
               taskId: block.taskId,
               habitId: block.habitId,
-              goalId: block.goalId,
               title: block.title,
             })}
             aria-label={`Start Focus on ${block.title}`}
@@ -1440,7 +1309,7 @@ function Today({
     closeScheduleModal();
   };
 
-  if (todayHabits.length === 0 && todayTasks.length === 0 && activeGoals.length === 0) {
+  if (todayHabits.length === 0 && todayTasks.length === 0) {
     return (
       <div style={styles.page}>
         <div style={styles.header}>
@@ -1482,8 +1351,8 @@ function Today({
                 <span>Start Focus</span>
               </span>
             </button>
-            <button type="button" style={styles.textButton} onClick={onNavigateToGoals}>
-              Create a goal →
+            <button type="button" style={styles.textButton} onClick={onNavigateToProjects}>
+              Open Projects →
             </button>
           </div>
         </div>
@@ -1527,8 +1396,6 @@ function Today({
       {renderNextStep()}
 
       {renderCompletionConfirmation()}
-
-      {renderGoalProgressSnapshot()}
 
       <div style={styles.section}>
         <p style={styles.eyebrow}>Tasks · {pendingTodayTasks.length} open</p>
@@ -1602,10 +1469,7 @@ function Today({
           ) : todayHabits.map((habit) => {
             const isCompleted = habit.completedDates.includes(todayKey);
             const streak = calculateStreak(habit, streakFreeze, dayResetHour);
-            const habitGoalTitle = habit.goalId
-              ? goals.find((goal) => goal.id === habit.goalId)?.title
-              : undefined;
-            
+                    
             return (
               <div
                 key={habit.id}
@@ -1638,7 +1502,7 @@ function Today({
                   >
                     {habit.name}
                   </h3>
-                  <HabitMetadata habit={habit} streak={streak} goalTitle={habitGoalTitle} />
+                  <HabitMetadata habit={habit} streak={streak} />
                 </div>
                 {!isCompleted && (
                   <>
@@ -1696,10 +1560,6 @@ function Today({
           <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHabits}>
             <ListChecks size={16} />
             Configure Habits
-          </button>
-          <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToGoals}>
-            <Target size={16} />
-            Create Goals
           </button>
           <button className="today-quick-action" style={styles.quickActionButton} onClick={onNavigateToHistory}>
             <HistoryIcon size={16} />

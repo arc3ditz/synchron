@@ -3,7 +3,7 @@
  * Context-aware notifications based on existing habit data
  */
 
-import type { AppSettings, Habit } from "../types";
+import type { AppSettings, Habit, Project } from "../types";
 import { getTodayKey, isHabitScheduledOnDate } from "../utils/dates.ts";
 import { onAction, registerActionTypes, sendNotification } from "@tauri-apps/plugin-notification";
 
@@ -278,16 +278,35 @@ function getHabitCompletionPattern(habit: Habit): number | null {
 }
 
 /**
+ * Habits linked to a finished (`completed`/`archived`) Project are silenced so
+ * ending a Project stops its temporary-habit nudges. Dangling `projectId`
+ * links stay eligible (standalone). `projects` is optional so existing callers
+ * without project context keep today's behavior.
+ */
+export function isHabitNotificationEligible(
+  habit: Pick<Habit, "projectId">,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
+): boolean {
+  if (habit.projectId === undefined || projects === undefined) return true;
+  const project = projects.find((candidate) => candidate.id === habit.projectId);
+  if (!project) return true;
+  return project.status !== "completed" && project.status !== "archived";
+}
+
+/**
  * Determine if a habit timing notification should be sent
  */
 export function shouldSendHabitTimingNotification(
   habit: Habit,
   currentHour: number,
-  resetHour: number
+  resetHour: number,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
 ): boolean {
   // Skip if archived
   if (habit.isArchived) return false;
-  
+
+  // Skip habits under a finished Project (temporary habits end with it).
+  if (!isHabitNotificationEligible(habit, projects)) return false;
   // Skip if completed today
   const todayKey = getTodayKey(resetHour);
   if (habit.completedDates.includes(todayKey)) return false;
@@ -345,6 +364,7 @@ function rankIncompleteHabits(
   habits: Habit[],
   resetHour: number,
   currentHour: number,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
 ): Habit[] {
   const todayKey = getTodayKey(resetHour);
 
@@ -352,6 +372,7 @@ function rankIncompleteHabits(
   const incompleteHabits = habits.filter(
     (habit) =>
       !habit.isArchived &&
+      isHabitNotificationEligible(habit, projects) &&
       !habit.completedDates.includes(todayKey) &&
       isHabitScheduledOnDate(habit, todayKey),
   );
@@ -384,8 +405,9 @@ export function getIncompletePriorityHabit(
   habits: Habit[],
   resetHour: number,
   currentHour: number,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
 ): Habit | null {
-  return rankIncompleteHabits(habits, resetHour, currentHour)[0] ?? null;
+  return rankIncompleteHabits(habits, resetHour, currentHour, projects)[0] ?? null;
 }
 
 /**
@@ -394,9 +416,10 @@ export function getIncompletePriorityHabit(
 export function shouldSendFocusSuggestion(
   habits: Habit[],
   resetHour: number,
-  currentHour: number
+  currentHour: number,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
 ): boolean {
-  const habit = getIncompletePriorityHabit(habits, resetHour, currentHour);
+  const habit = getIncompletePriorityHabit(habits, resetHour, currentHour, projects);
   return habit !== null;
 }
 
@@ -458,6 +481,7 @@ export function getIntelligentNotification(
   currentHour: number,
   defaultFocusDuration: number,
   settings: IntelligentNotificationSettings,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
 ): IntelligentNotification | null {
   if (!settings.enableIntelligentNotifications || getIsFocusTimerRunning()) return null;
 
@@ -474,15 +498,15 @@ export function getIntelligentNotification(
       ) {
         continue;
       }
-      if (shouldSendHabitTimingNotification(habit, currentHour, resetHour)) {
+      if (shouldSendHabitTimingNotification(habit, currentHour, resetHour, projects)) {
         return generateHabitTimingNotification(habit, defaultFocusDuration);
       }
     }
   }
 
   // Check focus suggestion
-  if (settings.incompleteHabitReminders && shouldSendFocusSuggestion(habits, resetHour, currentHour)) {
-    const ranked = rankIncompleteHabits(habits, resetHour, currentHour);
+  if (settings.incompleteHabitReminders && shouldSendFocusSuggestion(habits, resetHour, currentHour, projects)) {
+    const ranked = rankIncompleteHabits(habits, resetHour, currentHour, projects);
     const habit = ranked.find(
       (candidate) =>
         !sentIntelligentNotificationKeys.has(

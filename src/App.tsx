@@ -35,7 +35,6 @@ import type { PaletteCommand } from "./domain/commandPalette";
 import History from "./components/History";
 import Analytics from "./components/Analytics";
 import Today from "./components/Today";
-import Goals from "./components/Goals";
 import Projects from "./components/Projects";
 import StreakBadge from "./components/StreakBadge";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
@@ -52,7 +51,6 @@ import type {
   View,
   AppSettings,
   Habit,
-  Goal,
   Milestone,
   Task,
   FocusSessionRecord,
@@ -63,8 +61,6 @@ import {
   STORAGE_KEYS,
   loadStorageData,
   saveStorageData,
-  loadGoals,
-  saveGoals,
   loadTasks,
   saveTasks,
   loadMilestones,
@@ -74,38 +70,32 @@ import {
   saveProjects,
 } from "./utils/storage";
 import {
-  createGoal,
-  updateGoal,
-  updateGoalStatus,
   createMilestone,
   updateMilestone,
   toggleMilestone,
   deleteMilestone,
   detachTasksFromDeletedMilestone,
-  detachMilestonesFromDeletedGoal,
-  detachTasksFromDeletedGoal,
-  disassociateGoalFocusSessions,
 } from "./domain/goals";
 import {
   createProject,
   updateProject,
   updateProjectStatus,
   deleteProject,
+  detachHabitsFromDeletedProject,
+  archiveHabitsForFinishedProject,
   detachMilestonesFromDeletedProject,
   detachTasksFromDeletedProject,
-  detachGoalFromProjects,
   disassociateProjectFocusSessions,
 } from "./domain/projects";
 import { createTask, completeTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
 import { buildFocusSessionRecord, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
 import {
+  alignHabit,
   alignMilestone,
   alignProject,
   alignTask,
-  detachHabitsFromDeletedGoal,
   normalizeRelationships,
   propagateMilestoneMove,
-  propagateProjectGoalChange,
 } from "./domain/relationships";
 import {
   getTodayKey,
@@ -675,11 +665,6 @@ const styles: Record<string, CSSProperties> = {
     padding: "2px var(--space-2)",
     whiteSpace: "nowrap",
   },
-  habitGoalLink: {
-    color: "var(--text-muted)",
-    fontSize: 12,
-    overflowWrap: "anywhere",
-  },
   categoryManageButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1030,6 +1015,13 @@ function App() {
   );
   const lastLogicalDateKeyRef = useRef(getTodayKey(appSettings.dayResetHour));
 
+  // Normalize Project → Milestone → Task relationships at the
+  // storage loading boundary so invalid references are detached safely.
+  // Legacy goalId fields are preserved verbatim.
+  const [initialRelationships] = useState(() =>
+    normalizeRelationships(loadProjects(), loadMilestones(), loadTasks()),
+  );
+
   const [habits, setHabits] = useState<Habit[]>(() => {
     const localLoadHabits = (): Habit[] => {
       const parsed = loadStorageData<Array<Partial<Habit> & { id: number; name: string }>>(STORAGE_KEYS.HABITS, []);
@@ -1050,6 +1042,7 @@ function App() {
           name: item.name,
           createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
           goalId: typeof item.goalId === "string" ? item.goalId : undefined,
+          projectId: typeof item.projectId === "string" ? item.projectId : undefined,
           priority: item.priority === "Mandatory" ? "Mandatory" : "Optional",
           type: "Daily",
           frequencyType:
@@ -1073,14 +1066,10 @@ function App() {
         };
       });
     };
-    return localLoadHabits();
+    // Dangling habit → Project links (Project deleted before this link
+    // existed) detach to standalone here; the habit and its history are kept.
+    return localLoadHabits().map((habit) => alignHabit(habit, initialRelationships.projects));
   });
-  // Normalize Goal → Project → Milestone → Task relationships at the
-  // storage loading boundary so invalid references are detached safely.
-  const [initialRelationships] = useState(() =>
-    normalizeRelationships(loadGoals(), loadProjects(), loadMilestones(), loadTasks()),
-  );
-  const [goals, setGoals] = useState<Goal[]>(loadGoals);
   const [projects, setProjects] = useState<Project[]>(() => initialRelationships.projects);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>(() => initialRelationships.tasks);
@@ -1099,21 +1088,21 @@ function App() {
     });
   });
   const [newHabit, setNewHabit] = useState("");
-  const [newGoalId, setNewGoalId] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("Optional");
   const [newFrequencyType, setNewFrequencyType] = useState<FrequencyType>("daily");
   const [newCustomDays, setNewCustomDays] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newProjectId, setNewProjectId] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
-  const [editingGoalId, setEditingGoalId] = useState("");
   const [editingPriority, setEditingPriority] = useState<Priority>("Optional");
   const [editingFrequencyType, setEditingFrequencyType] = useState<FrequencyType>("daily");
   const [editingCustomDays, setEditingCustomDays] = useState<string[]>([]);
   const [editingCategory, setEditingCategory] = useState("");
   const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [editingProjectId, setEditingProjectId] = useState("");
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
   const [habitsPopover, setHabitsPopover] = useState<HabitsPopover>(null);
@@ -1130,6 +1119,7 @@ function App() {
   // refs keeps the interval cadence steady: editing or completing a habit no
   // longer resets the timer or fires an immediate extra check.
   const habitsRef = useRef(habits);
+  const projectsRef = useRef(projects);
   const appSettingsRef = useRef(appSettings);
   const registerTimerShortcut = useCallback((handler: (() => boolean) | null) => {
     timerShortcutRef.current = handler;
@@ -1163,7 +1153,8 @@ function App() {
   const [initialFocusEntityId, setInitialFocusEntityId] = useState<{
     taskId?: string;
     habitId?: number;
-    goalId?: string;
+    projectId?: string;
+    milestoneId?: string;
     title?: string;
   } | undefined>(undefined);
   // One-shot auto-start for the existing Focus Timer, shared by
@@ -1184,7 +1175,7 @@ function App() {
   // Gentle restart: decide once per launch whether this is a return after a
   // meaningful gap. Derived only from reliable local data (last-seen day,
   // habit completions, focus sessions); missing or invalid data falls back
-  // to the normal Today experience. Nothing here resets goals, habits,
+  // to the normal Today experience. Nothing here resets habits,
   // tasks, or progress — it only selects a calm banner.
   const [welcomeBack] = useState<{ daysAway: number } | null>(() => {
     try {
@@ -1271,10 +1262,6 @@ function App() {
   }, [appSettings.dayResetHour]);
 
   useEffect(() => {
-    saveGoals(goals);
-  }, [goals]);
-
-  useEffect(() => {
     saveProjects(projects);
   }, [projects]);
 
@@ -1302,10 +1289,10 @@ function App() {
     saveStorageData("synchron-sidebar-collapsed", sidebarCollapsed);
   }, [sidebarCollapsed]);
 
-  // Shared Milestone/Task handlers — used by both the Goals and Projects views
+  // Shared Milestone/Task handlers — used by the Projects and Tasks views
   // so there is exactly one wiring of the domain logic.
   function handleAddProject(data: Omit<Project, "id" | "createdAt" | "status">) {
-    setProjects((current) => [...current, alignProject(createProject(data), goals)]);
+    setProjects((current) => [...current, alignProject(createProject(data))]);
   }
 
   function handleAddTask(data: Omit<Task, "id" | "createdAt" | "completed">) {
@@ -1349,7 +1336,7 @@ function App() {
     // A Milestone is the source of truth for its Tasks' inherited links:
     // re-resolve child Tasks when the Milestone moves so no stale reference
     // survives that progress would count under both old and new parents.
-    if (updatedMilestone.projectId !== existing.projectId || updatedMilestone.goalId !== existing.goalId) {
+    if (updatedMilestone.projectId !== existing.projectId) {
       setTasks((current) => propagateMilestoneMove(current, updatedMilestone, nextMilestones, projects));
     }
   }
@@ -1390,6 +1377,10 @@ function App() {
   }, [habits]);
 
   useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  useEffect(() => {
     appSettingsRef.current = appSettings;
   }, [appSettings]);
 
@@ -1411,6 +1402,7 @@ function App() {
         currentHour,
         latestSettings.defaultFocusDuration,
         latestSettings,
+        projectsRef.current,
       );
 
       if (notification) {
@@ -1621,7 +1613,7 @@ function App() {
           "2": "Habits",
           "3": "Tasks",
           "4": "Timer",
-          "5": "goals",
+          "5": "Projects",
           "6": "History",
           "7": "Analytics",
           ",": "Settings",
@@ -1726,7 +1718,7 @@ function App() {
     setPaletteOpen(true);
   }
 
-  function startFocusSession(entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) {
+  function startFocusSession(entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }) {
     setInitialFocusEntityId(entityId);
     navigateToView("Timer");
   }
@@ -1890,23 +1882,25 @@ function App() {
       id: createHabitId(),
       name,
       createdAt: getTodayKey(appSettings.dayResetHour),
-      goalId: newGoalId || undefined,
       category: category || undefined,
       priority: newPriority,
       type: "Daily",
       frequencyType: newFrequencyType,
       customDays: newFrequencyType === "custom" ? newCustomDays : [],
       completedDates: [],
+      ...(newProjectId !== "" && projects.some((project) => project.id === newProjectId)
+        ? { projectId: newProjectId }
+        : {}),
     };
 
     setHabits([...habits, habit]);
     setNewHabit("");
-    setNewGoalId("");
     setNewPriority("Optional");
     setNewFrequencyType("daily");
     setNewCustomDays([]);
     setNewCategory("");
     setNewCategoryName("");
+    setNewProjectId("");
   }
 
   function toggleHabit(id: number, dateKey?: string) {
@@ -1964,23 +1958,24 @@ function App() {
   function startEdit(habit: Habit) {
     setEditingId(habit.id);
     setEditingName(habit.name);
-    setEditingGoalId(habit.goalId ?? "");
     setEditingPriority(habit.priority);
     setEditingFrequencyType(getFrequencyType(habit));
     setEditingCustomDays(habit.customDays ?? []);
     setEditingCategory(habit.category ?? "");
     setEditingCategoryName("");
+    setEditingProjectId(habit.projectId ?? "");
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditingName("");
-    setEditingGoalId("");
+    // legacy habit.goalId preserved verbatim; no Goal selector in the UI.
     setEditingPriority("Optional");
     setEditingFrequencyType("daily");
     setEditingCustomDays([]);
     setEditingCategory("");
     setEditingCategoryName("");
+    setEditingProjectId("");
   }
 
   function saveEdit(id: number) {
@@ -2000,7 +1995,11 @@ function App() {
         return {
           ...habit,
           name,
-          goalId: editingGoalId || undefined,
+          goalId: habit.goalId,
+          projectId: editingProjectId !== "" &&
+            projects.some((project) => project.id === editingProjectId)
+            ? editingProjectId
+            : undefined,
           priority: editingPriority,
           type: "Daily",
           frequencyType: editingFrequencyType,
@@ -2182,9 +2181,6 @@ function App() {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
     const isEditing = editingId === habit.id;
-    const linkedGoal = habit.goalId
-      ? goals.find((goal) => goal.id === habit.goalId)
-      : undefined;
     const todayKey = getTodayKey(appSettings.dayResetHour);
     const isFrozen = habit.streakFreezeDates?.includes(todayKey) ?? false;
 
@@ -2244,18 +2240,21 @@ function App() {
                 styles.editSelect,
                 styles.editInput,
               )}
-              <select
-                style={styles.editSelect}
-                value={editingGoalId}
-                onChange={(event) => setEditingGoalId(event.target.value)}
-                aria-label="Linked Goal (optional)"
-                title="Link this habit to a goal it supports (optional)"
-              >
-                <option value="">No Goal — standalone habit</option>
-                {goals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>{goal.title}</option>
-                ))}
-              </select>
+              {projects.length > 0 && (
+                <select
+                  style={styles.editSelect}
+                  value={editingProjectId}
+                  onChange={(event) => setEditingProjectId(event.target.value)}
+                  aria-label="Project (optional)"
+                >
+                  <option value="">No Project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="habit-cell-actions">
               <button
@@ -2300,9 +2299,9 @@ function App() {
             {habit.category && (
               <span style={styles.categoryBadge}>{habit.category}</span>
             )}
-            {linkedGoal && (
-              <span style={styles.habitGoalLink} title={`Supports goal: ${linkedGoal.title}`}>
-                → {linkedGoal.title}
+            {habit.projectId !== undefined && (
+              <span style={styles.categoryBadge}>
+                {projects.find((project) => project.id === habit.projectId)?.name ?? "Project"}
               </span>
             )}
           </div>
@@ -2407,9 +2406,6 @@ function App() {
     const doneOnSelectedDate = habit.completedDates.includes(selectedDateKey);
     const progress = doneOnSelectedDate ? 100 : 0;
     const streak = calculateStreak(habit, streakFreeze, appSettings.dayResetHour);
-    const linkedGoal = habit.goalId
-      ? goals.find((goal) => goal.id === habit.goalId)
-      : undefined;
     const todayKey = getTodayKey(appSettings.dayResetHour);
     const isFrozen = habit.streakFreezeDates?.includes(todayKey) ?? false;
 
@@ -2425,9 +2421,9 @@ function App() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={styles.gridCardName} title={habit.name}>{habit.name}</div>
             {habit.category && <span style={styles.categoryBadge}>{habit.category}</span>}
-            {linkedGoal && (
-              <span style={{ ...styles.habitGoalLink, display: "block", marginTop: 2 }} title={`Supports goal: ${linkedGoal.title}`}>
-                → {linkedGoal.title}
+            {habit.projectId !== undefined && (
+              <span style={styles.categoryBadge}>
+                {projects.find((project) => project.id === habit.projectId)?.name ?? "Project"}
               </span>
             )}
           </div>
@@ -2504,7 +2500,7 @@ function App() {
     { id: "go-habits", label: "Go to My Habits", hint: `${shortcutKey}2`, keywords: "navigate view habits" },
     { id: "go-tasks", label: "Go to Tasks", hint: `${shortcutKey}3`, keywords: "navigate view tasks" },
     { id: "go-timer", label: "Go to Timer", hint: `${shortcutKey}4`, keywords: "navigate view focus timer" },
-    { id: "go-goals", label: "Go to Goals", hint: `${shortcutKey}5`, keywords: "navigate view goals" },
+    { id: "go-projects", label: "Go to Projects", hint: `${shortcutKey}5`, keywords: "navigate view projects" },
     { id: "go-history", label: "Go to History", hint: `${shortcutKey}6`, keywords: "navigate view history" },
     { id: "go-analytics", label: "Go to Analytics", hint: `${shortcutKey}7`, keywords: "navigate view analytics" },
     { id: "open-settings", label: "Open Settings", hint: `${shortcutKey},`, keywords: "navigate preferences settings" },
@@ -2528,8 +2524,8 @@ function App() {
       case "go-timer":
         navigateToView("Timer");
         break;
-      case "go-goals":
-        navigateToView("goals");
+      case "go-projects":
+        navigateToView("Projects");
         break;
       case "go-history":
         navigateToView("History");
@@ -2609,13 +2605,13 @@ function App() {
               <span className="sidebar-shortcut">{shortcutKey}4</span>
             </button>
             <button
-              className={`sidebar-item ${view === "goals" ? "active" : ""}`}
-              onClick={() => navigateToView("goals")}
-              aria-current={view === "goals" ? "page" : undefined}
-              title="Goals"
+              className={`sidebar-item ${view === "Projects" ? "active" : ""}`}
+              onClick={() => navigateToView("Projects")}
+              aria-current={view === "Projects" ? "page" : undefined}
+              title="Projects"
             >
               <Target size={18} />
-              <span>Goals</span>
+              <span>Projects</span>
               <span className="sidebar-shortcut">{shortcutKey}5</span>
             </button>
           <button
@@ -2670,7 +2666,6 @@ function App() {
               viewMode={appSettings.viewMode}
               habits={habits}
               tasks={tasks}
-              goals={goals}
               milestones={milestones}
               projects={projects}
               focusSessions={focusSessions}
@@ -2687,7 +2682,7 @@ function App() {
                 startQuickFocus(entity);
               }}
               onNavigateToHabits={() => navigateToView("Habits")}
-              onNavigateToGoals={() => navigateToView("goals")}
+              onNavigateToProjects={() => navigateToView("Projects")}
               onNavigateToHistory={() => navigateToView("History")}
               onNavigateToAnalytics={() => navigateToView("Analytics")}
               streakFreeze={streakFreeze}
@@ -3028,18 +3023,23 @@ function App() {
                   styles.habitPropertySelect,
                   styles.categoryInput,
                 )}
-                <select
-                  style={styles.habitPropertySelect}
-                  value={newGoalId}
-                  onChange={(event) => setNewGoalId(event.target.value)}
-                  aria-label="Linked Goal (optional)"
-                  title="Link this habit to a goal it supports (optional)"
-                >
-                  <option value="">No Goal — standalone habit</option>
-                  {goals.map((goal) => (
-                    <option key={goal.id} value={goal.id}>{goal.title}</option>
-                  ))}
-                </select>
+                {projects.length > 0 && (
+                  <select
+                    style={styles.habitPropertySelect}
+                    value={newProjectId}
+                    onChange={(event) => setNewProjectId(event.target.value)}
+                    aria-label="Project (optional)"
+                  >
+                    <option value="">No Project</option>
+                    {projects
+                      .filter((project) => project.status !== "completed" && project.status !== "archived")
+                      .map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   style={{ ...styles.addButton, background: "transparent", border: "1px solid transparent", color: "var(--text-secondary)", fontSize: 12 }}
@@ -3066,7 +3066,7 @@ function App() {
                 {activeFilterCount > 0 || searchQuery !== ""
                   ? "No habits match these filters."
                   : habits.length === 0
-                  ? "No habits yet — name your first small habit above. Frequency, category, and goals can come later."
+                  ? "No habits yet — name your first small habit above. Frequency and category can come later."
                   : currentCategory !== ALL_CATEGORIES && !habits.some(matchesCategory)
                   ? `No habits in ${currentCategory} yet.`
                   : archivedHabits.length > 0
@@ -3184,7 +3184,6 @@ function App() {
           >
             <Tasks
               tasks={tasks}
-              goals={goals}
               milestones={milestones}
               projects={projects}
               dayResetHour={appSettings.dayResetHour}
@@ -3215,7 +3214,6 @@ function App() {
               onQuickAdjustStepChange={(minutes) =>
                 setAppSettings((current) => ({ ...current, quickAdjustStepMinutes: minutes }))
               }
-              goals={goals}
               milestones={milestones}
               tasks={tasks}
               projects={projects}
@@ -3259,7 +3257,6 @@ function App() {
             <Analytics
               habits={habits}
               tasks={tasks}
-              goals={goals}
               focusSessions={focusSessions}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
@@ -3267,63 +3264,6 @@ function App() {
             />
           </div>
 
-          <div
-            style={{
-              display: view === "goals" ? "flex" : "none",
-              flexDirection: "column",
-              alignItems: "center",
-              width: "100%",
-            }}
-          >
-            <Goals
-              goals={goals}
-              tasks={tasks}
-              habits={habits}
-              focusSessions={focusSessions}
-              streakFreeze={streakFreeze}
-              dayResetHour={appSettings.dayResetHour}
-              milestones={milestones}
-              onAddGoal={(data) => setGoals((current) => [...current, createGoal(data)])}
-              onToggleGoalArchive={(goalId) =>
-                setGoals((current) => current.map((goal) =>
-                  goal.id === goalId
-                    ? updateGoalStatus(goal, goal.status === "archived" ? "active" : "archived")
-                    : goal,
-                ))
-              }
-              onEditGoal={(goalId, data) =>
-                setGoals((current) => current.map((goal) =>
-                  goal.id === goalId ? updateGoal(goal, data) : goal,
-                ))
-              }
-              onDeleteGoal={(goalId) => {
-                // Only the Goal itself is deleted: its Milestones, Tasks,
-                // Projects, and Habits are detached (kept), matching the
-                // Project/Milestone deletion conventions. Focus Sessions keep
-                // their surviving child links; only the Goal link is cleared.
-                setFocusSessions((current) => disassociateGoalFocusSessions(
-                  current,
-                  goalId,
-                  new Set<string>(),
-                  new Set<string>(),
-                ));
-                setGoals((current) => current.filter((goal) => goal.id !== goalId));
-                setMilestones((current) => detachMilestonesFromDeletedGoal(current, goalId));
-                setTasks((current) => detachTasksFromDeletedGoal(current, goalId));
-                setProjects((current) => detachGoalFromProjects(current, goalId));
-                setHabits((current) => detachHabitsFromDeletedGoal(current, goalId));
-              }}              onAddMilestone={handleAddMilestone}
-              onEditMilestone={handleEditMilestone}
-              onDeleteMilestone={handleDeleteMilestone}
-              onToggleMilestone={(_goalId, milestoneId) => handleToggleMilestone(milestoneId)}
-              projects={projects}
-              onOpenProject={(projectId) => {
-                setSelectedProjectId(projectId);
-                navigateToView("Projects");
-              }}
-              onAddProject={handleAddProject}
-            />
-          </div>
 
           <div
             style={{
@@ -3335,39 +3275,37 @@ function App() {
           >
             <Projects
               projects={projects}
-              goals={goals}
               milestones={milestones}
               tasks={tasks}
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
-              onNavigateToGoals={() => navigateToView("goals")}
               onAddProject={handleAddProject}
               onEditProject={(projectId, data) => {
                 const existing = projects.find((project) => project.id === projectId);
                 if (!existing) return;
-                const updatedProject = alignProject(updateProject(existing, data), goals);
+                const updatedProject = alignProject(updateProject(existing, data));
                 setProjects((current) => current.map((project) =>
                   project.id === projectId ? updatedProject : project,
                 ));
-                // Keep child relationships consistent immediately when the
-                // Project's Goal changes; never wait for a reload.
-                if (updatedProject.goalId !== existing.goalId) {
-                  const propagated = propagateProjectGoalChange(milestones, tasks, updatedProject);
-                  setMilestones(propagated.milestones);
-                  setTasks(propagated.tasks);
-                }
               }}
-              onEditProjectStatus={(projectId, status) =>
+              onEditProjectStatus={(projectId, status) => {
                 setProjects((current) => current.map((project) =>
                   project.id === projectId ? updateProjectStatus(project, status) : project,
-                ))
-              }
+                ));
+                // Safe end-of-Project behavior: linked active habits are archived
+                // (hidden, history preserved), never deleted. Unrelated habits
+                // are untouched; unarchive restores a habit if still wanted.
+                if (status === "completed" || status === "archived") {
+                  setHabits((current) => archiveHabitsForFinishedProject(current, projectId));
+                }
+              }}
               onDeleteProject={(projectId) => {
                 const project = projects.find((item) => item.id === projectId);
                 if (!project) return;
-                // Milestones and Tasks are detached (kept), never deleted with the Project.
+                // Milestones, Tasks, and Habits are detached (kept), never deleted with the Project.
                 setMilestones((current) => detachMilestonesFromDeletedProject(current, project));
                 setTasks((current) => detachTasksFromDeletedProject(current, project, milestones));
+                setHabits((current) => detachHabitsFromDeletedProject(current, project));
                 setFocusSessions((current) => disassociateProjectFocusSessions(
                   current,
                   projectId,
@@ -3754,7 +3692,7 @@ function App() {
                         { keys: `${shortcutKey}2`, description: "Go to My Habits" },
                         { keys: `${shortcutKey}3`, description: "Go to Tasks" },
                         { keys: `${shortcutKey}4`, description: "Go to Timer" },
-                        { keys: `${shortcutKey}5`, description: "Go to Goals" },
+                        { keys: `${shortcutKey}5`, description: "Go to Projects" },
                         { keys: `${shortcutKey}6`, description: "Go to History" },
                         { keys: `${shortcutKey}7`, description: "Go to Analytics" },
                         { keys: `${shortcutKey},`, description: "Go to Settings" },

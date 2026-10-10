@@ -2,18 +2,16 @@ import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, ChevronLeft, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { FORM_CONTROL } from "../theme";
-import type { Goal, Milestone, Project, Task } from "../types";
+import type { Milestone, Project, Task } from "../types";
 import { calculateProjectProgress } from "../domain/projects";
 import { formatFullDate } from "../utils/dates";
 
 type ProjectsProps = {
   projects: Project[];
-  goals: Goal[];
   milestones: Milestone[];
   tasks: Task[];
   selectedProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
-  onNavigateToGoals?: () => void;
   onAddProject: (data: Omit<Project, "id" | "createdAt" | "status">) => void;
   onEditProject: (projectId: string, data: Omit<Project, "id" | "createdAt" | "status">) => void;
   onEditProjectStatus: (projectId: string, status: Project["status"]) => void;
@@ -125,17 +123,6 @@ const styles: Record<string, CSSProperties> = {
   },
   breadcrumbCurrent: {
     color: "var(--text-primary)",
-    fontWeight: 500,
-  },
-  goalBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 8px",
-    background: "var(--bg-inset)",
-    borderRadius: 6,
-    color: "var(--text-secondary)",
-    fontSize: 12,
     fontWeight: 500,
   },
   sectionHeader: {
@@ -596,12 +583,10 @@ const styles: Record<string, CSSProperties> = {
 
 export default function Projects({
   projects,
-  goals,
   milestones,
   tasks,
   selectedProjectId,
   onSelectProject,
-  onNavigateToGoals,
   onAddProject,
   onEditProject,
   onEditProjectStatus,
@@ -618,14 +603,13 @@ export default function Projects({
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
-  const [projectGoalId, setProjectGoalId] = useState("");
   const [projectStartDate, setProjectStartDate] = useState("");
   const [projectTargetDate, setProjectTargetDate] = useState("");
+  const [showProjectDetails, setShowProjectDetails] = useState(false);
 
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectEditName, setProjectEditName] = useState("");
   const [projectEditDescription, setProjectEditDescription] = useState("");
-  const [projectEditGoalId, setProjectEditGoalId] = useState("");
   const [projectEditStartDate, setProjectEditStartDate] = useState("");
   const [projectEditTargetDate, setProjectEditTargetDate] = useState("");
 
@@ -662,20 +646,11 @@ export default function Projects({
     setItemToDelete(null);
   }, [selectedProjectId]);
 
-  const activeGoals = goals.filter((goal) => goal.status !== "archived");
   const selectedProject = selectedProjectId
     ? projects.find((project) => project.id === selectedProjectId) ?? null
     : null;
   const activeProjects = projects.filter((project) => project.status !== "archived");
   const archivedProjects = projects.filter((project) => project.status === "archived");
-
-  function goalOptions(selectedGoalId: string) {
-    const current = goals.find((goal) => goal.id === selectedGoalId);
-    const list = current && !activeGoals.includes(current) ? [...activeGoals, current] : activeGoals;
-    return list.map((goal) => (
-      <option key={goal.id} value={goal.id}>{goal.title}</option>
-    ));
-  }
 
   function confirmItemDeletion() {
     if (!itemToDelete) return;
@@ -697,15 +672,14 @@ export default function Projects({
     onAddProject({
       name: trimmedName,
       description: projectDescription.trim() || undefined,
-      goalId: projectGoalId || undefined,
       startDate: projectStartDate || undefined,
       targetDate: projectTargetDate || undefined,
     });
     setProjectName("");
     setProjectDescription("");
-    setProjectGoalId("");
     setProjectStartDate("");
     setProjectTargetDate("");
+    setShowProjectDetails(false);
     setShowProjectForm(false);
   }
 
@@ -713,7 +687,6 @@ export default function Projects({
     setEditingProjectId(project.id);
     setProjectEditName(project.name);
     setProjectEditDescription(project.description ?? "");
-    setProjectEditGoalId(project.goalId ?? "");
     setProjectEditStartDate(project.startDate ?? "");
     setProjectEditTargetDate(project.targetDate ?? "");
   }
@@ -723,10 +696,11 @@ export default function Projects({
     const trimmedName = projectEditName.trim();
     if (!trimmedName) return;
 
+    // updateProject spreads over the existing record, so dates, description,
+    // and any legacy links stay intact unless explicitly replaced here.
     onEditProject(projectId, {
       name: trimmedName,
       description: projectEditDescription.trim() || undefined,
-      goalId: projectEditGoalId || undefined,
       startDate: projectEditStartDate || undefined,
       targetDate: projectEditTargetDate || undefined,
     });
@@ -740,7 +714,6 @@ export default function Projects({
 
     onAddMilestone({
       title: trimmedTitle,
-      goalId: project.goalId,
       projectId: project.id,
       targetDate: milestoneTargetDate || undefined,
     });
@@ -771,7 +744,6 @@ export default function Projects({
     const estimatedMinutes = Number(taskEstimatedMinutes);
     onAddTask({
       title: trimmedTitle,
-      goalId: project.goalId,
       projectId: project.id,
       milestoneId: taskMilestoneId || undefined,
       dueDate: taskDueDate || undefined,
@@ -827,7 +799,6 @@ export default function Projects({
   }
 
   function renderProjectCard(project: Project) {
-    const linkedGoal = goals.find((goal) => goal.id === project.goalId);
     const progress = calculateProjectProgress(project, milestones, tasks);
 
     return (
@@ -856,11 +827,13 @@ export default function Projects({
         </div>
 
         {project.description && <p style={styles.description}>{project.description}</p>}
-        <p style={styles.meta}>
-          {linkedGoal ? `Goal: ${linkedGoal.title}` : "No Goal"}
-          {project.startDate && <> · Start: {formatFullDate(project.startDate)}</>}
-          {project.targetDate && <> · Target: {formatFullDate(project.targetDate)}</>}
-        </p>
+        {(project.startDate || project.targetDate) && (
+          <p style={styles.meta}>
+            {project.startDate && <>Start: {formatFullDate(project.startDate)}</>}
+            {project.startDate && project.targetDate && " · "}
+            {project.targetDate && <>Target: {formatFullDate(project.targetDate)}</>}
+          </p>
+        )}
 
         <div>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
@@ -1195,7 +1168,7 @@ export default function Projects({
         {projectTasks.length === 0 ? (
           <div style={styles.emptyWithHint}>
             No tasks yet
-            <span style={styles.emptyHint}>Break down milestones into actionable tasks</span>
+            <span style={styles.emptyHint}>Add a task below — milestones are optional</span>
           </div>
         ) : (
           <ul style={styles.taskList}>
@@ -1277,28 +1250,10 @@ export default function Projects({
   }
 
   function renderDetail(project: Project) {
-    const linkedGoal = goals.find((goal) => goal.id === project.goalId);
     const progress = calculateProjectProgress(project, milestones, tasks);
 
     return (
       <section style={styles.page} aria-labelledby="project-detail-title">
-        {linkedGoal && (
-          <div style={styles.breadcrumb}>
-            {onNavigateToGoals ? (
-              <button
-                type="button"
-                style={styles.breadcrumbLink}
-                onClick={onNavigateToGoals}
-              >
-                {linkedGoal.title}
-              </button>
-            ) : (
-              <span style={styles.breadcrumbCurrent}>{linkedGoal.title}</span>
-            )}
-            <span style={styles.breadcrumbSeparator}>›</span>
-            <span style={styles.breadcrumbCurrent}>{project.name}</span>
-          </div>
-        )}
         <button
           type="button"
           style={styles.backButton}
@@ -1357,18 +1312,6 @@ export default function Projects({
               />
               <div style={styles.projectFormRow}>
                 <label style={styles.projectLabel}>
-                  Goal (Optional)
-                  <select
-                    style={styles.compactInput}
-                    value={projectEditGoalId}
-                    onChange={(event) => setProjectEditGoalId(event.target.value)}
-                    aria-label="Linked Goal (Optional)"
-                  >
-                    <option value="">No Goal</option>
-                    {goalOptions(projectEditGoalId)}
-                  </select>
-                </label>
-                <label style={styles.projectLabel}>
                   Start Date
                   <input
                     type="date"
@@ -1403,11 +1346,6 @@ export default function Projects({
           {project.description && <p style={styles.description}>{project.description}</p>}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-            {linkedGoal && (
-              <div style={styles.goalBadge}>
-                Goal: {linkedGoal.title}
-              </div>
-            )}
             <p style={styles.meta}>
               {project.startDate && <>Start: {formatFullDate(project.startDate)}</>}
               {project.startDate && project.targetDate && " · "}
@@ -1469,7 +1407,7 @@ export default function Projects({
           </button>
         </header>
         <p style={styles.subtitle}>
-          A project is a body of work toward a goal (or on its own), with milestones and tasks inside it.
+          A project groups milestones and tasks. Projects are optional.
         </p>
 
         {showProjectForm && (
@@ -1485,46 +1423,50 @@ export default function Projects({
               placeholder="Project Name"
               aria-label="Project Name"
             />
-            <textarea
-              maxLength={500}
-              style={{ ...styles.input, minHeight: 72, resize: "vertical" }}
-              value={projectDescription}
-              onChange={(event) => setProjectDescription(event.target.value)}
-              placeholder="Description (Optional)"
-              aria-label="Project Description"
-            />
-            <div style={styles.projectFormRow}>
-              <label style={styles.projectLabel}>
-                Goal (Optional)
-                <select
-                  style={styles.compactInput}
-                  value={projectGoalId}
-                  onChange={(event) => setProjectGoalId(event.target.value)}
-                  aria-label="Linked Goal (Optional)"
-                >
-                  <option value="">No Goal</option>
-                  {goalOptions(projectGoalId)}
-                </select>
-              </label>
-              <label style={styles.projectLabel}>
-                Start Date
-                <input
-                  type="date"
-                  style={styles.compactInput}
-                  value={projectStartDate}
-                  onChange={(event) => setProjectStartDate(event.target.value)}
+            {showProjectDetails ? (
+              <>
+                <textarea
+                  maxLength={500}
+                  style={{ ...styles.input, minHeight: 72, resize: "vertical" }}
+                  value={projectDescription}
+                  onChange={(event) => setProjectDescription(event.target.value)}
+                  placeholder="Description (Optional)"
+                  aria-label="Project Description"
                 />
-              </label>
-              <label style={styles.projectLabel}>
-                Target Date
-                <input
-                  type="date"
-                  style={styles.compactInput}
-                  value={projectTargetDate}
-                  onChange={(event) => setProjectTargetDate(event.target.value)}
-                />
-              </label>
-            </div>
+                <div style={styles.projectFormRow}>
+                  <label style={styles.projectLabel}>
+                    Start Date (Optional)
+                    <input
+                      type="date"
+                      style={styles.compactInput}
+                      value={projectStartDate}
+                      onChange={(event) => setProjectStartDate(event.target.value)}
+                      aria-label="Project Start Date (Optional)"
+                    />
+                  </label>
+                  <label style={styles.projectLabel}>
+                    Target Date (Optional)
+                    <input
+                      type="date"
+                      style={styles.compactInput}
+                      value={projectTargetDate}
+                      onChange={(event) => setProjectTargetDate(event.target.value)}
+                      aria-label="Project Target Date (Optional)"
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                style={styles.addInlineButton}
+                onClick={() => setShowProjectDetails(true)}
+                aria-expanded={false}
+              >
+                <Plus size={14} />
+                Add details (optional)
+              </button>
+            )}
             <div style={styles.formActions}>
               <button type="button" style={styles.secondaryButton} onClick={() => setShowProjectForm(false)}>
                 Cancel

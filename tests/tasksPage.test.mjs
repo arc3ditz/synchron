@@ -9,11 +9,11 @@ const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
 const tasksSource = readFileSync(path.join(root, "src/components/Tasks.tsx"), "utf8");
 const typesSource = readFileSync(path.join(root, "src/types/index.ts"), "utf8");
 
-test("sidebar order is Today, My Habits, Tasks, Timer, Goals, History, Analytics", () => {
-  const order = ["Today", "My Habits", "Tasks", "Timer", "Goals", "History", "Analytics"]
+test("sidebar order is Today, My Habits, Tasks, Timer, Projects, History, Analytics", () => {
+  const order = ["Today", "My Habits", "Tasks", "Timer", "Projects", "History", "Analytics"]
     .map((label) => appSource.indexOf(`<span>${label}</span>`));
   for (const [index, position] of order.entries()) {
-    assert.ok(position !== -1, `sidebar must contain ${["Today", "My Habits", "Tasks", "Timer", "Goals", "History", "Analytics"][index]}`);
+    assert.ok(position !== -1, `sidebar must contain ${["Today", "My Habits", "Tasks", "Timer", "Projects", "History", "Analytics"][index]}`);
     if (index > 0) assert.ok(position > order[index - 1], "sidebar items must follow the required order");
   }
 });
@@ -29,12 +29,11 @@ test("Tasks is a real view wired to the existing Task handlers", () => {
   }
 });
 
-test("keyboard shortcuts follow sidebar order without touching Projects", () => {
-  for (const [key, view] of [["1", "Today"], ["2", "Habits"], ["3", "Tasks"], ["4", "Timer"], ["5", "goals"], ["6", "History"], ["7", "Analytics"]]) {
+test("keyboard shortcuts follow sidebar order including Projects", () => {
+  for (const [key, view] of [["1", "Today"], ["2", "Habits"], ["3", "Tasks"], ["4", "Timer"], ["5", "Projects"], ["6", "History"], ["7", "Analytics"]]) {
     assert.ok(appSource.includes(`"${key}": "${view}"`), `shortcut ${key} must target ${view}`);
   }
-  assert.ok(!appSource.includes("<span>Projects</span>"), "Projects must stay out of top-level navigation");
-  assert.ok(!appSource.includes('"4": "Projects"'), "No keyboard shortcut may target a top-level Projects view");
+  assert.ok(appSource.includes("<span>Projects</span>"), "Projects must be in top-level navigation");
 });
 
 test("Tasks page manages the full lifecycle through existing mechanisms", () => {
@@ -42,7 +41,7 @@ test("Tasks page manages the full lifecycle through existing mechanisms", () => 
   assert.ok(tasksSource.includes("onEditTask(task.id,"), "Edit uses the shared edit handler");
   assert.ok(tasksSource.includes("onDeleteTask(pendingDeletion.id)"), "Delete uses the shared deletion handler");
   assert.ok(tasksSource.includes("onToggleTask(task.id)"), "Complete/uncomplete uses the shared toggle handler");
-  assert.ok(tasksSource.includes("resolveTaskContext"), "rows show Goal / Project / Milestone context");
+  assert.ok(tasksSource.includes("resolveTaskContext"), "rows show Project / Milestone context");
   assert.ok(tasksSource.includes("No tasks yet"), "page has a useful empty state");
 });
 

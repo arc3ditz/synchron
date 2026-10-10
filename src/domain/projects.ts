@@ -1,4 +1,4 @@
-import type { Project, Milestone, Task, FocusSessionRecord } from "../types";
+import type { Habit, Project, Milestone, Task, FocusSessionRecord } from "../types";
 
 export function createProject(data: Omit<Project, "id" | "createdAt" | "status">): Project {
   return {
@@ -26,7 +26,7 @@ export function deleteProject(projects: Project[], projectId: string): Project[]
 
 export function detachMilestonesFromDeletedProject(milestones: Milestone[], project: Project): Milestone[] {
   return milestones.map((milestone) => milestone.projectId === project.id
-    ? { ...milestone, goalId: milestone.goalId ?? project.goalId, projectId: undefined }
+    ? { ...milestone, projectId: undefined }
     : milestone);
 }
 
@@ -38,12 +38,11 @@ export function detachTasksFromDeletedProject(tasks: Task[], project: Project, m
     const directlyAttached = task.projectId === project.id;
     const viaDeletedMilestone = task.milestoneId !== undefined && projectMilestoneIds.has(task.milestoneId);
     if (!directlyAttached && !viaDeletedMilestone) return task;
-    // Only the deleted Project reference is cleared; a Task pointing at a
-    // different surviving Project keeps that relationship.
+    // Only the deleted Project reference is cleared; legacy goalId and
+    // surviving links are preserved verbatim.
     const projectId = directlyAttached ? undefined : task.projectId;
-    const goalId = task.goalId ?? project.goalId;
-    if (projectId === task.projectId && goalId === task.goalId) return task;
-    return { ...task, projectId, goalId };
+    if (projectId === task.projectId) return task;
+    return { ...task, projectId };
   });
 }
 
@@ -64,18 +63,35 @@ export function disassociateProjectFocusSessions(
   });
 }
 
-export function detachGoalFromProjects(projects: Project[], goalId: string): Project[] {
-  return projects.map((project) => project.goalId === goalId
-    ? { ...project, goalId: undefined }
-    : project);
-}
-
-export function filterProjectsByGoal(projects: Project[], goalId: string): Project[] {
-  return projects.filter((project) => project.goalId === goalId);
-}
-
 export function filterMilestonesByProject(milestones: Milestone[], projectId: string): Milestone[] {
   return milestones.filter((milestone) => milestone.projectId === projectId);
+}
+
+/**
+ * Detach habits from a deleted Project: the link is cleared, the habit and
+ * its full completion history are kept. Unrelated habits pass through
+ * untouched (same reference). Legacy `goalId` is preserved verbatim.
+ */
+export function detachHabitsFromDeletedProject(habits: Habit[], project: Project): Habit[] {
+  return habits.map((habit) => {
+    if (habit.projectId !== project.id) return habit;
+    return { ...habit, projectId: undefined };
+  });
+}
+
+/**
+ * Safe end-of-Project behavior for associated habits: when a Project moves to
+ * `completed` or `archived`, linked active habits are archived (hidden from
+ * Today/Next Step/notifications) but never deleted and their
+ * `completedDates`/`completedAt`/streak data is preserved verbatim.
+ * Already-archived and unrelated habits pass through untouched.
+ */
+export function archiveHabitsForFinishedProject(habits: Habit[], projectId: string): Habit[] {
+  return habits.map((habit) => {
+    if (habit.projectId !== projectId) return habit;
+    if (habit.isArchived) return habit;
+    return { ...habit, isArchived: true };
+  });
 }
 
 export function filterTasksByProject(tasks: Task[], projectId: string): Task[] {

@@ -73,16 +73,15 @@ test("nextStepKey is stable for pinning and skipping", () => {
 });
 
 test("preferMandatoryHabits=false keeps mandatory habits below contextual tasks", () => {
-  const goals = [{ id: "g", title: "G", status: "active", createdAt: "2026-01-01" }];
-  const milestones = [{ id: "m", goalId: "g", title: "M", completed: false }];
+  const milestones = [{ id: "m", title: "M", completed: false }];
   const tasks = [makeTask({ id: "ctx", title: "Context", milestoneId: "m", priority: "high" })];
   const habits = [makeHabit({ id: 3, name: "Vitamins", priority: "Mandatory" })];
 
-  const preferred = recommendNextStep(baseInput({ goals, milestones, tasks, habits }));
+  const preferred = recommendNextStep(baseInput({ milestones, tasks, habits }));
   assert.equal(preferred.kind, "habit", "default keeps mandatory preference");
 
   const neutral = recommendNextStep(
-    baseInput({ goals, milestones, tasks, habits, preferMandatoryHabits: false }),
+    baseInput({ milestones, tasks, habits, preferMandatoryHabits: false }),
   );
   assert.equal(neutral.kind, "task");
   assert.equal(neutral.taskId, "ctx");

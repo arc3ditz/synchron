@@ -90,7 +90,10 @@ export function loadTasks(): Task[] {
       goalId: typeof item.goalId === "string" ? item.goalId : undefined,
       projectId: typeof item.projectId === "string" ? item.projectId : undefined,
       title: item.title,
-      dueDate: typeof item.dueDate === "string" ? item.dueDate : undefined,
+      // Empty/whitespace dates (only reachable via hand-edited storage; every
+      // form coerces "" to undefined) are dropped so Today and the Next Step
+      // engine agree: raw "<" compares treat "" as overdue, validated ones do not.
+      dueDate: typeof item.dueDate === "string" && item.dueDate.trim() !== "" ? item.dueDate : undefined,
       estimatedMinutes: typeof item.estimatedMinutes === "number" && item.estimatedMinutes > 0 ? item.estimatedMinutes : undefined,
       completed: item.completed === true,
       priority: item.priority === "high" || item.priority === "low" ? item.priority : "medium",
@@ -131,12 +134,18 @@ export function loadHabits(): Habit[] {
   if (!Array.isArray(parsed)) return [];
   // Historical records predate timestamp collection: preserve them as-is,
   // keeping only valid timestamps for dates actually completed.
+  // Legacy `goalId` and optional `projectId` links are preserved verbatim;
+  // dangling project links are detached at the App boundary (alignHabit).
   return parsed.map((habit) => {
     if (!habit || typeof habit !== "object") return habit;
     const completedDates = Array.isArray(habit.completedDates) ? habit.completedDates : [];
     const completedAt = sanitizeCompletedAt(completedDates, habit.completedAt);
-    if (completedAt === undefined && habit.completedAt === undefined) return { ...habit, completedDates };
-    const next = { ...habit, completedDates };
+    const next = {
+      ...habit,
+      completedDates,
+      projectId: typeof habit.projectId === "string" ? habit.projectId : undefined,
+    };
+    if (next.projectId === undefined) delete next.projectId;
     if (completedAt !== undefined) {
       next.completedAt = completedAt;
     } else {

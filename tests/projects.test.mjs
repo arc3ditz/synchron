@@ -4,17 +4,14 @@ import {
   calculateProjectProgress,
   createProject,
   deleteProject,
-  detachGoalFromProjects,
   detachMilestonesFromDeletedProject,
   detachTasksFromDeletedProject,
   disassociateProjectFocusSessions,
   filterMilestonesByProject,
-  filterProjectsByGoal,
   filterTasksByProject,
   updateProject,
   updateProjectStatus,
 } from "../src/domain/projects.ts";
-import { selectGoalWork } from "../src/domain/goals.ts";
 import { alignProject } from "../src/domain/relationships.ts";
 
 const baseProject = {
@@ -34,19 +31,18 @@ test("createProject defaults to planned status and works without a Goal", () => 
   assert.equal(typeof project.createdAt, "string");
 });
 
-test("createProject links to a Goal when provided", () => {
-  const project = createProject({ ...baseProject, goalId: "goal-1" });
+test("createProject preserves a legacy goalId when present", () => {
+  const project = createProject({ ...baseProject, goalId: "legacy-goal" });
 
-  assert.equal(project.goalId, "goal-1");
+  assert.equal(project.goalId, "legacy-goal");
   assert.equal(project.status, "planned");
 });
 
 test("updateProject edits fields but preserves identity and status", () => {
-  const project = createProject({ ...baseProject, goalId: "goal-1" });
+  const project = createProject({ ...baseProject });
   const updated = updateProject(project, {
     name: "Renamed",
     description: undefined,
-    goalId: undefined,
     startDate: undefined,
     targetDate: "2025-04-01",
   });
@@ -75,50 +71,45 @@ test("deleteProject removes only the targeted project", () => {
   assert.deepEqual(deleteProject([first, second], first.id), [second]);
 });
 
-test("deleting a project detaches its Milestones and backfills their Goal", () => {
-  const project = createProject({ ...baseProject, goalId: "goal-1" });
+test("deleting a project detaches its Milestones without deleting them", () => {
+  const project = createProject({ ...baseProject });
   const milestones = [
     { id: "m-1", projectId: project.id, title: "Belongs to project", completed: false },
-    { id: "m-2", projectId: project.id, goalId: "goal-2", title: "Keeps its own goal", completed: false },
-    { id: "m-3", projectId: "other-project", goalId: "goal-3", title: "Untouched", completed: false },
+    { id: "m-2", projectId: project.id, title: "Also belongs", completed: false },
+    { id: "m-3", projectId: "other-project", title: "Untouched", completed: false },
   ];
 
   assert.deepEqual(detachMilestonesFromDeletedProject(milestones, project), [
-    { ...milestones[0], goalId: "goal-1", projectId: undefined },
+    { ...milestones[0], projectId: undefined },
     { ...milestones[1], projectId: undefined },
     milestones[2],
   ]);
 });
 
-test("deleting a project detaches its Tasks and backfills their Goal", () => {
-  const project = createProject({ ...baseProject, goalId: "goal-1" });
+test("deleting a project detaches its Tasks without deleting them", () => {
+  const project = createProject({ ...baseProject });
   const tasks = [
     { id: "t-1", projectId: project.id, title: "Belongs to project", completed: false, priority: "medium", createdAt: "2025-01-01" },
-    { id: "t-2", projectId: project.id, goalId: "goal-2", title: "Keeps its own goal", completed: false, priority: "high", createdAt: "2025-01-01" },
-    { id: "t-3", projectId: "other-project", goalId: "goal-3", title: "Untouched", completed: false, priority: "low", createdAt: "2025-01-01" },
+    { id: "t-2", projectId: project.id, title: "Also belongs", completed: false, priority: "high", createdAt: "2025-01-01" },
+    { id: "t-3", projectId: "other-project", title: "Untouched", completed: false, priority: "low", createdAt: "2025-01-01" },
   ];
 
   assert.deepEqual(detachTasksFromDeletedProject(tasks, project), [
-    { ...tasks[0], goalId: "goal-1", projectId: undefined },
+    { ...tasks[0], projectId: undefined },
     { ...tasks[1], projectId: undefined },
     tasks[2],
   ]);
 });
 
-test("deleting a Goal detaches only its Projects, which keep working goal-less", () => {
+test("projects work standalone without any Goal link", () => {
   const projects = [
-    createProject({ ...baseProject, goalId: "goal-1" }),
-    createProject({ ...baseProject, name: "Other goal", goalId: "goal-2" }),
-    createProject({ ...baseProject, name: "Standalone" }),
+    createProject({ ...baseProject }),
+    createProject({ ...baseProject, name: "Second" }),
   ];
 
-  const result = detachGoalFromProjects(projects, "goal-1");
-
-  assert.equal(result[0].goalId, undefined);
-  assert.equal(result[0].name, projects[0].name);
-  assert.equal(result[0].status, projects[0].status);
-  assert.equal(result[1].goalId, "goal-2");
-  assert.equal(result[2].goalId, undefined);
+  assert.equal(projects[0].goalId, undefined);
+  assert.equal(projects[0].status, "planned");
+  assert.equal(projects[1].name, "Second");
 });
 
 test("deleting a project disassociates its Focus Sessions without dropping child links", () => {
@@ -146,7 +137,7 @@ test("a Project without Milestones or Tasks has zero progress", () => {
 });
 
 test("Project progress rolls up Tasks and Milestones only", () => {
-  const project = createProject({ ...baseProject, goalId: "goal-1" });
+  const project = createProject({ ...baseProject });
   const milestones = [
     { id: "m-1", projectId: project.id, title: "Done", completed: true },
     { id: "m-2", projectId: project.id, title: "Open", completed: false },
@@ -188,7 +179,7 @@ test("Tasks under a Project's Milestone count toward the Project without their o
 
 test("filter helpers scope Projects, Milestones, and Tasks to a Project", () => {
   const projects = [
-    createProject({ ...baseProject, goalId: "goal-1" }),
+    createProject({ ...baseProject }),
     createProject({ ...baseProject, name: "Standalone" }),
   ];
   const milestones = [
@@ -200,14 +191,12 @@ test("filter helpers scope Projects, Milestones, and Tasks to a Project", () => 
     { id: "t-2", title: "Two", completed: false, priority: "medium", createdAt: "2025-01-01" },
   ];
 
-  assert.deepEqual(filterProjectsByGoal(projects, "goal-1"), [projects[0]]);
-  assert.deepEqual(filterProjectsByGoal(projects, "goal-missing"), []);
   assert.deepEqual(filterMilestonesByProject(milestones, projects[0].id), [milestones[0]]);
   assert.deepEqual(filterTasksByProject(tasks, projects[0].id), [tasks[0]]);
 });
 
 test("deleting a project clears the deleted reference from Tasks under its Milestones", () => {
-  const project = createProject({ ...baseProject, goalId: "goal-1" });
+  const project = createProject({ ...baseProject });
   const milestones = [
     { id: "m-1", projectId: project.id, title: "Belongs to project", completed: false },
   ];
@@ -239,16 +228,11 @@ test("deleting a project clears the deleted reference from Tasks under its Miles
   assert.equal(detachedTasks[3], tasks[3]);
 });
 
-test("a Project created from a Goal receives that Goal's goalId through the shared creation path", () => {
-  const goal = { id: "goal-1", title: "Get Fit", status: "active", createdAt: "2025-01-01" };
-
+test("a Project is created standalone through the shared creation path", () => {
   // Same composition as App.handleAddProject: existing creation logic only.
-  const project = alignProject(createProject({ name: "Run a 5K", goalId: goal.id }), [goal]);
+  const project = alignProject(createProject({ name: "Run a 5K" }));
 
-  assert.equal(project.goalId, goal.id);
+  assert.equal(project.goalId, undefined);
   assert.equal(project.name, "Run a 5K");
-
-  // The new Project immediately belongs to the Goal's work set.
-  const work = selectGoalWork(goal, { projects: [project], milestones: [], tasks: [] });
-  assert.deepEqual(work.projects.map((p) => p.id), [project.id]);
+  assert.equal(project.status, "planned");
 });

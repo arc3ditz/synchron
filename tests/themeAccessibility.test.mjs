@@ -9,7 +9,6 @@ const cssSource = readFileSync(path.join(root, "src/styles/index.css"), "utf8");
 const layoutSource = readFileSync(path.join(root, "src/styles/AppLayout.css"), "utf8");
 const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
 const todaySource = readFileSync(path.join(root, "src/components/Today.tsx"), "utf8");
-const goalsSource = readFileSync(path.join(root, "src/components/Goals.tsx"), "utf8");
 const projectsSource = readFileSync(path.join(root, "src/components/Projects.tsx"), "utf8");
 const tasksSource = readFileSync(path.join(root, "src/components/Tasks.tsx"), "utf8");
 
@@ -110,7 +109,7 @@ test("checkboxes and switches expose state beyond color", () => {
 });
 
 test("progress indicators pair bars with text values", () => {
-  for (const [file, source] of [["Goals.tsx", goalsSource], ["Projects.tsx", projectsSource]]) {
+  for (const [file, source] of [["Projects.tsx", projectsSource]]) {
     assert.ok(source.includes('role="progressbar"'), `${file} must label progress bars`);
     assert.ok(source.includes("aria-valuenow"), `${file} must expose progress values`);
     assert.ok(source.includes("progressPercent") || source.includes("percent}%"), `${file} must show a text percent`);
@@ -119,7 +118,6 @@ test("progress indicators pair bars with text values", () => {
 
 test("delete confirmations stay modal dialogs with names in both themes", () => {
   for (const [file, source] of [
-    ["Goals.tsx", goalsSource],
     ["Projects.tsx", projectsSource],
     ["Tasks.tsx", tasksSource],
   ]) {

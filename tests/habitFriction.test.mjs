@@ -35,9 +35,17 @@ test("primary creation path is Name + Frequency; the rest is optional", () => {
   assert.ok(addHabit.includes("frequencyType: newFrequencyType"), "frequency default preserved");
   assert.ok(addHabit.includes("priority: newPriority"), "priority default preserved");
   assert.ok(addHabit.includes("completedDates: []"), "new habits start incomplete");
-  for (const prop of ["targetCount", "complexity", "projectId", "milestoneId", "estimatedMinutes"]) {
+  for (const prop of ["targetCount", "complexity", "milestoneId", "estimatedMinutes"]) {
     assert.ok(!addHabit.includes(prop), `creation must not gain ${prop}`);
   }
+  // Optional Project association is the one sanctioned exception: it stays out
+  // of the primary path (behind More options), defaults to none, and is only
+  // attached when the picker names an existing Project.
+  assert.ok(addHabit.includes("newProjectId"), "optional project link is creation-time state");
+  assert.ok(
+    addHabit.includes('newProjectId !== ""') && addHabit.includes("projects.some"),
+    "project link defaults to standalone and validates the target exists",
+  );
 });
 
 // --- Finding habits: lightweight text search, no new metadata ---

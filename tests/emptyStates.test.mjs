@@ -8,13 +8,12 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
 const todaySource = readFileSync(path.join(root, "src/components/Today.tsx"), "utf8");
 const tasksSource = readFileSync(path.join(root, "src/components/Tasks.tsx"), "utf8");
-const goalsSource = readFileSync(path.join(root, "src/components/Goals.tsx"), "utf8");
 
 // --- Fresh install: one obvious action, existing creation paths only ---
 
 test("Today fresh-install state leads with a single inline task action", () => {
   assert.ok(
-    todaySource.includes("todayHabits.length === 0 && todayTasks.length === 0 && activeGoals.length === 0"),
+    todaySource.includes("todayHabits.length === 0 && todayTasks.length === 0"),
     "full empty page only when there is truly nothing to show",
   );
   assert.ok(todaySource.includes("plan your first win"), "headline stays encouraging, never technical");
@@ -48,7 +47,7 @@ test("Today partial empties point at the next useful action", () => {
 
 test("Habits empty state asks for a name first, defers optional config", () => {
   assert.ok(appSource.includes("No habits yet — name your first small habit above."));
-  assert.ok(appSource.includes("Frequency, category, and goals can come later"));
+  assert.ok(appSource.includes("Frequency and category can come later"));
 });
 
 test("Tasks empty state keeps its contract and lowers the bar to a title", () => {
@@ -57,18 +56,13 @@ test("Tasks empty state keeps its contract and lowers the bar to a title", () =>
   assert.ok(tasksSource.includes("No tasks match your filter"), "filtered empty stays distinct from true empty");
 });
 
-// --- Goals: one small goal first; structure marked optional ---
+// --- Projects: optional organization, usable standalone ---
 
-test("Goals empty states keep optionals out of the primary path", () => {
-  assert.ok(goalsSource.includes("No active goals yet"));
-  assert.ok(goalsSource.includes("Create one small goal to start"));
-  assert.ok(goalsSource.includes("projects and checkpoints are optional and can wait"));
-  assert.ok(goalsSource.includes("Optional: group work into a project when this grows"));
-  assert.ok(goalsSource.includes("Optional: add a checkpoint when you"));
-  assert.ok(
-    goalsSource.includes("Connect daily habits to track progress"),
-    "linking a habit stays the primary in-card next action",
-  );
+test("Projects empty states stay optional and standalone", () => {
+  const projectsSource = readFileSync(path.join(root, "src/components/Projects.tsx"), "utf8");
+  assert.ok(projectsSource.includes("No projects yet"), "projects empty state exists");
+  assert.ok(!projectsSource.includes("Linked Goal"), "no Goal selectors in Projects");
+  assert.ok(!appSource.includes("onNavigateToGoals"), "no Goals navigation callback remains");
 });
 
 // --- All-done and behind states stay calm and pressure-free ---

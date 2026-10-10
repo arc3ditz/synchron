@@ -527,7 +527,7 @@ export function getGoalFocusAllocation(
 /**
  * Builds insights from the same period-scoped dataset displayed by the widgets.
  */
-export function generateActionableInsights(dataset: AnalyticsDataset, goals: Goal[]): ActionableInsight[] {
+export function generateActionableInsights(dataset: AnalyticsDataset, goals?: Goal[]): ActionableInsight[] {
   const insights: ActionableInsight[] = [];
   const habitDiagnostics = getHabitPerformanceDiagnostics(dataset);
   if (habitDiagnostics.strongestHabits.length > 0) {
@@ -588,23 +588,25 @@ export function generateActionableInsights(dataset: AnalyticsDataset, goals: Goa
     }
   }
 
-  // Goal focus allocation insights
-  const goalAllocation = getGoalFocusAllocation(dataset.focusSessions, goals);
-  const topGoal = goalAllocation.allocations[0];
-  if (topGoal && topGoal.percentage > 50) {
-    insights.push({
-      id: "goal_focus",
-      type: "positive",
-      title: "Strong Goal Alignment",
-      description: `${topGoal.percentage.toFixed(0)}% of your focus time is aligned with "${topGoal.goalTitle}". Great prioritization!`,
-    });
-  } else if (goalAllocation.unlinkedPercentage > 50) {
-    insights.push({
-      id: "unlinked_focus",
-      type: "actionable",
-      title: "Link Focus to Goals",
-      description: `${goalAllocation.unlinkedPercentage.toFixed(0)}% of your focus time is unlinked to goals. Consider linking sessions to specific goals for better tracking.`,
-    });
+  // Legacy goal insights: only when a goals list is supplied.
+  if (goals !== undefined) {
+    const goalAllocation = getGoalFocusAllocation(dataset.focusSessions, goals);
+    const topGoal = goalAllocation.allocations[0];
+    if (topGoal && topGoal.percentage > 50) {
+      insights.push({
+        id: "goal_focus",
+        type: "positive",
+        title: "Strong Goal Alignment",
+        description: `${topGoal.percentage.toFixed(0)}% of your focus time is aligned with "${topGoal.goalTitle}". Great prioritization!`,
+      });
+    } else if (goalAllocation.unlinkedPercentage > 50) {
+      insights.push({
+        id: "unlinked_focus",
+        type: "actionable",
+        title: "Link Focus to Goals",
+        description: `${goalAllocation.unlinkedPercentage.toFixed(0)}% of your focus time is unlinked to goals. Consider linking sessions to specific goals for better tracking.`,
+      });
+    }
   }
 
   return insights;

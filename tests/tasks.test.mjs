@@ -4,7 +4,6 @@ import {
   completeTask,
   createTask,
   deleteTask,
-  filterTasksByGoal,
   filterTasksByMilestone,
   isTaskDueTodayOrOverdue,
   isTaskOverdue,
@@ -63,18 +62,24 @@ test("createTask assigns a stable unique id and defaults", () => {
   assert.equal(first.priority, "high");
 });
 
-test("createTask preserves Goal/Project/Milestone links", () => {
+test("createTask preserves Project/Milestone links and legacy goalId", () => {
   const task = createTask({
     title: "Linked",
-    goalId: "goal-1",
+    goalId: "legacy-goal",
     projectId: "project-1",
     milestoneId: "m-1",
     priority: "medium",
   });
 
-  assert.equal(task.goalId, "goal-1");
+  assert.equal(task.goalId, "legacy-goal");
   assert.equal(task.projectId, "project-1");
   assert.equal(task.milestoneId, "m-1");
+});
+
+test("createTask works standalone with title only", () => {
+  const task = createTask({ title: "Solo", priority: "medium" });
+  assert.equal(task.projectId, undefined);
+  assert.equal(task.milestoneId, undefined);
 });
 
 // --- Persistence / backwards compatibility ---
@@ -96,7 +101,7 @@ test("loadTasks fills defaults for legacy minimal records", () => {
 test("loadTasks preserves stored relationships and completion", () => {
   const stored = [{
     id: "t-1",
-    goalId: "goal-1",
+    goalId: "legacy-goal",
     projectId: "project-1",
     milestoneId: "m-1",
     title: "Linked",
@@ -109,7 +114,7 @@ test("loadTasks preserves stored relationships and completion", () => {
   withStorage({ tasks: JSON.stringify(stored) }, () => {
     const [loaded] = loadTasks();
     assert.equal(loaded.id, "t-1");
-    assert.equal(loaded.goalId, "goal-1");
+    assert.equal(loaded.goalId, "legacy-goal");
     assert.equal(loaded.projectId, "project-1");
     assert.equal(loaded.milestoneId, "m-1");
     assert.equal(loaded.title, "Linked");
@@ -134,6 +139,20 @@ test("loadTasks drops corrupt entries but keeps valid Tasks", () => {
   });
 });
 
+test("loadTasks drops empty-string dueDates so Today and Next Step agree", () => {
+  const stored = [
+    { id: "empty", title: "Empty date", dueDate: "" },
+    { id: "spaces", title: "Spaces date", dueDate: "   " },
+    { id: "valid", title: "Valid date", dueDate: "2025-05-14" },
+  ];
+  withStorage({ tasks: JSON.stringify(stored) }, () => {
+    const loaded = loadTasks();
+    assert.equal(loaded.find((task) => task.id === "empty").dueDate, undefined);
+    assert.equal(loaded.find((task) => task.id === "spaces").dueDate, undefined);
+    assert.equal(loaded.find((task) => task.id === "valid").dueDate, "2025-05-14");
+  });
+});
+
 test("Tasks round-trip through save and load", () => {
   withStorage({}, () => {
     const task = createTask({ title: "Round trip", priority: "low", dueDate: TODAY });
@@ -151,10 +170,10 @@ test("Tasks round-trip through save and load", () => {
 // --- Completion ---
 
 test("toggleTaskCompletion flips both ways without touching context", () => {
-  const task = createTask({ title: "T", goalId: "goal-1", priority: "medium" });
+  const task = createTask({ title: "T", projectId: "project-1", priority: "medium" });
   const done = toggleTaskCompletion(task);
   assert.equal(done.completed, true);
-  assert.equal(done.goalId, "goal-1");
+  assert.equal(done.projectId, "project-1");
   assert.equal(task.completed, false);
 
   const reopened = toggleTaskCompletion(done);
@@ -191,28 +210,25 @@ test("deleteTask removes only the targeted Task", () => {
 // --- Relationships ---
 
 test("valid Task relationships survive normalization", () => {
-  const goals = [{ id: "goal-1", title: "G", status: "active", createdAt: "2025-01-01" }];
-  const projects = [{ id: "project-1", goalId: "goal-1", name: "P", status: "active", createdAt: "2025-01-01" }];
-  const milestones = [{ id: "m-1", goalId: "goal-1", projectId: "project-1", title: "M", completed: false }];
-  const tasks = [{ id: "t-1", goalId: "goal-1", projectId: "project-1", milestoneId: "m-1", title: "T", completed: false, priority: "medium", createdAt: "2025-01-01" }];
+  const projects = [{ id: "project-1", name: "P", status: "active", createdAt: "2025-01-01" }];
+  const milestones = [{ id: "m-1", projectId: "project-1", title: "M", completed: false }];
+  const tasks = [{ id: "t-1", projectId: "project-1", milestoneId: "m-1", title: "T", completed: false, priority: "medium", createdAt: "2025-01-01" }];
 
-  const result = normalizeRelationships(goals, projects, milestones, tasks);
+  const result = normalizeRelationships(projects, milestones, tasks);
   assert.deepEqual(result.tasks, tasks);
 });
 
 test("standalone Tasks pass through normalization untouched", () => {
-  const goals = [{ id: "goal-1", title: "G", status: "active", createdAt: "2025-01-01" }];
   const standalone = { id: "t-free", title: "Free", completed: false, priority: "medium", createdAt: "2025-01-01" };
 
-  const result = normalizeRelationships(goals, [], [], [standalone]);
+  const result = normalizeRelationships([], [], [standalone]);
   assert.deepEqual(result.tasks, [standalone]);
 });
 
-test("dangling Task references are detached, never deleted", () => {
-  const goals = [{ id: "goal-1", title: "G", status: "active", createdAt: "2025-01-01" }];
+test("legacy goalId fields are preserved verbatim by normalization", () => {
   const tasks = [{
     id: "t-1",
-    goalId: "missing-goal",
+    goalId: "legacy-goal",
     projectId: "missing-project",
     milestoneId: "missing-milestone",
     title: "T",
@@ -221,69 +237,66 @@ test("dangling Task references are detached, never deleted", () => {
     createdAt: "2025-01-01",
   }];
 
-  const result = normalizeRelationships(goals, [], [], tasks);
+  const result = normalizeRelationships([], [], tasks);
   assert.equal(result.tasks.length, 1);
-  assert.equal(result.tasks[0].goalId, undefined);
+  assert.equal(result.tasks[0].goalId, "legacy-goal");
   assert.equal(result.tasks[0].projectId, undefined);
   assert.equal(result.tasks[0].milestoneId, undefined);
 });
 
-test("a Task under a Milestone resolves Project/Goal through it", () => {
-  const milestones = [{ id: "m-1", goalId: "goal-b", projectId: "project-1", title: "M", completed: false }];
-  const projects = [{ id: "project-1", goalId: "goal-b", name: "P", status: "active", createdAt: "2025-01-01" }];
-  const stale = { id: "t-1", goalId: "goal-a", projectId: "other", milestoneId: "m-1", title: "T", completed: false, priority: "medium", createdAt: "2025-01-01" };
+test("a Task under a Milestone resolves its Project through it and preserves legacy goalId", () => {
+  const milestones = [{ id: "m-1", projectId: "project-1", title: "M", completed: false }];
+  const projects = [{ id: "project-1", name: "P", status: "active", createdAt: "2025-01-01" }];
+  const stale = { id: "t-1", goalId: "legacy", projectId: "other", milestoneId: "m-1", title: "T", completed: false, priority: "medium", createdAt: "2025-01-01" };
 
   const aligned = alignTask(stale, milestones, projects);
-  assert.equal(aligned.goalId, "goal-b");
+  assert.equal(aligned.goalId, "legacy");
   assert.equal(aligned.projectId, "project-1");
   assert.equal(aligned.milestoneId, "m-1");
 });
 
-test("deleting a Milestone detaches its Tasks and backfills their Goal", () => {
-  const milestone = { id: "m-1", goalId: "goal-1", title: "M", completed: false };
+test("deleting a Milestone detaches its Tasks without deleting them", () => {
+  const milestone = { id: "m-1", title: "M", completed: false };
   const tasks = [
     { id: "t-1", milestoneId: "m-1", title: "Linked", completed: false, priority: "medium", createdAt: "2025-01-01" },
   ];
 
   assert.deepEqual(detachTasksFromDeletedMilestone(tasks, milestone), [
-    { ...tasks[0], goalId: "goal-1", milestoneId: undefined },
+    { ...tasks[0], milestoneId: undefined },
   ]);
 });
 
 test("deleting a Project clears its reference from Tasks without deleting them", () => {
-  const project = { id: "project-1", goalId: "goal-1", name: "P", status: "active", createdAt: "2025-01-01" };
+  const project = { id: "project-1", name: "P", status: "active", createdAt: "2025-01-01" };
   const tasks = [
-    { id: "t-1", projectId: "project-1", title: "Direct", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-1", projectId: "project-1", goalId: "legacy", title: "Direct", completed: false, priority: "medium", createdAt: "2025-01-01" },
     { id: "t-2", projectId: "other", title: "Untouched", completed: false, priority: "medium", createdAt: "2025-01-01" },
   ];
 
   const result = detachTasksFromDeletedProject(tasks, project);
   assert.equal(result.length, 2);
   assert.equal(result[0].projectId, undefined);
-  assert.equal(result[0].goalId, "goal-1");
+  assert.equal(result[0].goalId, "legacy");
   assert.equal(result[1], tasks[1]);
 });
 
-test("filter helpers scope Tasks to a Goal or Milestone", () => {
+test("filter helpers scope Tasks to a Milestone", () => {
   const tasks = [
-    { id: "t-1", goalId: "goal-1", title: "One", completed: false, priority: "medium", createdAt: "2025-01-01" },
-    { id: "t-2", goalId: "goal-1", milestoneId: "m-1", title: "Two", completed: false, priority: "medium", createdAt: "2025-01-01" },
-    { id: "t-3", goalId: "goal-2", title: "Other", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-1", projectId: "project-1", title: "One", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-2", projectId: "project-1", milestoneId: "m-1", title: "Two", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "t-3", projectId: "project-2", title: "Other", completed: false, priority: "medium", createdAt: "2025-01-01" },
   ];
 
-  assert.deepEqual(filterTasksByGoal(tasks, "goal-1").map((task) => task.id), ["t-1", "t-2"]);
   assert.deepEqual(filterTasksByMilestone(tasks, "m-1").map((task) => task.id), ["t-2"]);
 });
 
 test("resolveTaskContext falls back through the Milestone without duplicating links", () => {
   const task = { milestoneId: "m-1" };
   const context = resolveTaskContext(task, {
-    goals: [{ id: "goal-1", title: "Goal" }],
     projects: [{ id: "project-1", name: "Project" }],
-    milestones: [{ id: "m-1", title: "Milestone", goalId: "goal-1", projectId: "project-1" }],
+    milestones: [{ id: "m-1", title: "Milestone", projectId: "project-1" }],
   });
 
-  assert.equal(context.goal?.title, "Goal");
   assert.equal(context.project?.name, "Project");
   assert.equal(context.milestone?.title, "Milestone");
 });
@@ -303,16 +316,14 @@ test("Today includes due-today and overdue Tasks but not future ones", () => {
   assert.equal(isTaskDueTodayOrOverdue(tasks[0], TODAY), true);
   assert.equal(isTaskDueTodayOrOverdue(tasks[3], TODAY), false);
 
-  const selected = selectTodayTasks(tasks, { milestones: [], activeGoalIds: new Set(), todayKey: TODAY });
+  const selected = selectTodayTasks(tasks, { milestones: [], todayKey: TODAY });
   assert.deepEqual(selected.map((task) => task.id).sort(), ["overdue", "today"]);
 });
 
 test("Today includes Tasks under active Milestones and keeps completed ones for reopening", () => {
-  const goals = [{ id: "goal-1", title: "G", status: "active", createdAt: "2025-01-01" }];
-  const activeGoalIds = new Set(goals.map((goal) => goal.id));
   const milestones = [
-    { id: "m-active", goalId: "goal-1", title: "Active", completed: false },
-    { id: "m-done", goalId: "goal-1", title: "Done", completed: true },
+    { id: "m-active", title: "Active", completed: false },
+    { id: "m-done", title: "Done", completed: true },
   ];
   const tasks = [
     { id: "via-active", milestoneId: "m-active", title: "Via active", completed: false, priority: "medium", createdAt: "2025-01-01" },
@@ -320,7 +331,7 @@ test("Today includes Tasks under active Milestones and keeps completed ones for 
     { id: "done-today", dueDate: TODAY, title: "Done today", completed: true, priority: "medium", createdAt: "2025-01-01" },
   ];
 
-  const selected = selectTodayTasks(tasks, { milestones, activeGoalIds, todayKey: TODAY });
+  const selected = selectTodayTasks(tasks, { milestones, todayKey: TODAY });
   assert.deepEqual(selected.map((task) => task.id).sort(), ["done-today", "via-active"]);
 });
 

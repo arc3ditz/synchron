@@ -43,7 +43,7 @@ const LOOP_STEPS = [
   {
     icon: Check,
     title: "Complete to build momentum",
-    description: "Checking things off grows streaks and moves goals forward.",
+    description: "Checking things off grows streaks and moves work forward.",
   },
   {
     icon: BarChart3,
@@ -360,9 +360,9 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
           <>
             <div style={styles.header}>
               <p style={styles.eyebrow}>How Synchron works</p>
-              <h1 style={styles.title}>Turn goals into daily action</h1>
+              <h1 style={styles.title}>Turn plans into daily action</h1>
               <p style={styles.description}>
-                Set a goal, plan it into habits and tasks, focus on the work, and complete it.
+                Capture tasks and habits, focus on the work, and complete it.
                 Today brings it all together — streaks and feedback show what to adjust next.
               </p>
             </div>
@@ -389,10 +389,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
         {step === "focus" && (
           <>
             <div style={styles.header}>
-              <p style={styles.eyebrow}>Step 1 · Your goal</p>
+              <p style={styles.eyebrow}>Step 1 · Your focus</p>
               <h1 style={styles.title}>What do you want?</h1>
               <p style={styles.description}>
-                A goal is the outcome you want. Pick an area — your first habit will feed into it.
+                Pick an area — your first habit will support it.
               </p>
             </div>
             <div style={styles.focusGrid}>
@@ -451,7 +451,7 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
               <p style={styles.eyebrow}>Step 2 · Your first habit</p>
               <h1 style={styles.title}>What will you do repeatedly?</h1>
               <p style={styles.description}>
-                Habits handle the recurring actions toward your goal. One-off wins belong in Tasks.
+                Habits handle the recurring actions. One-off wins belong in Tasks.
               </p>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>

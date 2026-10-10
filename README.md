@@ -7,8 +7,8 @@ All data stays on your machine via local storage. No account, no backend.
 ## Core features
 
 - **Habits** — daily habits with Mandatory / Optional priority, custom frequencies (daily, weekdays, weekends, custom days), time blocking, streaks, streak freezes, archiving, and categories.
-- **Goal → Project → Milestone → Task planning** — long-term goals broken down into projects, milestones, and actionable tasks.
-- **Focus timer** — Pomodoro-style focus sessions linkable to a habit or task, with session history.
+- **Project → Milestone → Task planning** — optional projects group milestones and actionable tasks.
+- **Focus timer** — Pomodoro-style focus sessions linkable to a habit, task, project, or milestone, with session history.
 - **Today view** — what matters now: due habits, scheduled items, and focus entry point.
 - **Analytics & History** — completion rates, streaks, and historical review.
 - **Notifications** — configurable intelligent reminders (conservative / balanced / frequent).
@@ -17,15 +17,16 @@ All data stays on your machine via local storage. No account, no backend.
 ## Planning workflow
 
 ```
-Goal → Project → Milestone → Task
+Project → Milestone → Task
 ```
 
-1. **Goal** — a long-term outcome with an optional target date (e.g. "Run a marathon"). Status: `active` / `completed` / `archived`.
-2. **Project** — a scoped effort attached to a goal (e.g. "Base training block"). Has its own dates and progress.
-3. **Milestone** — a checkpoint inside a project or goal (e.g. "Run 10K without stopping").
-4. **Task** — the smallest actionable unit. Tasks (and habits) can optionally be the target of a focus session.
+1. **Project** — an optional scoped effort (e.g. "Base training block"). Has its own dates and progress.
+2. **Milestone** — a checkpoint inside a project (e.g. "Run 10K without stopping").
+3. **Task** — the smallest actionable unit. Tasks (and habits) can optionally be the target of a focus session.
 
-Habits run alongside this hierarchy for recurring daily execution; tasks and milestones handle one-off progress toward goals.
+Habits run alongside this hierarchy for recurring daily execution; tasks and milestones handle one-off progress. All three work standalone — links are always optional.
+
+Legacy Goal data stored on this machine (if any) is preserved but no longer shown; no Goal links are created, migrated, or deleted by the app.
 
 ## Habits and Focus
 

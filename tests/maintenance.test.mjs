@@ -68,7 +68,7 @@ test("creation stays minimal: title/name only, everything else defaulted or opti
   const addForm = tasksSource.match(/function handleAddSubmit[\s\S]*?\n  \}/);
   assert.ok(addForm);
   assert.ok(addForm[0].includes("dueDate: dueDate || undefined"), "due date stays optional on creation");
-  assert.ok(addForm[0].includes("goalId: goalId || undefined"), "links stay optional on creation");
+  assert.ok(addForm[0].includes("projectId: projectId || undefined"), "links stay optional on creation");
   assert.ok(
     appSource.includes("frequencyType: newFrequencyType") && appSource.includes('priority: newPriority'),
     "habit creation keeps working defaults",

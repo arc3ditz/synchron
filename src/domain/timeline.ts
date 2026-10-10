@@ -64,9 +64,10 @@ export function formatClockTime(timestamp: number): string {
 export interface TimelineInput {
   habits: Habit[];
   tasks: Task[];
-  goals: { id: string; title: string }[];
   milestones: { id: string; title: string; goalId?: string; projectId?: string }[];
   projects?: { id: string; name: string }[];
+  /** Legacy Goal list; ignored except for backward-compatible callers. */
+  goals?: { id: string; title: string }[];
   focusSessions: FocusSessionRecord[];
   todayKey: string;
   dayResetHour: number;
@@ -104,8 +105,7 @@ export function buildDailyTimeline(input: TimelineInput): TimelineBlock[] {
     if (!task.scheduledTime) continue;
     const sortMinutes = timeToMinutes(task.scheduledTime);
     if (sortMinutes === null) continue;
-    const { goal } = resolveTaskContext(task, {
-      goals: input.goals,
+    const { project } = resolveTaskContext(task, {
       projects: input.projects,
       milestones: input.milestones,
     });
@@ -116,7 +116,7 @@ export function buildDailyTimeline(input: TimelineInput): TimelineBlock[] {
       sortMinutes,
       taskId: task.id,
       title: task.title,
-      meta: goal?.title || task.priority,
+      meta: project?.name || task.priority,
       durationMinutes: task.durationMinutes || task.estimatedMinutes,
       completed: task.completed,
       overdue: !task.completed && task.dueDate !== undefined && task.dueDate < input.todayKey,

@@ -57,7 +57,7 @@ test("palette renders from App and closes first on Escape", () => {
 
 test("palette exposes every required action and reuses navigation", () => {
   for (const id of [
-    "go-today", "go-habits", "go-timer", "go-goals", "go-history",
+    "go-today", "go-habits", "go-timer", "go-projects", "go-history",
     "go-analytics", "open-settings", "add-task", "add-habit", "start-focus",
   ]) {
     assert.ok(appSource.includes(`"${id}"`), `palette must define ${id}`);

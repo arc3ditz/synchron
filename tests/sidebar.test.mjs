@@ -8,7 +8,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
 const cssSource = readFileSync(path.join(root, "src/styles/AppLayout.css"), "utf8");
 
-const NAV_ITEMS = ["Today", "My Habits", "Tasks", "Timer", "Goals", "History", "Analytics", "Settings"];
+const NAV_ITEMS = ["Today", "My Habits", "Tasks", "Timer", "Projects", "History", "Analytics", "Settings"];
 
 test("every sidebar item keeps a tooltip, active wiring, and shortcut hint", () => {
   for (const label of NAV_ITEMS) {
@@ -38,7 +38,7 @@ test("the collapse control stays discoverable and labelled in both states", () =
 });
 
 test("keyboard navigation and collapse keep working regardless of sidebar state", () => {
-  for (const [key, view] of [["1", "Today"], ["2", "Habits"], ["3", "Tasks"], ["4", "Timer"], ["5", "goals"], ["6", "History"], ["7", "Analytics"]]) {
+  for (const [key, view] of [["1", "Today"], ["2", "Habits"], ["3", "Tasks"], ["4", "Timer"], ["5", "Projects"], ["6", "History"], ["7", "Analytics"]]) {
     assert.ok(appSource.includes(`"${key}": "${view}"`), `shortcut ${key} must target ${view}`);
   }
   assert.ok(appSource.includes('key === "b"'), "a shortcut must toggle the sidebar");

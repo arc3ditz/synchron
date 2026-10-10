@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
 import { FORM_CONTROL } from "../theme";
-import type { Goal, Milestone, Project, Task } from "../types";
+import type { Milestone, Project, Task } from "../types";
 import { resolveTaskContext } from "../domain/tasks";
 import { isTaskStaleBacklog } from "../domain/nextStep";
 import { getTodayKey } from "../utils/dates";
@@ -10,7 +10,6 @@ import { formatFullDate } from "../utils/dates";
 
 type TasksProps = {
   tasks: Task[];
-  goals: Goal[];
   milestones: Milestone[];
   projects?: Project[];
   dayResetHour: number;
@@ -18,7 +17,7 @@ type TasksProps = {
   onEditTask: (taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
-  onStartFocus: (entityId?: { taskId?: string; habitId?: number; goalId?: string; title?: string }) => void;
+  onStartFocus: (entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }) => void;
 };
 
 type StatusFilter = "open" | "completed" | "all";
@@ -149,7 +148,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--color-accent)",
     fontWeight: 600,
   },
-  goalFilter: {
+  projectFilter: {
     minWidth: 160,
     maxWidth: 260,
   },
@@ -286,7 +285,6 @@ const styles: Record<string, CSSProperties> = {
 
 export default function Tasks({
   tasks,
-  goals,
   milestones,
   projects = [],
   dayResetHour,
@@ -302,7 +300,6 @@ export default function Tasks({
   const [priority, setPriority] = useState<Task["priority"]>("medium");
   const [dueDate, setDueDate] = useState("");
   const [estimatedMinutes, setEstimatedMinutes] = useState("");
-  const [goalId, setGoalId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [milestoneId, setMilestoneId] = useState("");
 
@@ -313,36 +310,28 @@ export default function Tasks({
   const [editEstimatedMinutes, setEditEstimatedMinutes] = useState("");
   const [editScheduledTime, setEditScheduledTime] = useState("");
   const [editDurationMinutes, setEditDurationMinutes] = useState("");
-  const [editGoalId, setEditGoalId] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
   const [editMilestoneId, setEditMilestoneId] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
-  const [goalFilter, setGoalFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
   const [pendingDeletion, setPendingDeletion] = useState<Task | null>(null);
 
-  const activeGoals = goals.filter((goal) => goal.status !== "archived");
   const openCount = tasks.filter((task) => !task.completed).length;
   const completedCount = tasks.length - openCount;
 
   const availableProjects = useMemo(() => {
-    const list = projects.filter((project) =>
-      project.status !== "archived" && (goalId === "" || project.goalId === undefined || project.goalId === goalId),
-    );
+    const list = projects.filter((project) => project.status !== "archived");
     if (projectId !== "" && !list.some((project) => project.id === projectId)) {
       const current = projects.find((project) => project.id === projectId);
       return current ? [...list, current] : list;
     }
     return list;
-  }, [projects, goalId, projectId]);
+  }, [projects, projectId]);
 
   const availableMilestones = useMemo(() => {
     const list = milestones.filter((milestone) => {
-      if (projectId !== "") {
-        return milestone.projectId === projectId ||
-          (milestone.goalId !== undefined && milestone.goalId === goalId && milestone.projectId === undefined);
-      }
-      if (goalId !== "") return milestone.goalId === goalId;
+      if (projectId !== "") return milestone.projectId === projectId;
       return true;
     });
     if (milestoneId !== "" && !list.some((milestone) => milestone.id === milestoneId)) {
@@ -350,14 +339,13 @@ export default function Tasks({
       return current ? [...list, current] : list;
     }
     return list;
-  }, [milestones, goalId, projectId, milestoneId]);
+  }, [milestones, projectId, milestoneId]);
 
   function resetAddForm() {
     setTitle("");
     setPriority("medium");
     setDueDate("");
     setEstimatedMinutes("");
-    setGoalId("");
     setProjectId("");
     setMilestoneId("");
   }
@@ -377,7 +365,6 @@ export default function Tasks({
       priority,
       dueDate: dueDate || undefined,
       estimatedMinutes: parseMinutes(estimatedMinutes),
-      goalId: goalId || undefined,
       projectId: projectId || undefined,
       milestoneId: milestoneId || undefined,
     });
@@ -392,7 +379,6 @@ export default function Tasks({
     setEditEstimatedMinutes(task.estimatedMinutes?.toString() ?? "");
     setEditScheduledTime(task.scheduledTime ?? "");
     setEditDurationMinutes(task.durationMinutes?.toString() ?? "");
-    setEditGoalId(task.goalId ?? "");
     setEditProjectId(task.projectId ?? "");
     setEditMilestoneId(task.milestoneId ?? "");
   }
@@ -404,6 +390,7 @@ export default function Tasks({
 
     // Same scheduling semantics as Today: duration only applies alongside a
     // scheduled time, so clearing the time also clears the duration.
+    // Legacy goalId links are preserved verbatim.
     const scheduledTime = editScheduledTime || undefined;
     onEditTask(task.id, {
       title: trimmedTitle,
@@ -412,7 +399,7 @@ export default function Tasks({
       estimatedMinutes: parseMinutes(editEstimatedMinutes),
       scheduledTime,
       durationMinutes: scheduledTime ? parseMinutes(editDurationMinutes) : undefined,
-      goalId: editGoalId || undefined,
+      goalId: task.goalId,
       projectId: editProjectId || undefined,
       milestoneId: editMilestoneId || undefined,
     });
@@ -423,10 +410,7 @@ export default function Tasks({
     const filtered = tasks.filter((task) => {
       if (statusFilter === "open" && task.completed) return false;
       if (statusFilter === "completed" && !task.completed) return false;
-      if (goalFilter !== "") {
-        const { goal } = resolveTaskContext(task, { goals, projects, milestones });
-        if ((goal?.id ?? task.goalId) !== goalFilter) return false;
-      }
+      if (projectFilter !== "" && task.projectId !== projectFilter) return false;
       return true;
     });
     // Overdue first, then due date, then priority, then creation order.
@@ -441,17 +425,16 @@ export default function Tasks({
       if (byPriority !== 0) return byPriority;
       return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
     });
-  }, [tasks, statusFilter, goalFilter, goals, projects, milestones, todayKey]);
+  }, [tasks, statusFilter, projectFilter, todayKey]);
 
   function renderContext(task: Task) {
-    const { goal, project, milestone } = resolveTaskContext(task, { goals, projects, milestones });
-    const parts = [goal?.title, project?.name, milestone?.title].filter(
+    const { project, milestone } = resolveTaskContext(task, { projects, milestones });
+    const parts = [project?.name, milestone?.title].filter(
       (part): part is string => part !== undefined && part !== "",
     );
     if (parts.length === 0) return null;
     return (
       <span style={styles.context}>
-        {goal && <span style={styles.taskContextBadge}>Goal</span>}
         {project && <span style={styles.taskContextBadge}>Project</span>}
         {milestone && <span style={styles.taskContextBadge}>Milestone</span>}
         {parts.join(" › ")}
@@ -481,26 +464,13 @@ export default function Tasks({
             <div style={styles.formGrid}>
               <select
                 style={styles.compactInput}
-                value={editGoalId}
-                onChange={(event) => setEditGoalId(event.target.value)}
-                aria-label="Linked Goal (Optional)"
-              >
-                <option value="">No Goal</option>
-                {activeGoals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>{goal.title}</option>
-                ))}
-              </select>
-              <select
-                style={styles.compactInput}
                 value={editProjectId}
                 onChange={(event) => setEditProjectId(event.target.value)}
                 aria-label="Linked Project (Optional)"
               >
                 <option value="">No Project</option>
                 {projects
-                  .filter((project) =>
-                    project.status !== "archived" &&
-                    (editGoalId === "" || project.goalId === undefined || project.goalId === editGoalId))
+                  .filter((project) => project.status !== "archived")
                   .map((project) => (
                     <option key={project.id} value={project.id}>{project.name}</option>
                   ))}
@@ -515,7 +485,6 @@ export default function Tasks({
                 {milestones
                   .filter((milestone) => {
                     if (editProjectId !== "") return milestone.projectId === editProjectId;
-                    if (editGoalId !== "") return milestone.goalId === editGoalId;
                     return true;
                   })
                   .map((milestone) => (
@@ -710,20 +679,6 @@ export default function Tasks({
             />
           </label>
           <label style={styles.fieldLabel}>
-            Goal
-            <select
-              style={styles.compactInput}
-              value={goalId}
-              onChange={(event) => { setGoalId(event.target.value); setProjectId(""); setMilestoneId(""); }}
-              aria-label="Linked Goal (Optional)"
-            >
-              <option value="">No Goal</option>
-              {activeGoals.map((goal) => (
-                <option key={goal.id} value={goal.id}>{goal.title}</option>
-              ))}
-            </select>
-          </label>
-          <label style={styles.fieldLabel}>
             Project
             <select
               style={styles.compactInput}
@@ -769,14 +724,14 @@ export default function Tasks({
           ))}
         </div>
         <select
-          style={{ ...styles.compactInput, ...styles.goalFilter }}
-          value={goalFilter}
-          onChange={(event) => setGoalFilter(event.target.value)}
-          aria-label="Filter by Goal"
+          style={{ ...styles.compactInput, ...styles.projectFilter }}
+          value={projectFilter}
+          onChange={(event) => setProjectFilter(event.target.value)}
+          aria-label="Filter by Project"
         >
-          <option value="">All Goals</option>
-          {activeGoals.map((goal) => (
-            <option key={goal.id} value={goal.id}>{goal.title}</option>
+          <option value="">All Projects</option>
+          {projects.filter((project) => project.status !== "archived").map((project) => (
+            <option key={project.id} value={project.id}>{project.name}</option>
           ))}
         </select>
       </div>
@@ -813,7 +768,7 @@ export default function Tasks({
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="tasks-delete-modal-title">Delete "{pendingDeletion.title}"?</h2>
-            <p>This action cannot be undone. Its goal, project, milestone, and focus history are left untouched.</p>
+            <p>This action cannot be undone. Its project, milestone, and focus history are left untouched.</p>
             <div className="delete-modal-actions">
               <button
                 type="button"

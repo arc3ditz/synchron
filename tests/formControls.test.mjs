@@ -12,7 +12,6 @@ const componentFiles = [
   "src/App.tsx",
   "src/components/Tasks.tsx",
   "src/components/Projects.tsx",
-  "src/components/Goals.tsx",
   "src/components/FocusTimer.tsx",
   "src/components/History.tsx",
   "src/components/Today.tsx",

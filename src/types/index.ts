@@ -5,7 +5,7 @@ export type FrequencyType = "daily" | "weekdays" | "weekends" | "custom";
 export type WeekStart = "Sunday" | "Monday";
 export type Theme = "dark" | "light";
 export type NotificationFrequency = "conservative" | "balanced" | "frequent";
-export type View = "Today" | "Habits" | "Tasks" | "Timer" | "Projects" | "goals" | "History" | "Analytics" | "Settings";
+export type View = "Today" | "Habits" | "Tasks" | "Timer" | "Projects" | "History" | "Analytics" | "Settings";
 
 export interface AppSettings {
   viewMode: "grid" | "list";
@@ -36,6 +36,7 @@ export interface Habit {
   name: string;
   createdAt?: string; // Local calendar date in YYYY-MM-DD format
   goalId?: string;
+  projectId?: string; // optional link to a Project; undefined = standalone habit
   priority: Priority;
   type: HabitType;
   frequencyType?: FrequencyType;
@@ -116,7 +117,8 @@ export interface KeyboardShortcutsModalProps {
   shortcutKey: string;
 }
 
-// New domain interfaces for goals, milestones, and tasks
+// Legacy Goal type retained for backward compatibility with stored data.
+// Goals are no longer user-facing; no new Goal records are created.
 export interface Goal {
   id: string;
   title: string;

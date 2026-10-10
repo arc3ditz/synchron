@@ -62,10 +62,8 @@ test("task due today outranks a mandatory habit", () => {
 });
 
 test("mandatory habit outranks a merely contextual milestone task", () => {
-  const goals = [{ id: "g", title: "G", status: "active", createdAt: "2026-01-01" }];
-  const milestones = [{ id: "m", goalId: "g", title: "M", completed: false }];
+  const milestones = [{ id: "m", title: "M", completed: false }];
   const rec = recommendNextStep(input({
-    goals,
     milestones,
     tasks: [makeTask({ id: "ctx", title: "Context", milestoneId: "m", priority: "high" })],
     habits: [makeHabit({ id: 3, name: "Vitamins", priority: "Mandatory" })],
@@ -109,25 +107,20 @@ test("completed and archived items are excluded", () => {
   assert.equal(rec.taskId, "open");
 });
 
-test("tasks under completed milestones, inactive goals, or finished projects are ineligible", () => {
-  const goals = [
-    { id: "active", title: "A", status: "active", createdAt: "2026-01-01" },
-    { id: "done-goal", title: "D", status: "completed", createdAt: "2026-01-01" },
-  ];
+test("tasks under completed milestones or finished projects are ineligible", () => {
   const milestones = [
-    { id: "m-done", goalId: "active", title: "MD", completed: true },
-    { id: "m-ok", goalId: "active", title: "MO", completed: false },
+    { id: "m-done", title: "MD", completed: true },
+    { id: "m-ok", title: "MO", completed: false },
   ];
   const projects = [
     { id: "p-done", name: "P", status: "completed", createdAt: "2026-01-01" },
   ];
   const rec = recommendNextStep(input({
-    goals,
     milestones,
     projects,
     tasks: [
       makeTask({ id: "via-done", title: "Via done", milestoneId: "m-done", priority: "high" }),
-      makeTask({ id: "goal-done", title: "Goal done", goalId: "done-goal", dueDate: TODAY, priority: "high" }),
+      makeTask({ id: "legacy-goal", title: "Legacy goal link stays eligible", goalId: "legacy", priority: "medium" }),
       makeTask({ id: "proj-done", title: "Proj done", projectId: "p-done", dueDate: TODAY, priority: "high" }),
       makeTask({ id: "ok", title: "Ok", milestoneId: "m-ok", priority: "low" }),
     ],

@@ -100,7 +100,7 @@ const shortcutGroups: ShortcutGroup[] = [
       { keys: "⌘2", description: "Go to My Habits" },
       { keys: "⌘3", description: "Go to Tasks" },
       { keys: "⌘4", description: "Go to Timer" },
-      { keys: "⌘5", description: "Go to Goals" },
+      { keys: "⌘5", description: "Go to Projects" },
       { keys: "⌘6", description: "Go to History" },
       { keys: "⌘7", description: "Go to Analytics" },
       { keys: "⌘,", description: "Go to Settings" },
