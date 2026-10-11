@@ -12,6 +12,7 @@ import {
   isValidFocusDurationMinutes,
   MAX_FOCUS_DURATION_MINUTES,
   MIN_COUNTDOWN_FONT_PX,
+  parseCountdownDuration,
 } from "../src/domain/focusTimer.ts";
 
 process.env.TZ = "Asia/Tokyo";
@@ -64,6 +65,16 @@ test("attempts to enter 1000 minutes or more are rejected live and clamped on co
   assert.equal(clampFocusDurationMinutes("25.5", 25), 26, "non-integers round to the nearest minute");
   assert.equal(clampFocusDurationMinutes("", 25), 25, "empty input keeps the fallback");
   assert.equal(clampFocusDurationMinutes("abc", 25), 25, "garbage keeps the fallback");
+});
+
+test("inline countdown input accepts minutes and minutes:seconds within supported limits", () => {
+  assert.equal(parseCountdownDuration("35:00"), 35 * 60000);
+  assert.equal(parseCountdownDuration("1:30"), 90000);
+  assert.equal(parseCountdownDuration("35"), 35 * 60000);
+  assert.equal(parseCountdownDuration("999:00"), 999 * 60000);
+  for (const value of ["", "0", "0:59", "-1", "-1:30", "1:60", "abc", "1000:00", "999:01"]) {
+    assert.equal(parseCountdownDuration(value), null, `${JSON.stringify(value)} is rejected`);
+  }
 });
 
 // --- Countdown rendering at the boundary ---
@@ -179,4 +190,29 @@ test("the countdown scales from the measured ring instead of a fixed font size",
     timerSource.includes("RING_TEXT_PADDING_PX"),
     "the fit keeps padding between the glyphs and the ring",
   );
+});
+
+test("countdown editing is keyboard-accessible and linked context precedes duration controls", () => {
+  assert.ok(timerSource.includes("Activate to edit in minutes and seconds."), "countdown has an accessible activation label");
+  assert.ok(timerSource.includes('aria-label="Set remaining time in minutes or minutes:seconds'), "editor explains accepted input");
+  assert.ok(timerSource.includes('event.key === "Enter"'), "Enter applies the edited duration");
+  assert.ok(timerSource.includes('event.key === "Escape"'), "Escape cancels the edit");
+  assert.ok(timerSource.includes("commitCountdownEdit(event.currentTarget.value)"), "blur applies the edited duration");
+
+  const linkedContext = timerSource.indexOf('aria-label="Linked context"');
+  const presets = timerSource.indexOf('aria-label="Duration Presets"');
+  const durationSettings = timerSource.indexOf('aria-label="Duration settings"');
+  assert.ok(linkedContext >= 0 && linkedContext < presets, "linked context is above quick presets");
+  assert.ok(presets < durationSettings, "quick presets remain above duration settings");
+});
+
+test("inline countdown editor has no border, outline, shadow, or opaque field surface", () => {
+  const editorStart = timerSource.indexOf('type="text"', timerSource.indexOf('countdownEditDraft === null'));
+  const editorEnd = timerSource.indexOf("value={countdownEditDraft}", editorStart);
+  const editor = timerSource.slice(editorStart, editorEnd);
+  assert.ok(editor.includes("border: 0"), "border is absent in both focus states");
+  assert.ok(editor.includes('outline: "none"'), "global focus outline is suppressed");
+  assert.ok(editor.includes('boxShadow: "none"'), "global focus shadow is suppressed");
+  assert.ok(editor.includes('background: "transparent"'), "field background does not form a rectangle");
+  assert.ok(editor.includes("textAlign: \"center\""), "entered text remains centered");
 });

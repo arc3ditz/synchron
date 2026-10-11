@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import {
   ListChecks,
   ListTodo,
@@ -60,6 +60,8 @@ import {
   STORAGE_KEYS,
   loadStorageData,
   saveStorageData,
+  loadTodaySnoozes,
+  saveTodaySnoozes,
   loadTasks,
   saveTasks,
   loadMilestones,
@@ -78,7 +80,8 @@ import {
 import {
   createProject,
   updateProject,
-  updateProjectStatus,
+  updateProjectArchive,
+  recalculateProjectStatuses,
   deleteProject,
   detachHabitsFromDeletedProject,
   archiveHabitsForFinishedProject,
@@ -97,6 +100,7 @@ import {
   propagateMilestoneMove,
 } from "./domain/relationships";
 import {
+  getDateKey,
   getTodayKey,
   formatDateDisplay,
   shiftDateKey,
@@ -118,6 +122,14 @@ import {
   sanitizeCompletedAt,
 } from "./domain/completions";
 import { shouldShowWelcomeBack } from "./domain/welcomeBack";
+import {
+  DEFAULT_SNOOZE_RETURN_MINUTES,
+  SNOOZE_RETURN_MINUTES,
+  removeTodaySnooze,
+  snoozeTodayItem,
+  type TodaySnooze,
+  type TodaySnoozeTarget,
+} from "./domain/todaySnoozes";
 
 const DEFAULT_SETTINGS: AppSettings = {
   viewMode: "grid",
@@ -134,7 +146,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     pomodoroTransition: true,
     timerComplete: true,
   },
-  showMandatoryHabitsInImportantItems: false,
+  skippedItemReturnMinutes: DEFAULT_SNOOZE_RETURN_MINUTES,
   enableIntelligentNotifications: true,
   notificationFrequency: "balanced",
   habitReminders: true,
@@ -903,9 +915,10 @@ function loadAppSettings(): AppSettings {
           timerComplete: typeof parsed.sfxEnabled.timerComplete === "boolean" ? parsed.sfxEnabled.timerComplete : DEFAULT_SETTINGS.sfxEnabled.timerComplete,
         }
       : DEFAULT_SETTINGS.sfxEnabled,
-    showMandatoryHabitsInImportantItems: typeof parsed.showMandatoryHabitsInImportantItems === "boolean"
-      ? parsed.showMandatoryHabitsInImportantItems
-      : DEFAULT_SETTINGS.showMandatoryHabitsInImportantItems,
+    skippedItemReturnMinutes: typeof parsed.skippedItemReturnMinutes === "number" &&
+      SNOOZE_RETURN_MINUTES.some((minutes) => minutes === parsed.skippedItemReturnMinutes)
+      ? parsed.skippedItemReturnMinutes!
+      : DEFAULT_SETTINGS.skippedItemReturnMinutes,
     enableIntelligentNotifications: typeof parsed.enableIntelligentNotifications === "boolean"
       ? parsed.enableIntelligentNotifications
       : DEFAULT_SETTINGS.enableIntelligentNotifications,
@@ -975,6 +988,7 @@ function App() {
   const shortcutKey = isMac ? "⌘" : "Ctrl";
 
   const [appSettings, setAppSettings] = useState<AppSettings>(loadAppSettings);
+  const [todaySnoozes, setTodaySnoozes] = useState<TodaySnooze[]>(loadTodaySnoozes);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [view, setView] = useState<View>("Today");
   const [selectedDateKey, setSelectedDateKey] = useState(() =>
@@ -985,9 +999,19 @@ function App() {
   // Normalize Project → Milestone → Task relationships at the
   // storage loading boundary so invalid references are detached safely.
   // Legacy goalId fields are preserved verbatim.
-  const [initialRelationships] = useState(() =>
-    normalizeRelationships(loadProjects(), loadMilestones(), loadTasks()),
-  );
+  const [projectStatusDate, setProjectStatusDate] = useState(() => getDateKey(new Date()));
+  const [initialRelationships] = useState(() => {
+    const relationships = normalizeRelationships(loadProjects(), loadMilestones(), loadTasks());
+    return {
+      ...relationships,
+      projects: recalculateProjectStatuses(
+        relationships.projects,
+        relationships.milestones,
+        relationships.tasks,
+        getDateKey(new Date()),
+      ),
+    };
+  });
 
   const [habits, setHabits] = useState<Habit[]>(() => {
     const localLoadHabits = (): Habit[] => {
@@ -1037,10 +1061,14 @@ function App() {
     // existed) detach to standalone here; the habit and its history are kept.
     return localLoadHabits().map((habit) => alignHabit(habit, initialRelationships.projects));
   });
-  const [projects, setProjects] = useState<Project[]>(() => initialRelationships.projects);
+  const [projectRecords, setProjects] = useState<Project[]>(() => initialRelationships.projects);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>(() => initialRelationships.tasks);
   const [milestones, setMilestones] = useState<Milestone[]>(() => initialRelationships.milestones);
+  const projects = useMemo(
+    () => recalculateProjectStatuses(projectRecords, milestones, tasks, projectStatusDate),
+    [projectRecords, milestones, tasks, projectStatusDate],
+  );
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
     const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
     if (!Array.isArray(parsed)) return [];
@@ -1178,6 +1206,24 @@ function App() {
   }, [appSettings]);
 
   useEffect(() => {
+    saveTodaySnoozes(todaySnoozes);
+  }, [todaySnoozes]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const nextReturnAt = todaySnoozes.reduce(
+      (earliest, snooze) => snooze.returnAt > now ? Math.min(earliest, snooze.returnAt) : earliest,
+      Number.POSITIVE_INFINITY,
+    );
+    if (!Number.isFinite(nextReturnAt)) return;
+    const timerId = window.setTimeout(() => {
+      const currentTime = Date.now();
+      setTodaySnoozes((current) => current.filter((snooze) => snooze.returnAt > currentTime));
+    }, Math.max(0, nextReturnAt - now));
+    return () => window.clearTimeout(timerId);
+  }, [todaySnoozes]);
+
+  useEffect(() => {
     configureSfx({
       enabled: appSettings.soundAlerts,
       volume: appSettings.sfxVolume,
@@ -1221,6 +1267,7 @@ function App() {
 
   useEffect(() => {
     function syncHabitDay() {
+      setProjectStatusDate(getDateKey(new Date()));
       const currentDateKey = getTodayKey(appSettings.dayResetHour);
       const previousDateKey = lastLogicalDateKeyRef.current;
       if (currentDateKey === previousDateKey) return;
@@ -1285,6 +1332,9 @@ function App() {
     setTasks((current) => current.map((task) =>
       task.id === taskId ? toggleTaskCompletion(task) : task,
     ));
+    if (!isCurrentlyComplete) {
+      setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "task", id: taskId }));
+    }
 
     // Same subtle confirmation as habits, only when marking complete (not unmarking)
     if (!isCurrentlyComplete) {
@@ -1300,6 +1350,13 @@ function App() {
 
   function handleDeleteTask(taskId: string) {
     setTasks((current) => deleteTask(current, taskId));
+    setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "task", id: taskId }));
+  }
+
+  function handleSnoozeTodayItem(item: TodaySnoozeTarget) {
+    setTodaySnoozes((current) =>
+      snoozeTodayItem(current, item, Date.now(), appSettings.skippedItemReturnMinutes),
+    );
   }
 
   function handleAddMilestone(data: Omit<Milestone, "id" | "completed">) {
@@ -1908,6 +1965,9 @@ function App() {
         ? markHabitIncomplete(h, targetDateKey)
         : markHabitComplete(h, targetDateKey);
     }));
+    if (!isCurrentlyComplete && targetDateKey === getTodayKey(appSettings.dayResetHour)) {
+      setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "habit", id }));
+    }
 
     // Play habit complete sound only when marking complete (not unmarking)
     if (!isCurrentlyComplete) {
@@ -2047,6 +2107,7 @@ function App() {
     if (!updatedHabit) return;
     const archivedHabit = { ...updatedHabit, isArchived: true };
     setHabits(habits.map((habit) => (habit.id === id ? archivedHabit : habit)));
+    setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "habit", id }));
   }
 
   function unarchiveHabit(id: number) {
@@ -2551,8 +2612,6 @@ function App() {
             {!sidebarCollapsed && (
               <span className="sidebar-brand-text">
                 <span className="sidebar-brand-name">Synchron</span>
-                <br />
-                <span className="sidebar-brand-sub">Atelier</span>
               </span>
             )}
           </div>
@@ -2699,7 +2758,8 @@ function App() {
               onNavigateToAnalytics={() => navigateToView("Analytics")}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
-              showMandatoryHabitsInImportantItems={appSettings.showMandatoryHabitsInImportantItems ?? false}
+              todaySnoozes={todaySnoozes}
+              onSnoozeItem={handleSnoozeTodayItem}
               onUpdateHabit={(updatedHabit) =>
                 setHabits((current) => current.map((habit) =>
                   habit.id === updatedHabit.id ? updatedHabit : habit,
@@ -2789,6 +2849,18 @@ function App() {
               </div>
             )}
 
+            <label className="habit-search-control">
+              <Search size={15} aria-hidden="true" />
+              <input
+                className="form-control"
+                value={habitSearch}
+                onChange={(event) => setHabitSearch(event.target.value)}
+                placeholder="Search habits"
+                aria-label="Search habits"
+                maxLength={120}
+              />
+            </label>
+
             <div className="category-section">
               <div className="category-tabs habits-toolbar" role="group" aria-label="Filter Habits by Category">
                 <div className="habit-category-tabs" role="group" aria-label="Category">
@@ -2807,19 +2879,8 @@ function App() {
                 <div
                   className="habit-toolbar-controls"
                   role="group"
-                  aria-label="Search, filters, and category settings"
+                  aria-label="Filters and category settings"
                 >
-                  <label className="habit-search-control">
-                    <Search size={15} aria-hidden="true" />
-                    <input
-                      className="form-control"
-                      value={habitSearch}
-                      onChange={(event) => setHabitSearch(event.target.value)}
-                      placeholder="Search habits"
-                      aria-label="Search habits"
-                      maxLength={120}
-                    />
-                  </label>
                   <div ref={filterPopoverRef} style={{ position: "relative" }}>
                     <button
                       type="button"
@@ -3040,10 +3101,10 @@ function App() {
 
             {/* Primary creation path: Name + Frequency only. Everything else
                 lives behind More options so a basic habit saves in one step. */}
-            <div style={{ ...styles.inputRow, justifyContent: "center", margin: "12px auto", maxWidth: 640 }}>
+            <div style={{ ...styles.inputRow, flexWrap: "wrap", alignItems: "center", justifyContent: "center", margin: "12px auto", maxWidth: 640 }}>
               <input
                 ref={newHabitInputRef}
-                style={{ ...styles.input, flex: 2 }}
+                style={{ ...styles.input, flex: "2 1 220px", minWidth: 0 }}
                 value={newHabit}
                 onChange={(event) => setNewHabit(event.target.value)}
                 onKeyDown={(event) => {
@@ -3069,17 +3130,34 @@ function App() {
 
             {showHabitOptions ? (
               <div style={{ ...styles.optionsRow, justifyContent: "center", margin: "12px 0 32px" }}>
-                <select
-                  style={styles.habitPropertySelect}
-                  value={newPriority}
-                  onChange={(event) =>
-                    setNewPriority(event.target.value as Priority)
-                  }
-                  aria-label="Priority"
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                    flex: "1 1 140px",
+                    minWidth: 140,
+                  }}
                 >
-                  <option value="Optional">Optional</option>
-                  <option value="Mandatory">Mandatory</option>
-                </select>
+                  <label
+                    htmlFor="new-habit-priority"
+                    style={{ fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}
+                  >
+                    Habit requirement
+                  </label>
+                  <select
+                    id="new-habit-priority"
+                    style={{ ...styles.habitPropertySelect, width: "100%" }}
+                    value={newPriority}
+                    onChange={(event) =>
+                      setNewPriority(event.target.value as Priority)
+                    }
+                    aria-label="Habit requirement"
+                  >
+                    <option value="Optional">Optional</option>
+                    <option value="Mandatory">Mandatory</option>
+                  </select>
+                </div>
                 {renderCategorySelect(
                   newCategory,
                   setNewCategory,
@@ -3131,7 +3209,7 @@ function App() {
                 {activeFilterCount > 0 || searchQuery !== ""
                   ? "No habits match these filters."
                   : habits.length === 0
-                  ? "No habits yet — name your first small habit above. Frequency and category can come later."
+                  ? "No habits yet — name your first small habit above. Category and project can come later."
                   : currentCategory !== ALL_CATEGORIES && !habits.some(matchesCategory)
                   ? `No habits in ${currentCategory} yet.`
                   : archivedHabits.length > 0
@@ -3146,7 +3224,8 @@ function App() {
                       color: "var(--text-secondary)",
                       fontSize: 12,
                       padding: "8px 12px",
-                      marginTop: 8,
+                      display: "block",
+                      margin: "12px auto 0",
                     }}
                     onClick={clearPropertyFilters}
                   >
@@ -3322,14 +3401,14 @@ function App() {
                   project.id === projectId ? updatedProject : project,
                 ));
               }}
-              onEditProjectStatus={(projectId, status) => {
-                setProjects((current) => current.map((project) =>
-                  project.id === projectId ? updateProjectStatus(project, status) : project,
-                ));
-                // Safe end-of-Project behavior: linked active habits are archived
-                // (hidden, history preserved), never deleted. Unrelated habits
-                // are untouched; unarchive restores a habit if still wanted.
-                if (status === "completed" || status === "archived") {
+              onToggleProjectArchive={(projectId) => {
+                const project = projects.find((item) => item.id === projectId);
+                if (!project) return;
+                const archived = project.status !== "archived";
+                setProjects((current) => current.map((item) => item.id === projectId
+                  ? updateProjectArchive(item, archived)
+                  : item));
+                if (archived) {
                   setHabits((current) => archiveHabitsForFinishedProject(current, projectId));
                 }
               }}
@@ -3454,17 +3533,27 @@ function App() {
                 <div style={styles.settingsCard}>
                   <div style={styles.settingsRow}>
                     <div>
-                      <span style={styles.settingsLabel}>Show Mandatory Habits in Important Items</span>
-                      <span style={styles.settingsDescription}>Include pending mandatory habits in today&apos;s important items.</span>
+                      <span style={styles.settingsLabel}>Bring skipped items back after</span>
+                      <span style={styles.settingsDescription}>
+                        Existing snoozes keep their return time. Changes apply to future snoozes.
+                      </span>
                     </div>
-                    <SettingsSwitch
-                      label="Show Mandatory Habits in Important Items"
-                      checked={appSettings.showMandatoryHabitsInImportantItems ?? false}
-                      onChange={() => setAppSettings((current) => ({
+                    <select
+                      className="ui-select"
+                      style={{ ...styles.settingsSelect, minWidth: 150 }}
+                      value={appSettings.skippedItemReturnMinutes}
+                      onChange={(event) => setAppSettings((current) => ({
                         ...current,
-                        showMandatoryHabitsInImportantItems: !(current.showMandatoryHabitsInImportantItems ?? false),
+                        skippedItemReturnMinutes: Number(event.target.value),
                       }))}
-                    />
+                      aria-label="Bring skipped items back after"
+                    >
+                      <option value={30}>30 minutes</option>
+                      <option value={60}>1 hour</option>
+                      <option value={120}>2 hours</option>
+                      <option value={240}>4 hours</option>
+                      <option value={480}>8 hours</option>
+                    </select>
                   </div>
                 </div>
               </section>

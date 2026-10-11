@@ -58,7 +58,7 @@ function migrateProgramsToProjects(): void {
       name: program.name,
       description: `Migrated from a ${program.durationDays}-day Program.`,
       startDate: program.startDate,
-      status: "planned",
+      status: "active",
       createdAt: typeof program.createdAt === "string"
         ? program.createdAt
         : program.startDate,

@@ -3,6 +3,7 @@ import type { Milestone, Task } from "../types";
 export function createTask(data: Omit<Task, "id" | "createdAt" | "completed">): Task {
   return {
     ...data,
+    isBacklog: data.isBacklog ?? false,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     completed: false,
@@ -70,12 +71,24 @@ export function isTaskDueTodayOrOverdue(task: Pick<Task, "dueDate">, todayKey: s
   return task.dueDate !== undefined && task.dueDate <= todayKey;
 }
 
+export type TaskPlanningCategory = "overdue" | "scheduled" | "backlog" | "uncategorized" | "completed";
+
+export function getTaskPlanningCategory(
+  task: Pick<Task, "dueDate" | "isBacklog" | "completed">,
+  todayKey: string,
+): TaskPlanningCategory {
+  if (task.completed) return "completed";
+  if (task.dueDate !== undefined && task.dueDate < todayKey) return "overdue";
+  if (task.dueDate !== undefined) return "scheduled";
+  return task.isBacklog === true ? "backlog" : "uncategorized";
+}
+
 /**
  * Single Today membership definition for Tasks: due today or overdue, or
- * attached to an active (incomplete) Milestone. Completed Tasks stay included
- * so Today can show (and reopen) what was finished; callers split
- * pending/completed. Future-due Tasks without an active Milestone stay out of
- * Today. Milestones no longer require a Goal link.
+ * attached to an active (incomplete) Milestone unless explicitly deferred.
+ * Completed Tasks stay included so Today can show (and reopen) what was
+ * finished; callers split pending/completed. Future-due Tasks without an
+ * active Milestone stay out of Today. Milestones no longer require a Goal link.
  */
 export function selectTodayTasks(
   tasks: Task[],
@@ -88,7 +101,7 @@ export function selectTodayTasks(
   );
   return tasks.filter((task) =>
     isTaskDueTodayOrOverdue(task, input.todayKey) ||
-    (task.milestoneId !== undefined && activeMilestoneIds.has(task.milestoneId)),
+    (!task.isBacklog && task.milestoneId !== undefined && activeMilestoneIds.has(task.milestoneId)),
   );
 }
 

@@ -1,10 +1,11 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { Check, ChevronLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronLeft, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { Milestone, Project, Task } from "../types";
 import { FORM_CONTROL } from "../theme";
-import { calculateProjectProgress } from "../domain/projects";
+import { calculateProjectProgress, type ProjectData } from "../domain/projects";
 import { formatFullDate } from "../utils/dates";
+import DatePicker from "./DatePicker";
 
 type ProjectsProps = {
   projects: Project[];
@@ -12,9 +13,9 @@ type ProjectsProps = {
   tasks: Task[];
   selectedProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
-  onAddProject: (data: Omit<Project, "id" | "createdAt" | "status">) => void;
-  onEditProject: (projectId: string, data: Omit<Project, "id" | "createdAt" | "status">) => void;
-  onEditProjectStatus: (projectId: string, status: Project["status"]) => void;
+  onAddProject: (data: ProjectData) => void;
+  onEditProject: (projectId: string, data: ProjectData) => void;
+  onToggleProjectArchive: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onAddMilestone: (data: Omit<Milestone, "id" | "completed">) => void;
   onEditMilestone: (milestoneId: string, data: Omit<Milestone, "id" | "completed">) => void;
@@ -34,9 +35,14 @@ type PendingDeletion = {
 
 const STATUS_DOT: Record<Project["status"], string> = {
   active: "var(--color-accent)",
-  planned: "var(--color-warning)",
   completed: "var(--color-success)",
   archived: "var(--text-muted)",
+};
+
+const STATUS_BADGE_CLASS: Record<Project["status"], string> = {
+  active: "ui-badge ui-badge--accent",
+  completed: "ui-badge ui-badge--success",
+  archived: "ui-badge ui-badge--subdued",
 };
 
 const PRIORITY_BADGE_CLASS: Record<Task["priority"], string> = {
@@ -56,7 +62,7 @@ export default function Projects({
   onSelectProject,
   onAddProject,
   onEditProject,
-  onEditProjectStatus,
+  onToggleProjectArchive,
   onDeleteProject,
   onAddMilestone,
   onEditMilestone,
@@ -242,6 +248,7 @@ export default function Projects({
       projectId: task.projectId,
       milestoneId: taskEditMilestoneId || undefined,
       dueDate: taskEditDueDate || undefined,
+      isBacklog: taskEditDueDate ? false : task.isBacklog,
       estimatedMinutes: Number.isFinite(estimatedMinutes) && estimatedMinutes > 0
         ? estimatedMinutes
         : undefined,
@@ -275,22 +282,8 @@ export default function Projects({
 
   function renderStatusPill(project: Project) {
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        <span className="ui-badge ui-badge--accent" style={{ textTransform: "capitalize" }}>{project.status}</span>
-        <select
-          className="form-control"
-          style={{ ...selectStyle, width: "auto", height: 32, minHeight: 32, fontSize: "var(--type-xs)" }}
-          value={project.status}
-          onChange={(event) =>
-            onEditProjectStatus(project.id, event.target.value as Project["status"])
-          }
-          aria-label={`Status for "${project.name}"`}
-        >
-          <option value="planned">Planned</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="archived">Archived</option>
-        </select>
+      <span className={`project-status-badge ${STATUS_BADGE_CLASS[project.status]}`} style={{ textTransform: "capitalize" }}>
+        {project.status}
       </span>
     );
   }
@@ -308,7 +301,10 @@ export default function Projects({
           aria-label={`Open project "${project.name}"`}
           style={{ display: "grid", flex: 1, minWidth: 0, gap: 6, padding: 0, border: "none", background: "transparent", color: "var(--text-primary)", textAlign: "left", cursor: "pointer" }}
         >
-          <span className="truncate-1" style={{ fontWeight: 600 }}>{project.name}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span className="truncate-1" style={{ fontWeight: 600 }}>{project.name}</span>
+            <span className={`project-status-badge ${STATUS_BADGE_CLASS[project.status]}`} style={{ textTransform: "capitalize", flexShrink: 0 }}>{project.status}</span>
+          </span>
           <span style={{ fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
             Tasks {progress.taskCompleted}/{progress.taskTotal} · Milestones {progress.milestoneCompleted}/{progress.milestoneTotal}
           </span>
@@ -333,7 +329,7 @@ export default function Projects({
 
     if (editingTaskId === task.id) {
       return (
-        <li key={task.id} className="row-item" style={{ alignItems: "stretch" }}>
+        <li key={task.id} className="project-work-item">
           <form style={{ display: "grid", flex: 1, minWidth: 0, gap: 6 }} onSubmit={(event) => handleTaskEditSubmit(event, task)}>
             <input
               autoFocus
@@ -361,12 +357,11 @@ export default function Projects({
               </select>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))", gap: 6 }}>
-              <input
-                type="date"
+              <DatePicker
                 className="form-control"
                 value={taskEditDueDate}
-                onChange={(event) => setTaskEditDueDate(event.target.value)}
-                aria-label="Task Due Date"
+                onChange={setTaskEditDueDate}
+                ariaLabel="Task Due Date"
               />
               <input
                 type="number"
@@ -390,7 +385,7 @@ export default function Projects({
                 <option value="low">Low</option>
               </select>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" className="ui-button ui-button--sm" onClick={() => setEditingTaskId(null)}>
                 Cancel
               </button>
@@ -402,7 +397,7 @@ export default function Projects({
     }
 
     return (
-      <li key={task.id} className="row-item">
+      <li key={task.id} className="project-work-item">
         <button
           type="button"
           className="ring-check"
@@ -477,11 +472,11 @@ export default function Projects({
             <span className="atelier-sub">Define key checkpoints for this project</span>
           </div>
         ) : (
-          <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+          <ul className="project-work-list">
             {projectMilestones.map((milestone) => {
               const nested = projectTasks.filter((task) => task.milestoneId === milestone.id);
               return (
-                <li key={milestone.id} className="row-item" style={{ alignItems: "stretch", flexDirection: "column", gap: 0 }}>
+                <li key={milestone.id} className="project-work-item project-work-item--milestone">
                   {editingMilestoneId === milestone.id ? (
                     <form
                       style={{ display: "grid", gap: 8, flex: 1, width: "100%" }}
@@ -496,14 +491,13 @@ export default function Projects({
                         onChange={(event) => setMilestoneEditTitle(event.target.value)}
                         aria-label="Milestone Title"
                       />
-                      <input
-                        type="date"
+                      <DatePicker
                         className="form-control"
                         value={milestoneEditTargetDate}
-                        onChange={(event) => setMilestoneEditTargetDate(event.target.value)}
-                        aria-label="Milestone Target Date"
+                        onChange={setMilestoneEditTargetDate}
+                        ariaLabel="Milestone Target Date"
                       />
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
                         <button
                           type="button"
                           className="ui-button ui-button--sm"
@@ -516,7 +510,7 @@ export default function Projects({
                     </form>
                   ) : (
                     <>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, width: "100%" }}>
                         <button
                           type="button"
                           className="milestone-checkbox"
@@ -569,7 +563,7 @@ export default function Projects({
                         </span>
                       </div>
                       {nested.length > 0 && (
-                        <ul style={{ margin: "8px 0 0 34px", padding: "0 0 0 12px", listStyle: "none", borderLeft: "1px solid var(--border-color)", display: "grid" }}>
+                        <ul className="project-work-list project-work-list--nested">
                           {nested.map((task) => renderTaskRow(task, projectMilestones))}
                         </ul>
                       )}
@@ -593,14 +587,13 @@ export default function Projects({
               placeholder="Milestone title"
               aria-label="Milestone Title"
             />
-            <input
-              type="date"
+            <DatePicker
               className="form-control"
               value={milestoneTargetDate}
-              onChange={(event) => setMilestoneTargetDate(event.target.value)}
-              aria-label="Milestone Target Date"
+              onChange={setMilestoneTargetDate}
+              ariaLabel="Milestone Target Date"
             />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
               <button
                 type="button"
                 className="ui-button ui-button--sm"
@@ -608,11 +601,11 @@ export default function Projects({
               >
                 Cancel
               </button>
-              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Add Milestone</button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary project-add-button">Add Milestone</button>
             </div>
           </form>
         ) : (
-          <button type="button" className="ui-button ui-button--ghost ui-button--sm" style={{ justifySelf: "start" }} onClick={() => setShowMilestoneForm(true)}>
+          <button type="button" className="ui-button ui-button--ghost ui-button--sm project-add-button" onClick={() => setShowMilestoneForm(true)}>
             <Plus size={14} />
             Add Milestone
           </button>
@@ -637,7 +630,7 @@ export default function Projects({
             <span className="atelier-sub">Add a task below — milestones are optional</span>
           </div>
         ) : (
-          <ul className="atelier-group" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+          <ul className="project-work-list">
             {unassigned.map((task) => renderTaskRow(task, projectMilestones))}
           </ul>
         )}
@@ -671,12 +664,11 @@ export default function Projects({
               </select>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))", gap: 8 }}>
-              <input
-                type="date"
+              <DatePicker
                 className="form-control"
                 value={taskDueDate}
-                onChange={(event) => setTaskDueDate(event.target.value)}
-                aria-label="Task Due Date"
+                onChange={setTaskDueDate}
+                ariaLabel="Task Due Date"
               />
               <input
                 type="number"
@@ -700,15 +692,15 @@ export default function Projects({
                 <option value="low">Low</option>
               </select>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" className="ui-button ui-button--sm" onClick={() => setShowTaskForm(false)}>
                 Cancel
               </button>
-              <button type="submit" className="ui-button ui-button--sm ui-button--primary">Add Task</button>
+              <button type="submit" className="ui-button ui-button--sm ui-button--primary project-add-button">Add Task</button>
             </div>
           </form>
         ) : (
-          <button type="button" className="ui-button ui-button--ghost ui-button--sm" style={{ justifySelf: "start" }} onClick={() => setShowTaskForm(true)}>
+          <button type="button" className="ui-button ui-button--ghost ui-button--sm project-add-button" onClick={() => setShowTaskForm(true)}>
             <Plus size={14} />
             Add Task
           </button>
@@ -723,9 +715,28 @@ export default function Projects({
     return (
       <div className="project-detail" style={{ display: "grid", gap: 16, minWidth: 0 }}>
         <div className="atelier-group" style={{ padding: 16, display: "grid", gap: 10 }}>
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--sm"
+            style={{ justifySelf: "start" }}
+            onClick={() => onSelectProject(null)}
+          >
+            <ChevronLeft size={15} />
+            All Projects
+          </button>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <h2 id="project-detail-title" className="truncate-1" style={{ margin: 0, fontSize: "var(--type-lg)", fontWeight: 700, color: "var(--text-primary)" }}>{project.name}</h2>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              <button
+                type="button"
+                className="ui-button ui-button--ghost ui-button--sm"
+                style={{ minHeight: 30, padding: "4px 8px", flexShrink: 0 }}
+                onClick={() => onToggleProjectArchive(project.id)}
+                aria-label={`${project.status === "archived" ? "Unarchive" : "Archive"} "${project.name}"`}
+                title={project.status === "archived" ? "Unarchive Project" : "Archive Project"}
+              >
+                {project.status === "archived" ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+              </button>
               <button
                 type="button"
                 className="ui-button ui-button--ghost ui-button--sm"
@@ -776,20 +787,20 @@ export default function Projects({
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8 }}>
                 <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
                   Start Date
-                  <input
-                    type="date"
+                  <DatePicker
                     className="form-control"
                     value={projectEditStartDate}
-                    onChange={(event) => setProjectEditStartDate(event.target.value)}
+                    onChange={setProjectEditStartDate}
+                    ariaLabel="Project Start Date"
                   />
                 </label>
                 <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
                   Target Date
-                  <input
-                    type="date"
+                  <DatePicker
                     className="form-control"
                     value={projectEditTargetDate}
-                    onChange={(event) => setProjectEditTargetDate(event.target.value)}
+                    onChange={setProjectEditTargetDate}
+                    ariaLabel="Project Target Date"
                   />
                 </label>
               </div>
@@ -922,22 +933,20 @@ export default function Projects({
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8 }}>
                   <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
                     Start Date (optional)
-                    <input
-                      type="date"
+                    <DatePicker
                       className="form-control"
                       value={projectStartDate}
-                      onChange={(event) => setProjectStartDate(event.target.value)}
-                      aria-label="Project Start Date (Optional)"
+                      onChange={setProjectStartDate}
+                      ariaLabel="Project Start Date (Optional)"
                     />
                   </label>
                   <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
                     Target Date (optional)
-                    <input
-                      type="date"
+                    <DatePicker
                       className="form-control"
                       value={projectTargetDate}
-                      onChange={(event) => setProjectTargetDate(event.target.value)}
-                      aria-label="Project Target Date (Optional)"
+                      onChange={setProjectTargetDate}
+                      ariaLabel="Project Target Date (Optional)"
                     />
                   </label>
                 </div>
@@ -1000,25 +1009,20 @@ export default function Projects({
             )}
           </div>
 
-          <div style={{ minWidth: 0, display: "grid", gap: 16 }}>
+          <div style={{ minWidth: 0, display: "grid", gap: 8 }}>
             {selectedProject ? (
               <>
-                <button
-                  type="button"
-                  className="ui-button ui-button--ghost ui-button--sm"
-                  style={{ justifySelf: "start" }}
-                  onClick={() => onSelectProject(null)}
-                >
-                  <ChevronLeft size={15} />
-                  All Projects
-                </button>
+                <h2 className="section-eyebrow" style={{ margin: 0 }}>Project details</h2>
                 {renderDetail(selectedProject)}
               </>
             ) : (
-              <div className="atelier-group ui-empty-state">
-                <strong>{activeProjects.length === 0 ? "No project selected" : "Select a project"}</strong>
-                <span className="atelier-sub">Choose a project from the list to see milestones, tasks, and progress.</span>
-              </div>
+              <section aria-label="Project details" style={{ display: "grid", alignContent: "start", gap: 8 }}>
+                <h2 className="section-eyebrow" style={{ margin: 0 }}>Project details</h2>
+                <div className="atelier-group ui-empty-state">
+                  <strong>{activeProjects.length === 0 ? "No project selected" : "Select a project"}</strong>
+                  <span className="atelier-sub">Choose a project from the list to see milestones, tasks, and progress.</span>
+                </div>
+              </section>
             )}
           </div>
         </div>

@@ -52,12 +52,6 @@ export interface NextStepInput {
   /** Explicitly skipped work for this session. Skipped items are hidden when an alternative exists. */
   skippedTaskIds?: ReadonlySet<string> | readonly string[];
   skippedHabitIds?: ReadonlySet<number> | readonly number[];
-  /**
-   * Honor the "mandatory habits first" preference (see Today settings).
-   * Defaults to true. When false, mandatory habits rank alongside optional
-   * ones instead of outranking contextual tasks.
-   */
-  preferMandatoryHabits?: boolean;
 }
 
 function toSkippedTaskSet(value?: ReadonlySet<string> | readonly string[]): ReadonlySet<string> {
@@ -225,7 +219,7 @@ type RankedCandidate = RankedTask | RankedHabit;
  * renumbers existing tiers.
  */
 function categoryRankForTask(task: Task, todayKey: string, lookup: ParentLookup): number {
-  if (isTaskStaleBacklog(task, todayKey)) return 6;
+  if ((task.isBacklog && task.dueDate === undefined) || isTaskStaleBacklog(task, todayKey)) return 6;
   const dueDate = validDueDate(task);
   if (isOverdueByKey(dueDate, todayKey)) return 0;
   if (dueDate !== undefined && dueDate === todayKey) return 1;
@@ -233,8 +227,8 @@ function categoryRankForTask(task: Task, todayKey: string, lookup: ParentLookup)
   return 4;
 }
 
-function categoryRankForHabit(habit: Habit, preferMandatoryHabits = true): number {
-  if (habit.priority === "Mandatory" && preferMandatoryHabits) return 2;
+function categoryRankForHabit(habit: Habit): number {
+  if (habit.priority === "Mandatory") return 2;
   return 5;
 }
 
@@ -315,6 +309,7 @@ function taskReason(task: Task, todayKey: string, contextKind: TaskContextKind):
   if (dueDate !== undefined && dueDate === todayKey) {
     return `Due today · ${task.priority} priority`;
   }
+  if (task.isBacklog && dueDate === undefined) return `Backlog · ${task.priority} priority`;
   if (task.scheduledTime !== undefined && validScheduledMinutes(task.scheduledTime) !== null) {
     return `Scheduled ${task.scheduledTime} · ${task.priority} priority`;
   }
@@ -430,7 +425,7 @@ function rankCandidates(input: NextStepInput): {
     ...eligibleHabits.map((habit): RankedHabit => ({
       type: "habit",
       habit,
-      categoryRank: categoryRankForHabit(habit, input.preferMandatoryHabits ?? true),
+      categoryRank: categoryRankForHabit(habit),
     })),
   ];
   ranked.sort((a, b) => compareRanked(a, b, input.todayKey));
@@ -476,9 +471,8 @@ export function listNextStepCandidates(
  * - Task recency is not ranked: tasks carry no completion timestamp, so
  *   "recently completed task" cannot be derived reliably. Completed tasks
  *   are only ever excluded, never boosted or demoted by recency.
- * - Skips are session-scoped by design (no new persistence): an explicitly
- *   rejected item never reappears within the same session while an
- *   alternative exists, but it can be recommended again on a later launch.
+ * - Skips are caller-supplied eligibility exclusions. Today persists their
+ *   absolute return timestamps separately, while this engine remains pure.
  * - Focus sessions are not an input: a session doesn't mark work complete
  *   and its item mapping is ambiguous, so recency comes from habit
  *   completedDates only.

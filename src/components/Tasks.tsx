@@ -1,12 +1,13 @@
 import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import { Check, Pencil, Play, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Pencil, Play, Plus, Search, Trash2 } from "lucide-react";
 
 import type { Milestone, Project, Task } from "../types";
 import { FORM_CONTROL } from "../theme";
-import { resolveTaskContext } from "../domain/tasks";
+import { getTaskPlanningCategory, resolveTaskContext } from "../domain/tasks";
 import { isTaskStaleBacklog } from "../domain/nextStep";
 import { getTodayKey } from "../utils/dates";
 import { formatFullDate } from "../utils/dates";
+import DatePicker from "./DatePicker";
 
 type TasksProps = {
   tasks: Task[];
@@ -155,6 +156,7 @@ export default function Tasks({
       title: trimmedTitle,
       priority: editPriority,
       dueDate: editDueDate || undefined,
+      isBacklog: editDueDate ? false : task.isBacklog,
       estimatedMinutes: parseMinutes(editEstimatedMinutes),
       scheduledTime,
       durationMinutes: scheduledTime ? parseMinutes(editDurationMinutes) : undefined,
@@ -193,29 +195,41 @@ export default function Tasks({
     const overdue: Task[] = [];
     const upcoming: Task[] = [];
     const backlog: Task[] = [];
+    const uncategorized: Task[] = [];
     const done: Task[] = [];
     for (const task of visibleTasks) {
-      if (task.completed) {
+      const category = getTaskPlanningCategory(task, todayKey);
+      if (category === "completed") {
         done.push(task);
         continue;
       }
-      if (task.dueDate !== undefined && task.dueDate < todayKey) {
+      if (category === "overdue") {
         overdue.push(task);
         continue;
       }
-      if (task.dueDate !== undefined) {
+      if (category === "scheduled") {
         upcoming.push(task);
         continue;
       }
-      backlog.push(task);
+      if (category === "backlog") backlog.push(task);
+      else uncategorized.push(task);
     }
     const ordered: { key: string; label: string; hint: string; items: Task[] }[] = [];
     if (overdue.length > 0) ordered.push({ key: "overdue", label: "Overdue", hint: "Needs attention first", items: overdue });
     if (upcoming.length > 0) ordered.push({ key: "upcoming", label: "Scheduled", hint: "Dated work in order", items: upcoming });
-    if (backlog.length > 0) ordered.push({ key: "backlog", label: "Backlog", hint: "No due date yet", items: backlog });
+    if (backlog.length > 0) ordered.push({ key: "backlog", label: "Backlog", hint: "Deferred work", items: backlog });
+    if (uncategorized.length > 0) ordered.push({ key: "uncategorized", label: "Uncategorized", hint: "No date or backlog placement", items: uncategorized });
     if (done.length > 0) ordered.push({ key: "done", label: "Completed", hint: "Finished work", items: done });
     return ordered;
   }, [visibleTasks, todayKey]);
+
+  function toggleBacklog(task: Task) {
+    onEditTask(task.id, {
+      ...task,
+      dueDate: undefined,
+      isBacklog: !task.isBacklog,
+    });
+  }
 
   function renderContext(task: Task) {
     const { project, milestone } = resolveTaskContext(task, { projects, milestones });
@@ -288,12 +302,11 @@ export default function Tasks({
                     <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
                   ))}
               </select>
-              <input
-                type="date"
+              <DatePicker
                 className="form-control"
                 value={editDueDate}
-                onChange={(event) => setEditDueDate(event.target.value)}
-                aria-label="Task Due Date"
+                onChange={setEditDueDate}
+                ariaLabel="Task Due Date"
               />
               <input
                 type="number"
@@ -400,6 +413,18 @@ export default function Tasks({
           </span>
         </button>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          {!task.completed && !task.dueDate && (
+            <button
+              type="button"
+              className="ui-button ui-button--ghost ui-button--sm"
+              style={{ minHeight: 30, padding: "4px 8px", flexShrink: 0 }}
+              onClick={() => toggleBacklog(task)}
+              aria-label={`${task.isBacklog ? "Remove" : "Move"} "${task.title}" ${task.isBacklog ? "from" : "to"} Backlog`}
+              title={task.isBacklog ? "Remove from Backlog" : "Move to Backlog"}
+            >
+              {task.isBacklog ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+            </button>
+          )}
           <button
             type="button"
             className="ui-button ui-button--ghost ui-button--sm"
@@ -512,12 +537,12 @@ export default function Tasks({
             <span>Add</span>
           </button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8, marginTop: 10 }}>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 12, marginTop: 10 }}>
+          <label style={{ display: "grid", minWidth: 0, gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Priority
             <select
               className="form-control"
-              style={selectStyle}
+              style={{ ...selectStyle, width: "100%" }}
               value={priority}
               onChange={(event) => setPriority(event.target.value as Task["priority"])}
               aria-label="Priority"
@@ -527,17 +552,16 @@ export default function Tasks({
               <option value="low">Low</option>
             </select>
           </label>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
+          <label style={{ display: "grid", minWidth: 0, gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Due Date
-            <input
-              type="date"
+            <DatePicker
               className="form-control"
               value={dueDate}
-              onChange={(event) => setDueDate(event.target.value)}
-              aria-label="Due Date"
+              onChange={setDueDate}
+              ariaLabel="Due Date"
             />
           </label>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
+          <label style={{ display: "grid", minWidth: 0, gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Estimate (min)
             <input
               type="number"
@@ -550,11 +574,11 @@ export default function Tasks({
               aria-label="Estimated Minutes"
             />
           </label>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
+          <label style={{ display: "grid", minWidth: 0, gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Project
             <select
               className="form-control"
-              style={selectStyle}
+              style={{ ...selectStyle, width: "100%" }}
               value={projectId}
               onChange={(event) => { setProjectId(event.target.value); setMilestoneId(""); }}
               aria-label="Linked Project (Optional)"
@@ -565,11 +589,11 @@ export default function Tasks({
               ))}
             </select>
           </label>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
+          <label style={{ display: "grid", minWidth: 0, gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
             Milestone
             <select
               className="form-control"
-              style={selectStyle}
+              style={{ ...selectStyle, width: "100%" }}
               value={milestoneId}
               onChange={(event) => setMilestoneId(event.target.value)}
               aria-label="Linked Milestone (Optional)"

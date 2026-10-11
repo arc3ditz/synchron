@@ -311,7 +311,7 @@ test("ranking with links, effort, and history is deterministic", () => {
 
 test("engine documents its limitations instead of feigning intelligence", () => {
   assert.match(engineSource, /Limitations/);
-  assert.match(engineSource, /session-scoped/);
+  assert.match(engineSource, /absolute return timestamps/);
   assert.match(engineSource, /no completion timestamp/);
   assert.match(engineSource, /Focus sessions are not an input/);
   assert.match(engineSource, /never invented|only echoed when present/);

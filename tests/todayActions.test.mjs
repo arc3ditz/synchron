@@ -71,21 +71,20 @@ test("habit toggle updates from latest state, not a stale snapshot", () => {
   );
 });
 
-// --- Skipping never touches persistent state ---
+// --- Not now snoozes without changing completion state ---
 
-test("skipping a recommendation only hides it in-session", () => {
+test("skipping a recommendation persists its return time without completing it", () => {
   const body = section(todaySource, "function skipNextStep()");
-  assert.ok(body.includes("setSkippedTaskIds") || body.includes("setSkippedHabitIds"));
+  assert.ok(body.includes("onSnoozeItem"), "Not now records a snooze for the selected item");
   assert.ok(body.includes("setChosenNextStepKey(null)"), "pin clears so the next candidate surfaces");
-  for (const forbidden of ["onToggleTask", "onToggleHabit", "onUpdateTask", "onUpdateHabit", "completeTask", "markHabitComplete", "saveStorageData"]) {
+  for (const forbidden of ["onToggleTask", "onToggleHabit", "onUpdateTask", "onUpdateHabit", "completeTask", "markHabitComplete"]) {
     assert.ok(!body.includes(forbidden), `skip path must not call ${forbidden}`);
   }
   assert.ok(
-    todaySource.includes("const [skippedTaskIds, setSkippedTaskIds] = useState<string[]>([])"),
-    "skips stay in component state",
+    appSource.includes("snoozeTodayItem(current, item, Date.now(), appSettings.skippedItemReturnMinutes)"),
+    "the configured interval becomes an absolute timestamp when the action occurs",
   );
-  assert.ok(!todaySource.includes("skippedTaskIds") || !todaySource.match(/saveStorageData\([^)]*[Ss]kip/),
-    "no persistent skip history");
+  assert.ok(appSource.includes("saveTodaySnoozes(todaySnoozes)"), "return timestamps persist through app storage");
 });
 
 // --- Timer start reuses the existing instance; stop never completes ---

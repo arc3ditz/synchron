@@ -81,6 +81,15 @@ test("stale backlog does not dominate: optional habit beats very old overdue", (
   assert.equal(rec.habitId, 9);
 });
 
+test("explicitly deferred undated task ranks below an optional habit", () => {
+  const rec = recommendNextStep(input({
+    tasks: [makeTask({ id: "deferred", title: "Deferred", isBacklog: true })],
+    habits: [makeHabit({ id: 9, name: "Read", priority: "Optional" })],
+  }));
+  assert.equal(rec.kind, "habit");
+  assert.equal(rec.habitId, 9);
+});
+
 test("fresh overdue is preferred over stale backlog", () => {
   const rec = recommendNextStep(input({
     tasks: [

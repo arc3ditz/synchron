@@ -9,9 +9,12 @@ import {
   disassociateProjectFocusSessions,
   filterMilestonesByProject,
   filterTasksByProject,
+  determineProjectStatus,
+  recalculateProjectStatuses,
   updateProject,
-  updateProjectStatus,
+  updateProjectArchive,
 } from "../src/domain/projects.ts";
+import { loadProjects, STORAGE_KEYS } from "../src/utils/storage.ts";
 import { alignProject } from "../src/domain/relationships.ts";
 
 const baseProject = {
@@ -21,10 +24,10 @@ const baseProject = {
   targetDate: "2025-03-01",
 };
 
-test("createProject defaults to planned status and works without a Goal", () => {
+test("createProject defaults to active status and works without a Goal", () => {
   const project = createProject({ ...baseProject });
 
-  assert.equal(project.status, "planned");
+  assert.equal(project.status, "active");
   assert.equal(project.goalId, undefined);
   assert.equal(project.name, baseProject.name);
   assert.equal(typeof project.id, "string");
@@ -35,7 +38,7 @@ test("createProject preserves a legacy goalId when present", () => {
   const project = createProject({ ...baseProject, goalId: "legacy-goal" });
 
   assert.equal(project.goalId, "legacy-goal");
-  assert.equal(project.status, "planned");
+  assert.equal(project.status, "active");
 });
 
 test("updateProject edits fields but preserves identity and status", () => {
@@ -55,13 +58,71 @@ test("updateProject edits fields but preserves identity and status", () => {
   assert.equal(updated.targetDate, "2025-04-01");
 });
 
-test("updateProjectStatus only changes the status", () => {
-  const project = createProject({ ...baseProject });
-  const activated = updateProjectStatus(project, "active");
+test("project lifecycle derives completion, date-based archival, and manual archive overrides", () => {
+  const project = createProject({ name: "Lifecycle", targetDate: "2026-10-08" });
+  const milestones = [{ id: "m-1", projectId: project.id, title: "Milestone", completed: true }];
+  const tasks = [{ id: "t-1", projectId: project.id, title: "Task", completed: true, priority: "medium", createdAt: "2026-01-01" }];
 
-  assert.equal(activated.status, "active");
-  assert.equal(activated.name, project.name);
-  assert.equal(updateProjectStatus(activated, "archived").status, "archived");
+  assert.equal(determineProjectStatus(project, milestones, tasks, "2026-10-09"), "archived");
+  assert.equal(determineProjectStatus({ ...project, targetDate: undefined }, milestones, tasks, "2026-10-09"), "completed");
+  assert.equal(determineProjectStatus({ ...project, targetDate: "2026-10-09" }, milestones, tasks, "2026-10-09"), "completed");
+
+  const manuallyArchived = updateProjectArchive(project, true);
+  assert.equal(determineProjectStatus(manuallyArchived, [], [], "2026-10-09"), "archived");
+
+  const unarchived = updateProjectArchive(manuallyArchived, false);
+  assert.equal(determineProjectStatus(unarchived, [], [], "2026-10-09"), "active");
+  assert.equal(determineProjectStatus(
+    updateProjectArchive({ ...project, status: "archived" }, false),
+    milestones,
+    tasks,
+    "2026-10-09",
+  ), "completed");
+});
+
+test("reopening work reverses automatic archival but not an intentional archive", () => {
+  const project = createProject({ name: "Reopen", targetDate: "2026-10-08" });
+  const milestone = { id: "m-1", projectId: project.id, title: "Milestone", completed: true };
+  const completedTask = { id: "t-1", projectId: project.id, title: "Task", completed: true, priority: "medium", createdAt: "2026-01-01" };
+  const reopenedTask = { ...completedTask, completed: false };
+
+  assert.equal(recalculateProjectStatuses([project], [milestone], [completedTask], "2026-10-09")[0].status, "archived");
+  assert.equal(recalculateProjectStatuses([project], [milestone], [reopenedTask], "2026-10-09")[0].status, "active");
+  assert.equal(recalculateProjectStatuses(
+    [updateProjectArchive(project, true)],
+    [milestone],
+    [reopenedTask],
+    "2026-10-09",
+  )[0].status, "archived");
+});
+
+test("empty projects remain active even when their target date has passed", () => {
+  const project = createProject({ name: "Empty", targetDate: "2026-10-08" });
+
+  assert.equal(determineProjectStatus(project, [], [], "2026-10-09"), "active");
+  assert.equal(determineProjectStatus({ ...project, status: "completed" }, [], [], "2026-10-09"), "active");
+});
+
+test("legacy Planned projects load as active and legacy archived projects stay archived", () => {
+  const previousStorage = globalThis.localStorage;
+  const stored = [
+    { id: "legacy-planned", name: "Legacy planned", status: "planned", createdAt: "2025-01-01" },
+    { id: "legacy-archived", name: "Legacy archived", status: "archived", createdAt: "2025-01-01" },
+  ];
+  globalThis.localStorage = {
+    getItem: (key) => key === STORAGE_KEYS.PROJECTS ? JSON.stringify(stored) : null,
+    setItem: () => {},
+    removeItem: () => {},
+  };
+  try {
+    const projects = loadProjects();
+    assert.equal(projects[0].status, "active");
+    assert.equal(projects[1].status, "archived");
+    assert.equal(projects[1].archiveOverride, "archived");
+  } finally {
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
 });
 
 test("deleteProject removes only the targeted project", () => {
@@ -108,7 +169,7 @@ test("projects work standalone without any Goal link", () => {
   ];
 
   assert.equal(projects[0].goalId, undefined);
-  assert.equal(projects[0].status, "planned");
+  assert.equal(projects[0].status, "active");
   assert.equal(projects[1].name, "Second");
 });
 
@@ -234,5 +295,5 @@ test("a Project is created standalone through the shared creation path", () => {
 
   assert.equal(project.goalId, undefined);
   assert.equal(project.name, "Run a 5K");
-  assert.equal(project.status, "planned");
+  assert.equal(project.status, "active");
 });

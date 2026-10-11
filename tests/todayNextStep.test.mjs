@@ -72,19 +72,13 @@ test("nextStepKey is stable for pinning and skipping", () => {
   assert.equal(nextStepKey({ kind: "habit", habitId: 12 }), "habit:12");
 });
 
-test("preferMandatoryHabits=false keeps mandatory habits below contextual tasks", () => {
+test("mandatory habits keep their established priority over contextual tasks", () => {
   const milestones = [{ id: "m", title: "M", completed: false }];
   const tasks = [makeTask({ id: "ctx", title: "Context", milestoneId: "m", priority: "high" })];
   const habits = [makeHabit({ id: 3, name: "Vitamins", priority: "Mandatory" })];
 
   const preferred = recommendNextStep(baseInput({ milestones, tasks, habits }));
-  assert.equal(preferred.kind, "habit", "default keeps mandatory preference");
-
-  const neutral = recommendNextStep(
-    baseInput({ milestones, tasks, habits, preferMandatoryHabits: false }),
-  );
-  assert.equal(neutral.kind, "task");
-  assert.equal(neutral.taskId, "ctx");
+  assert.equal(preferred.kind, "habit");
 });
 
 // --- Today wiring: one hero, single primary Start, in-place switching ---
@@ -143,11 +137,21 @@ test("Today lets the user choose another candidate without navigating away", () 
 });
 
 test("Today refreshes the pick on complete, skip, delete, or ineligibility", () => {
-  assert.ok(todaySource.includes("skippedTaskIds") && todaySource.includes("skippedHabitIds"));
+  assert.ok(todaySource.includes("activeSnoozes"), "active snoozes are excluded from recommendations");
+  assert.ok(todaySource.includes("onSnoozeItem"), "Not now delegates persistent snoozing");
   assert.ok(
     todaySource.includes("chosenNextStepKey"),
     "pinned choice must be revalidated against current eligibility",
   );
+});
+
+test("Today exposes only mandatory habits to its list, progress, and recommendations", () => {
+  assert.ok(todaySource.includes("selectTodayMandatoryHabits"), "Today uses the shared mandatory filter");
+  assert.ok(todaySource.includes("habits: todayHabits"), "the recommendation only receives visible habits");
+  assert.ok(todaySource.includes("activeSnoozes.habitIds.has(habit.id)"), "snoozed habits hide from Today");
+  assert.ok(todaySource.includes("activeSnoozes.taskIds.has(task.id)"), "snoozed tasks hide from Today");
+  assert.ok(todaySource.includes("todayHabits.length + todayTasks.length"), "progress denominator uses visible habits");
+  assert.ok(!todaySource.includes("showMandatoryHabitsInImportantItems"), "Today has no visibility preference");
   assert.ok(
     todaySource.includes("options.find((option) => nextStepKey(option) === chosenNextStepKey)"),
     "a pinned item that is completed, deleted, or ineligible falls back to the engine top",

@@ -4,6 +4,7 @@
 
 import type { Goal, Milestone, Task, Habit, Project } from "../types";
 import { sanitizeCompletedAt } from "../domain/completions.ts";
+import { isTodaySnooze, type TodaySnooze } from "../domain/todaySnoozes.ts";
 
 export const STORAGE_KEYS = {
   HABITS: "habits",
@@ -13,6 +14,7 @@ export const STORAGE_KEYS = {
   MILESTONES: "milestones",
   PROJECTS: "projects",
   FOCUS_SESSIONS: "focusSessions",
+  TODAY_SNOOZES: "todaySnoozes",
   STREAK_FREEZE: "streakFreeze",
   CUSTOM_CATEGORIES: "habitCategories",
   LAST_SEEN: "synchron-last-seen",
@@ -66,6 +68,17 @@ export function saveStorageData<T>(key: string, data: T): void {
   }
 }
 
+export function loadTodaySnoozes(): TodaySnooze[] {
+  const parsed = loadStorageData<unknown>(STORAGE_KEYS.TODAY_SNOOZES, []);
+  if (!Array.isArray(parsed)) return [];
+  const now = Date.now();
+  return parsed.filter(isTodaySnooze).filter((snooze) => snooze.returnAt > now);
+}
+
+export function saveTodaySnoozes(snoozes: TodaySnooze[]): void {
+  saveStorageData(STORAGE_KEYS.TODAY_SNOOZES, snoozes);
+}
+
 export function loadGoals(): Goal[] {
   return loadStorageData<Goal[]>(STORAGE_KEYS.GOALS, []);
 }
@@ -94,6 +107,7 @@ export function loadTasks(): Task[] {
       // form coerces "" to undefined) are dropped so Today and the Next Step
       // engine agree: raw "<" compares treat "" as overdue, validated ones do not.
       dueDate: typeof item.dueDate === "string" && item.dueDate.trim() !== "" ? item.dueDate : undefined,
+      isBacklog: item.isBacklog === true,
       estimatedMinutes: typeof item.estimatedMinutes === "number" && item.estimatedMinutes > 0 ? item.estimatedMinutes : undefined,
       completed: item.completed === true,
       priority: item.priority === "high" || item.priority === "low" ? item.priority : "medium",
@@ -160,7 +174,13 @@ export function saveHabits(habits: Habit[]): void {
 }
 
 export function loadProjects(): Project[] {
-  const parsed = loadStorageData<(Partial<Project> & { id: string; name: string })[]>(STORAGE_KEYS.PROJECTS, []);
+  type StoredProject = Omit<Partial<Project>, "status" | "archiveOverride"> & {
+    id: string;
+    name: string;
+    status?: unknown;
+    archiveOverride?: unknown;
+  };
+  const parsed = loadStorageData<StoredProject[]>(STORAGE_KEYS.PROJECTS, []);
   if (!Array.isArray(parsed)) return [];
 
   return parsed.map((item) => {
@@ -171,9 +191,12 @@ export function loadProjects(): Project[] {
       description: typeof item.description === "string" ? item.description : undefined,
       startDate: typeof item.startDate === "string" ? item.startDate : undefined,
       targetDate: typeof item.targetDate === "string" ? item.targetDate : undefined,
-      status: (item.status === "planned" || item.status === "active" || item.status === "completed" || item.status === "archived")
-        ? item.status
-        : "planned",
+      status: item.status === "completed" || item.status === "archived" ? item.status : "active",
+      archiveOverride: item.archiveOverride === "archived" || item.archiveOverride === "unarchived"
+        ? item.archiveOverride
+        : item.status === "archived"
+          ? "archived"
+          : undefined,
       createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
     };
   });

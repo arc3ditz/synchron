@@ -30,12 +30,12 @@ test("Today partial empties point at the next useful action", () => {
     "empty task list points to the quick-add form directly above it",
   );
   assert.ok(
-    todaySource.includes("No habits scheduled for today."),
-    "habit empty line keeps its calm base copy",
+    todaySource.includes("No mandatory habits are scheduled for today."),
+    "habit empty line explains the mandatory-only Today list",
   );
   assert.ok(
-    todaySource.includes("Start one small habit →"),
-    "empty habit list offers one inline creation path",
+    todaySource.includes("Manage habits →"),
+    "empty habit list offers access to the existing habit manager",
   );
   assert.ok(
     todaySource.includes("onClick={onNavigateToHabits}"),
@@ -47,7 +47,7 @@ test("Today partial empties point at the next useful action", () => {
 
 test("Habits empty state asks for a name first, defers optional config", () => {
   assert.ok(appSource.includes("No habits yet — name your first small habit above."));
-  assert.ok(appSource.includes("Frequency and category can come later"));
+  assert.ok(appSource.includes("Category and project can come later"));
 });
 
 test("Tasks empty state keeps its contract and lowers the bar to a title", () => {

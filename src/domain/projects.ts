@@ -1,22 +1,22 @@
 import type { Habit, Project, Milestone, Task, FocusSessionRecord } from "../types";
+import { getDateKey } from "../utils/dates.ts";
 
-export function createProject(data: Omit<Project, "id" | "createdAt" | "status">): Project {
+export type ProjectData = Omit<Project, "id" | "createdAt" | "status" | "archiveOverride">;
+
+export function createProject(data: ProjectData): Project {
   return {
     ...data,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    status: "planned",
+    status: "active",
   };
 }
 
-export function updateProjectStatus(project: Project, status: Project["status"]): Project {
-  return { ...project, status };
+export function updateProjectArchive(project: Project, archived: boolean): Project {
+  return { ...project, archiveOverride: archived ? "archived" : "unarchived" };
 }
 
-export function updateProject(
-  project: Project,
-  data: Omit<Project, "id" | "createdAt" | "status">,
-): Project {
+export function updateProject(project: Project, data: ProjectData): Project {
   return { ...project, ...data };
 }
 
@@ -108,6 +108,42 @@ export interface ProjectProgress {
   milestoneTotal: number;
   milestoneCompleted: number;
   milestonePercent: number;
+}
+
+export function determineProjectStatus(
+  project: Project,
+  milestones: Milestone[],
+  tasks: Task[],
+  todayKey = getDateKey(new Date()),
+): Project["status"] {
+  if (project.archiveOverride === "archived") return "archived";
+
+  const progress = calculateProjectProgress(project, milestones, tasks);
+  if (progress.total === 0 || progress.completed < progress.total) return "active";
+  if (
+    project.archiveOverride !== "unarchived" &&
+    project.targetDate !== undefined &&
+    project.targetDate < todayKey
+  ) {
+    return "archived";
+  }
+  return "completed";
+}
+
+export function recalculateProjectStatuses(
+  projects: Project[],
+  milestones: Milestone[],
+  tasks: Task[],
+  todayKey = getDateKey(new Date()),
+): Project[] {
+  let changed = false;
+  const nextProjects = projects.map((project) => {
+    const status = determineProjectStatus(project, milestones, tasks, todayKey);
+    if (status === project.status) return project;
+    changed = true;
+    return { ...project, status };
+  });
+  return changed ? nextProjects : projects;
 }
 
 /**

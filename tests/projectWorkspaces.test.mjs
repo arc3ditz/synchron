@@ -9,8 +9,9 @@ import {
   deleteProject,
   detachMilestonesFromDeletedProject,
   detachTasksFromDeletedProject,
+  recalculateProjectStatuses,
   updateProject,
-  updateProjectStatus,
+  updateProjectArchive,
 } from "../src/domain/projects.ts";
 import { createTask, toggleTaskCompletion } from "../src/domain/tasks.ts";
 import { createMilestone, toggleMilestone } from "../src/domain/goals.ts";
@@ -20,6 +21,7 @@ import { recommendNextStep } from "../src/domain/nextStep.ts";
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const projectsSource = readFileSync(path.join(root, "src/components/Projects.tsx"), "utf8");
 const tasksSource = readFileSync(path.join(root, "src/components/Tasks.tsx"), "utf8");
+const datePickerSource = readFileSync(path.join(root, "src/components/DatePicker.tsx"), "utf8");
 
 const TODAY = "2026-10-09";
 
@@ -40,7 +42,7 @@ test("a Project is created with a name alone; dates and description stay optiona
   const project = createProject({ name: "Garden shed" });
 
   assert.equal(project.name, "Garden shed");
-  assert.equal(project.status, "planned");
+  assert.equal(project.status, "active");
   assert.equal(project.description, undefined);
   assert.equal(project.startDate, undefined);
   assert.equal(project.targetDate, undefined);
@@ -53,14 +55,24 @@ test("the Projects create form asks for a name first and hides details", () => {
   assert.ok(projectsSource.includes("Add details (optional)"), "details sit behind an opt-in toggle");
   // Description and dates still exist as optional fields, never required.
   assert.ok(projectsSource.includes('aria-label="Project Description"'), "description remains available");
-  assert.ok(projectsSource.includes('aria-label="Project Start Date (Optional)"'), "start date remains available");
-  assert.ok(projectsSource.includes('aria-label="Project Target Date (Optional)"'), "target date remains available");
+  assert.ok(projectsSource.includes('ariaLabel="Project Start Date (Optional)"'), "start date remains available");
+  assert.ok(projectsSource.includes('ariaLabel="Project Target Date (Optional)"'), "target date remains available");
   const createForm = projectsSource.slice(
     projectsSource.indexOf("Create a Project"),
     projectsSource.indexOf("Create a Project") + 4000,
   );
   assert.ok(!/required/.test(createForm.replace('aria-label="Project Name"', "").split("Add details")[1] ?? ""),
     "no required attribute on optional detail fields");
+});
+
+test("Projects and Tasks use the shared manual and calendar date picker", () => {
+  assert.doesNotMatch(projectsSource, /type="date"/);
+  assert.doesNotMatch(tasksSource, /type="date"/);
+  assert.match(projectsSource, /import DatePicker from "\.\/DatePicker"/);
+  assert.match(tasksSource, /import DatePicker from "\.\/DatePicker"/);
+  assert.match(datePickerSource, /inputMode="numeric"/);
+  assert.match(datePickerSource, /aria-label="Previous month"/);
+  assert.match(datePickerSource, /aria-label="Next month"/);
 });
 
 test("no Goal selection remains anywhere in the Projects screen", () => {
@@ -155,7 +167,7 @@ test("a Milestone is added only with a title; completing it keeps the record", (
 
 // --- 6. Complete or archive a Project without losing historical work ---
 
-test("completing a Project keeps every linked Task and Milestone", () => {
+test("project work stays linked while completion is derived from all linked items", () => {
   const project = createProject({ name: "Shed" });
   const milestone = { id: "m-1", projectId: project.id, title: "Frame", completed: true };
   const tasks = [
@@ -163,20 +175,25 @@ test("completing a Project keeps every linked Task and Milestone", () => {
     { id: "t-2", projectId: project.id, title: "Open", completed: false, priority: "medium", createdAt: "2026-01-01" },
   ];
 
-  const completed = updateProjectStatus(project, "completed");
+  const updated = recalculateProjectStatuses([project], [milestone], tasks, "2026-01-02")[0];
 
-  assert.equal(completed.status, "completed");
+  assert.equal(updated.status, "active");
   assert.deepEqual(tasks.filter((t) => t.projectId === project.id).length, 2, "tasks stay linked");
   assert.equal(milestone.projectId, project.id, "milestone stays linked");
 
-  const progress = calculateProjectProgress(completed, [milestone], tasks);
+  const progress = calculateProjectProgress(updated, [milestone], tasks);
   assert.equal(progress.total, 3);
   assert.equal(progress.completed, 2);
 });
 
 test("archiving a Project keeps its work linked; only deletion detaches", () => {
   const project = createProject({ name: "Shed" });
-  const archived = updateProjectStatus(project, "archived");
+  const archived = recalculateProjectStatuses(
+    [updateProjectArchive(project, true)],
+    [{ id: "m-1", projectId: project.id, title: "Kept", completed: false }],
+    [],
+    "2026-01-02",
+  )[0];
   const tasks = [
     { id: "t-1", projectId: project.id, title: "Kept", completed: true, priority: "medium", createdAt: "2026-01-01" },
   ];

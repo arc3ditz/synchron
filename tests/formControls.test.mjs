@@ -81,3 +81,8 @@ test("form controls keep usable focus, disabled, and theme behavior", () => {
   const accentDefs = [...cssSource.matchAll(/--color-accent: ([^;]+);/g)].map((m) => m[1].trim());
   assert.ok(accentDefs.length >= 2, "accent must be defined for dark and light themes");
 });
+
+test("number inputs suppress browser-default spinners in every theme", () => {
+  assert.match(cssSource, /input\[type="number"\]\s*\{[^}]*appearance:\s*textfield/);
+  assert.match(cssSource, /input\[type="number"\]::-webkit-inner-spin-button,\s*input\[type="number"\]::-webkit-outer-spin-button\s*\{[^}]*display:\s*none/);
+});

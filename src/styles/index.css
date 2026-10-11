@@ -234,7 +234,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   box-shadow: 0 0 0 4px var(--color-focus-ring-wash);
 }
 button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: 0.55; }
-input[type="date"], input[type="number"], input[type="range"], input[type="checkbox"], input[type="radio"] { color-scheme: inherit; accent-color: var(--color-accent); }
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  color-scheme: inherit;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  display: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="range"], input[type="checkbox"], input[type="radio"] { color-scheme: inherit; accent-color: var(--color-accent); }
 #root { width: 100%; min-height: 100svh; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -273,10 +284,10 @@ textarea.form-control, textarea.ui-input { height: auto; min-height: 76px; resiz
 .ui-input::placeholder { color: var(--color-text-muted); }
 .ui-input:hover:not(:disabled), .ui-select:hover:not(:disabled) { border-color: var(--color-border-strong); }
 .ui-range { box-sizing: border-box; height: var(--control-height); min-height: var(--control-min-height); cursor: pointer; }
-input.form-control[type="date"]::-webkit-datetime-edit, input.form-control[type="time"]::-webkit-datetime-edit,
-input.form-control[type="date"]::-webkit-datetime-edit-fields-wrapper, input.form-control[type="time"]::-webkit-datetime-edit-fields-wrapper { padding: 0; }
-input.form-control[type="date"]::-webkit-calendar-picker-indicator, input.form-control[type="time"]::-webkit-calendar-picker-indicator { margin: 0; padding: 0; height: 1em; width: 1em; }
-input.form-control[type="number"]::-webkit-inner-spin-button, input.form-control[type="number"]::-webkit-outer-spin-button { margin: 0; height: 1.2em; }
+input.form-control[type="time"]::-webkit-datetime-edit,
+input.form-control[type="time"]::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+input.form-control[type="time"]::-webkit-calendar-picker-indicator { margin: 0; padding: 0; height: 1em; width: 1em; }
+.tasks-page input.form-control:not([type="number"]):not([type="time"]) { padding-inline: 16px; }
 
 .ui-toggle { position: relative; width: 42px; height: 25px; padding: 2px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); background: var(--bg-toggle); cursor: pointer; transition: all var(--transition-standard); }
 .ui-toggle::after { content: ""; display: block; width: 19px; height: 19px; border-radius: 50%; background: var(--color-text-muted); transition: transform var(--transition-standard), background-color var(--transition-standard); }

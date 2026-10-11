@@ -91,7 +91,7 @@ test("focus picker lists work with no Goal selected", () => {
 });
 
 test("projects are created and used standalone", () => {
-  const project = alignProject({ id: "p-1", name: "P", status: "planned", createdAt: "2025-01-01" });
+  const project = alignProject({ id: "p-1", name: "P", status: "active", createdAt: "2025-01-01" });
   assert.equal(project.goalId, undefined);
   assert.ok(projectsSource.includes("Projects are optional"), "projects copy states optionality");
 });

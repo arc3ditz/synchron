@@ -48,6 +48,25 @@ test("primary creation path is Name + Frequency; the rest is optional", () => {
   );
 });
 
+test("frequency stays in the inline creation row and priority stays in More options", () => {
+  const creation = appSource.slice(appSource.indexOf("{/* Primary creation path:"));
+  const primaryRow = creation.slice(0, creation.indexOf("{showHabitOptions ?"));
+  const optionsRow = creation.slice(
+    creation.indexOf("{showHabitOptions ?"),
+    creation.indexOf("{activeHabits.length"),
+  );
+  assert.ok(primaryRow.includes('aria-label="New habit name"'));
+  assert.ok(primaryRow.includes("renderFrequencyControls("));
+  assert.match(primaryRow, />\s*Add\s*<\/button>/);
+  assert.ok(!primaryRow.includes('aria-label="Habit requirement"'));
+  assert.match(optionsRow, /Habit requirement\s*<\/label>/);
+  assert.ok(optionsRow.includes('aria-label="Habit requirement"'));
+  assert.ok(optionsRow.includes('value="Optional"') && optionsRow.includes('value="Mandatory"'));
+  assert.ok(optionsRow.includes("renderCategorySelect("));
+  assert.ok(optionsRow.includes('aria-label="Project (optional)"'));
+  assert.match(primaryRow, /flexWrap:\s*"wrap"/, "the primary controls wrap at narrower widths");
+});
+
 // --- Finding habits: lightweight text search, no new metadata ---
 
 test("habit search filters by name without new properties or filters", () => {
@@ -63,6 +82,14 @@ test("habit search filters by name without new properties or filters", () => {
     appSource.includes('searchQuery !== ""') && appSource.includes("No habits match these filters."),
     "search-only dead ends explain themselves with a reset path",
   );
+});
+
+test("empty search and category results show a centered, separated clear action", () => {
+  assert.ok(
+    appSource.includes("(activeFilterCount > 0 || searchQuery !== \"\") && ("),
+    "both search and filter empty states share the clear action",
+  );
+  assert.match(appSource, /fontSize: 12,\s+padding: "8px 12px",\s+display: "block",\s+margin: "12px auto 0"/);
 });
 
 // --- Pause, resume, and daily action stay one click away ---

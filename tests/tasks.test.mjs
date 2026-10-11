@@ -5,6 +5,7 @@ import {
   createTask,
   deleteTask,
   filterTasksByMilestone,
+  getTaskPlanningCategory,
   isTaskDueTodayOrOverdue,
   isTaskOverdue,
   resolveTaskContext,
@@ -80,6 +81,32 @@ test("createTask works standalone with title only", () => {
   const task = createTask({ title: "Solo", priority: "medium" });
   assert.equal(task.projectId, undefined);
   assert.equal(task.milestoneId, undefined);
+  assert.equal(task.isBacklog, false);
+});
+
+test("undated tasks are uncategorized unless explicitly deferred", () => {
+  const normal = createTask({ title: "Normal", priority: "medium" });
+  const backlog = createTask({ title: "Deferred", priority: "medium", isBacklog: true });
+  const scheduled = createTask({ title: "Dated", priority: "medium", dueDate: TODAY });
+
+  assert.equal(getTaskPlanningCategory(normal, TODAY), "uncategorized");
+  assert.equal(getTaskPlanningCategory(backlog, TODAY), "backlog");
+  assert.equal(getTaskPlanningCategory(scheduled, TODAY), "scheduled");
+});
+
+test("explicit backlog state persists and old undated tasks remain normal", () => {
+  withStorage({
+    tasks: JSON.stringify([
+      { id: "old", title: "Old undated", priority: "medium", createdAt: "2025-01-01" },
+      { id: "deferred", title: "Deferred", isBacklog: true, priority: "medium", createdAt: "2025-01-01" },
+    ]),
+  }, () => {
+    const loaded = loadTasks();
+    assert.equal(loaded[0].isBacklog, false);
+    assert.equal(loaded[1].isBacklog, true);
+    saveTasks(loaded);
+    assert.equal(loadTasks()[1].isBacklog, true);
+  });
 });
 
 // --- Persistence / backwards compatibility ---
@@ -327,6 +354,7 @@ test("Today includes Tasks under active Milestones and keeps completed ones for 
   ];
   const tasks = [
     { id: "via-active", milestoneId: "m-active", title: "Via active", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "backlog", milestoneId: "m-active", isBacklog: true, title: "Deferred", completed: false, priority: "medium", createdAt: "2025-01-01" },
     { id: "via-done", milestoneId: "m-done", title: "Via done", completed: true, priority: "medium", createdAt: "2025-01-01" },
     { id: "done-today", dueDate: TODAY, title: "Done today", completed: true, priority: "medium", createdAt: "2025-01-01" },
   ];

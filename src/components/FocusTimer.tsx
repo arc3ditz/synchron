@@ -17,6 +17,7 @@ import {
   getFocusSessionsForLogicalToday,
   isValidFocusDurationMinutes,
   MAX_FOCUS_DURATION_MINUTES,
+  parseCountdownDuration,
 } from "../domain/focusTimer";
 import { playSfx, primeAudioContext as primeSfxContext } from "../utils/sfx";
 
@@ -339,11 +340,11 @@ function getSessionTotalMs(
   mode: Mode,
   session: Session,
   timerMinutes: number,
-  focusMinutes: number,
-  breakMinutes: number,
+  focusDurationMs: number,
+  breakDurationMs: number,
 ): number {
   if (mode === "Pomodoro") {
-    return (session === "Focus" ? focusMinutes : breakMinutes) * 60000;
+    return session === "Focus" ? focusDurationMs : breakDurationMs;
   }
   return timerMinutes * 60000;
 }
@@ -378,6 +379,8 @@ function FocusTimer({
     defaultFocusDuration * 60000,
   );
   const [pomodoroTotalMs, setPomodoroTotalMs] = useState(defaultFocusDuration * 60000);
+  const [countdownEditDraft, setCountdownEditDraft] = useState<string | null>(null);
+  const [countdownEditError, setCountdownEditError] = useState("");
   const [timerRunning, setTimerRunning] = useState(false);
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
   const [pomodoroSession, setPomodoroSession] = useState<Session>("Focus");
@@ -433,6 +436,8 @@ function FocusTimer({
   const pomodoroTotalMsRef = useRef(defaultFocusDuration * 60000);
   const timerMinutesRef = useRef(defaultFocusDuration);
   const focusMinutesRef = useRef(defaultFocusDuration);
+  const focusDurationMsRef = useRef(defaultFocusDuration * 60000);
+  const breakDurationMsRef = useRef(DEFAULT_BREAK_MINUTES * 60000);
   const appliedDefaultFocusDurationRef = useRef(defaultFocusDuration);
   const breakMinutesRef = useRef(DEFAULT_BREAK_MINUTES);
   const updateTimerRef = useRef<(now: number) => void>(() => {});
@@ -441,9 +446,17 @@ function FocusTimer({
   const primaryControlRef = useRef<HTMLButtonElement>(null);
   const ringStageRef = useRef<HTMLDivElement>(null);
   const digitsRef = useRef<HTMLSpanElement>(null);
+  const countdownEditInputRef = useRef<HTMLInputElement>(null);
+  const cancelCountdownEditRef = useRef(false);
   // Measured font size that keeps the countdown inside the ring; null until
   // the first fit, so the seed clamp in styles.digits shows before that.
   const [countdownFontSize, setCountdownFontSize] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (countdownEditDraft === null) return;
+    countdownEditInputRef.current?.focus();
+    countdownEditInputRef.current?.select();
+  }, [countdownEditDraft]);
 
   useEffect(() => {
     const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
@@ -499,6 +512,7 @@ function FocusTimer({
     if (!pomodoroRunningRef.current) {
       focusMinutesRef.current = defaultFocusDuration;
       setFocusMinutes(defaultFocusDuration);
+      focusDurationMsRef.current = defaultFocusDuration * 60000;
       if (pomodoroSessionRef.current === "Focus") {
         updatePomodoroTotalMs(defaultFocusDuration * 60000);
         setPomodoroState(defaultFocusDuration * 60000, false, "Focus");
@@ -719,8 +733,8 @@ function FocusTimer({
         "Pomodoro",
         currentSession,
         timerMinutesRef.current,
-        focusMinutesRef.current,
-        breakMinutesRef.current,
+        focusDurationMsRef.current,
+        breakDurationMsRef.current,
       );
       end += sessionTotalMs;
     }
@@ -794,18 +808,12 @@ function FocusTimer({
 
   function handleReset() {
     if (mode === "Timer") {
-      const totalMs = timerMinutesRef.current * 60000;
+      const totalMs = timerTotalMsRef.current;
       updateTimerTotalMs(totalMs);
       timerEndTimestampRef.current = null;
       setTimerState(totalMs, false);
     } else {
-      const totalMs = getSessionTotalMs(
-        "Pomodoro",
-        pomodoroSessionRef.current,
-        timerMinutesRef.current,
-        focusMinutesRef.current,
-        breakMinutesRef.current,
-      );
+      const totalMs = pomodoroTotalMsRef.current;
       updatePomodoroTotalMs(totalMs);
       pomodoroEndTimestampRef.current = null;
       setPomodoroState(
@@ -860,6 +868,7 @@ function FocusTimer({
     const parsed = clampFocusDurationMinutes(value, defaultFocusDuration);
     focusMinutesRef.current = parsed;
     setFocusMinutes(parsed);
+    focusDurationMsRef.current = parsed * 60000;
     if (!pomodoroRunningRef.current && pomodoroSessionRef.current === "Focus") {
       updatePomodoroTotalMs(parsed * 60000);
       setPomodoroState(parsed * 60000, false, "Focus");
@@ -870,10 +879,45 @@ function FocusTimer({
     const parsed = clampFocusDurationMinutes(value, DEFAULT_BREAK_MINUTES);
     breakMinutesRef.current = parsed;
     setBreakMinutes(parsed);
+    breakDurationMsRef.current = parsed * 60000;
     if (!pomodoroRunningRef.current && pomodoroSessionRef.current === "Break") {
       updatePomodoroTotalMs(parsed * 60000);
       setPomodoroState(parsed * 60000, false, "Break");
     }
+  }
+
+  function commitCountdownEdit(value: string) {
+    const durationMs = parseCountdownDuration(value);
+    if (durationMs === null) {
+      setCountdownEditError("Enter at least 1 minute, using minutes or minutes:seconds.");
+      return;
+    }
+
+    setCountdownEditDraft(null);
+    setCountdownEditError("");
+    const wholeMinutes = Math.ceil(durationMs / 60000);
+    if (mode === "Timer") {
+      timerMinutesRef.current = wholeMinutes;
+      setTimerMinutes(wholeMinutes);
+      updateTimerTotalMs(durationMs);
+      timerEndTimestampRef.current = null;
+      setTimerState(durationMs, false);
+      return;
+    }
+
+    const session = pomodoroSessionRef.current;
+    if (session === "Focus") {
+      focusMinutesRef.current = wholeMinutes;
+      setFocusMinutes(wholeMinutes);
+      focusDurationMsRef.current = durationMs;
+    } else {
+      breakMinutesRef.current = wholeMinutes;
+      setBreakMinutes(wholeMinutes);
+      breakDurationMsRef.current = durationMs;
+    }
+    updatePomodoroTotalMs(durationMs);
+    pomodoroEndTimestampRef.current = null;
+    setPomodoroState(durationMs, false, session);
   }
 
   function handlePreset(minutes: number) {
@@ -1027,7 +1071,13 @@ function FocusTimer({
     : selectedHabit
       ? selectedHabit.name
       : "Nothing linked yet";
-  const activeMinutes = mode === "Timer" ? timerMinutes : focusMinutes;
+  const activeDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
+  const pomodoroDurationMs = pomodoroSession === "Focus"
+    ? focusDurationMsRef.current
+    : breakDurationMsRef.current;
+  const pomodoroDurationLabel = pomodoroDurationMs % 60000 === 0
+    ? `${pomodoroDurationMs / 60000}m`
+    : formatCountdownClock(pomodoroDurationMs);
 
   return (
     <div style={styles.stage}>
@@ -1089,23 +1139,91 @@ function FocusTimer({
           />
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span
-            ref={digitsRef}
-            className="focus-timer-digits"
-            style={{
-              ...styles.digits,
-              ...(countdownFontSize !== null ? { fontSize: countdownFontSize } : {}),
-            }}
-          >
-            {countdownText}
-          </span>
+          {countdownEditDraft === null ? (
+            <button
+              type="button"
+              className="focus-timer-digits"
+              style={{
+                ...styles.digits,
+                padding: 0,
+                border: 0,
+                borderRadius: "var(--radius-sm)",
+                background: "transparent",
+                color: "var(--text-primary)",
+                cursor: isRunning ? "default" : "text",
+                ...(countdownFontSize !== null ? { fontSize: countdownFontSize } : {}),
+              }}
+              disabled={isRunning}
+              onClick={() => {
+                setCountdownEditError("");
+                setCountdownEditDraft(countdownText);
+              }}
+              aria-label={`Remaining time ${countdownText}. Activate to edit in minutes and seconds.`}
+              title={isRunning ? "Pause the timer to edit the duration" : "Edit remaining time"}
+            >
+              <span ref={digitsRef}>{countdownText}</span>
+            </button>
+          ) : (
+            <input
+              ref={countdownEditInputRef}
+              type="text"
+              className="focus-timer-digits"
+              style={{
+                ...styles.digits,
+                boxSizing: "content-box",
+                width: `${Math.max(5, countdownEditDraft.length)}ch`,
+                maxWidth: "80%",
+                padding: "2px 6px",
+                border: 0,
+                outline: "none",
+                boxShadow: "none",
+                background: "transparent",
+                color: "var(--text-primary)",
+                textAlign: "center",
+                fontVariantNumeric: "tabular-nums",
+                ...(countdownFontSize !== null ? { fontSize: countdownFontSize } : {}),
+              }}
+              value={countdownEditDraft}
+              onChange={(event) => {
+                setCountdownEditError("");
+                setCountdownEditDraft(event.target.value);
+              }}
+              onBlur={(event) => {
+                if (cancelCountdownEditRef.current) {
+                  cancelCountdownEditRef.current = false;
+                  return;
+                }
+                commitCountdownEdit(event.currentTarget.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelCountdownEditRef.current = true;
+                  setCountdownEditDraft(null);
+                  event.currentTarget.blur();
+                }
+              }}
+              aria-label="Set remaining time in minutes or minutes:seconds, from 1 to 999 minutes"
+              aria-invalid={countdownEditError !== ""}
+              aria-describedby={countdownEditError !== "" ? "countdown-edit-error" : undefined}
+              autoComplete="off"
+              inputMode="text"
+            />
+          )}
         </div>
       </div>
-
+      {countdownEditError !== "" && (
+        <p id="countdown-edit-error" role="alert" style={{ color: "var(--color-danger)", textAlign: "center" }}>
+          {countdownEditError}
+        </p>
+      )}
       {mode === "Pomodoro" && (
         <>
           <p style={styles.phaseLine}>
-            {pomodoroSession === "Focus" ? `Focusing · ${focusMinutes}m` : `On break · ${breakMinutes}m`}
+            {pomodoroSession === "Focus" ? `Focusing · ${pomodoroDurationLabel}` : `On break · ${pomodoroDurationLabel}`}
             {isRunning ? " · running" : isPaused ? " · paused" : ""}
           </p>
           <div style={styles.dots} aria-label={`${filledDots} of 4 sessions in this round`}>
@@ -1189,27 +1307,6 @@ function FocusTimer({
           <Plus size={16} />
           {quickAdjustStepMinutes}m
         </button>
-      </div>
-
-      <div style={styles.presetRow} role="group" aria-label="Duration Presets">
-        {DURATION_PRESETS.map((minutes) => {
-          const isActive = activeMinutes === minutes;
-          return (
-            <button
-              key={minutes}
-              type="button"
-              style={{
-                ...styles.presetPill,
-                ...(isActive ? styles.presetPillActive : {}),
-              }}
-              onClick={() => handlePreset(minutes)}
-              disabled={isRunning}
-              aria-pressed={isActive}
-            >
-              {minutes}m
-            </button>
-          );
-        })}
       </div>
 
       <section style={styles.panel} aria-label="Linked context">
@@ -1304,6 +1401,27 @@ function FocusTimer({
         </div>
       </section>
 
+      <div style={styles.presetRow} role="group" aria-label="Duration Presets">
+        {DURATION_PRESETS.map((minutes) => {
+          const isActive = activeDurationMs === minutes * 60000;
+          return (
+            <button
+              key={minutes}
+              type="button"
+              style={{
+                ...styles.presetPill,
+                ...(isActive ? styles.presetPillActive : {}),
+              }}
+              onClick={() => handlePreset(minutes)}
+              disabled={isRunning}
+              aria-pressed={isActive}
+            >
+              {minutes}m
+            </button>
+          );
+        })}
+      </div>
+
       <section style={styles.panel} aria-label="Duration settings">
         <h2 style={styles.panelTitle}>Duration</h2>
         {mode === "Timer" ? (
@@ -1330,8 +1448,10 @@ function FocusTimer({
                 if (isValidFocusDurationMinutes(value)) handleTimerDurationChange(value);
               }}
               onBlur={() => {
-                const value = clampFocusDurationMinutes(timerDurationDraft ?? String(timerMinutes), timerMinutes);
-                handleTimerDurationChange(String(value));
+                const value = timerDurationDraft ?? String(timerMinutes);
+                if (value !== String(timerMinutes) && isValidFocusDurationMinutes(value)) {
+                  handleTimerDurationChange(value);
+                }
                 setTimerDurationDraft(null);
               }}
             />
@@ -1361,8 +1481,10 @@ function FocusTimer({
                   if (isValidFocusDurationMinutes(value)) handleFocusDurationChange(value);
                 }}
                 onBlur={() => {
-                  const value = clampFocusDurationMinutes(focusDurationDraft ?? String(focusMinutes), focusMinutes);
-                  handleFocusDurationChange(String(value));
+                  const value = focusDurationDraft ?? String(focusMinutes);
+                  if (value !== String(focusMinutes) && isValidFocusDurationMinutes(value)) {
+                    handleFocusDurationChange(value);
+                  }
                   setFocusDurationDraft(null);
                 }}
               />
@@ -1390,8 +1512,10 @@ function FocusTimer({
                   if (isValidFocusDurationMinutes(value)) handleBreakDurationChange(value);
                 }}
                 onBlur={() => {
-                  const value = clampFocusDurationMinutes(breakDurationDraft ?? String(breakMinutes), breakMinutes);
-                  handleBreakDurationChange(String(value));
+                  const value = breakDurationDraft ?? String(breakMinutes);
+                  if (value !== String(breakMinutes) && isValidFocusDurationMinutes(value)) {
+                    handleBreakDurationChange(value);
+                  }
                   setBreakDurationDraft(null);
                 }}
               />

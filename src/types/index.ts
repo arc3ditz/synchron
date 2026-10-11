@@ -22,7 +22,7 @@ export interface AppSettings {
     pomodoroTransition: boolean;
     timerComplete: boolean;
   };
-  showMandatoryHabitsInImportantItems?: boolean;
+  skippedItemReturnMinutes: number;
   enableIntelligentNotifications: boolean;
   notificationFrequency: NotificationFrequency;
   habitReminders: boolean;
@@ -136,7 +136,8 @@ export interface Project {
   description?: string;
   startDate?: string;
   targetDate?: string;
-  status: 'planned' | 'active' | 'completed' | 'archived';
+  status: 'active' | 'completed' | 'archived';
+  archiveOverride?: 'archived' | 'unarchived';
   createdAt: string;
 }
 
@@ -156,6 +157,8 @@ export interface Task {
   projectId?: string;
   title: string;
   dueDate?: string;
+  /** Explicitly deferred by the user; never inferred from a missing due date. */
+  isBacklog?: boolean;
   estimatedMinutes?: number;
   completed: boolean;
   priority: 'low' | 'medium' | 'high';

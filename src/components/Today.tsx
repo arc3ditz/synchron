@@ -6,13 +6,18 @@ import {
   calculateStreak,
   formatFullDate,
   getTodayKey,
-  isHabitScheduledOnDate,
 } from "../utils/dates";
 import { getFocusSessionsForLogicalToday, QUICK_FOCUS_MINUTES } from "../domain/focusTimer";
 import { FORM_CONTROL } from "../theme";
 import { isTaskStaleBacklog, listNextStepCandidates, nextStepKey, recommendNextStep } from "../domain/nextStep";
 import { getWelcomeBackSubtitle, getWelcomeBackTitle } from "../domain/welcomeBack";
 import { COMPLETION_CONFIRMATION_MS, getCompletionMessage } from "../domain/completionFeedback";
+import {
+  getTodaySnoozeIds,
+  type TodaySnooze,
+  type TodaySnoozeTarget,
+} from "../domain/todaySnoozes";
+import { selectTodayMandatoryHabits } from "../domain/today";
 import { buildDailyTimeline, totalPlannedMinutes as sumPlannedMinutes, type TimelineBlock } from "../domain/timeline";
 import { isTaskOverdue, resolveTaskContext, selectTodayTasks, sortTodayTasks } from "../domain/tasks";
 
@@ -37,7 +42,8 @@ type TodayProps = {
   onNavigateToAnalytics: () => void;
   streakFreeze: boolean;
   dayResetHour: number;
-  showMandatoryHabitsInImportantItems: boolean;
+  todaySnoozes: TodaySnooze[];
+  onSnoozeItem: (item: TodaySnoozeTarget) => void;
   onUpdateHabit: (habit: Habit) => void;
   onUpdateTask: (task: Task) => void;
   // Gentle restart: present only after a meaningful inactivity gap with
@@ -177,13 +183,18 @@ function Today({
   onNavigateToAnalytics,
   streakFreeze,
   dayResetHour,
-  showMandatoryHabitsInImportantItems,
+  todaySnoozes,
+  onSnoozeItem,
   onUpdateHabit,
   onUpdateTask,
   welcomeBack = null,
 }: TodayProps) {
   const todayKey = getTodayKey(dayResetHour);
   const today = useMemo(() => new Date(), []);
+  const activeSnoozes = useMemo(
+    () => getTodaySnoozeIds(todaySnoozes),
+    [todaySnoozes],
+  );
   // Session-only dismissal: hides the calm welcome for this mount without
   // touching habits, tasks, or progress.
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
@@ -193,18 +204,26 @@ function Today({
   const [scheduleDuration, setScheduleDuration] = useState("");
 
   const todayHabits = useMemo(() => {
-    return habits.filter(
-      (habit) =>
-        !habit.isArchived &&
-        habit.type === "Daily" &&
-        isHabitScheduledOnDate(habit, todayKey),
-    );
-  }, [habits, todayKey]);
+    return selectTodayMandatoryHabits(habits, todayKey)
+      .filter((habit) => !activeSnoozes.habitIds.has(habit.id));
+  }, [habits, todayKey, activeSnoozes]);
 
   const todayTasks = useMemo(
-    () => sortTodayTasks(selectTodayTasks(tasks, { milestones, todayKey }), todayKey),
-    [tasks, milestones, todayKey],
+    () => sortTodayTasks(selectTodayTasks(tasks, { milestones, todayKey }), todayKey)
+      .filter((task) => !activeSnoozes.taskIds.has(task.id)),
+    [tasks, milestones, todayKey, activeSnoozes],
   );
+  const hasActiveMandatoryHabits = habits.some(
+    (habit) => !habit.isArchived && habit.priority === "Mandatory",
+  );
+  const hasOptionalHabits = habits.some(
+    (habit) => !habit.isArchived && habit.priority === "Optional",
+  );
+  const habitEmptyMessage = !hasActiveMandatoryHabits
+    ? hasOptionalHabits
+      ? "No mandatory habits yet. Your optional habits remain available in My Habits."
+      : "No mandatory habits yet. Add one in My Habits whenever you’re ready."
+    : "No mandatory habits are scheduled for today.";
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
 
   // Chronological daily timeline derived from existing scheduledTime /
@@ -382,19 +401,13 @@ function Today({
   // overdue → due → priority), else the next incomplete Habit. Mandatory
   // Habits are preferred when the user opts into them as important items.
   const nextStepBaseInput = useMemo(() => ({
-    habits,
+    habits: todayHabits,
     tasks,
     milestones,
     projects,
     todayKey,
-    preferMandatoryHabits: showMandatoryHabitsInImportantItems,
-  }), [habits, tasks, milestones, projects, todayKey, showMandatoryHabitsInImportantItems]);
+  }), [todayHabits, tasks, milestones, projects, todayKey]);
 
-  // Session-only skip/choice state: no new storage, so skips never persist
-  // beyond this mount. Completing, deleting, or invalidating the underlying
-  // item refreshes the pick automatically because it derives from props.
-  const [skippedTaskIds, setSkippedTaskIds] = useState<string[]>([]);
-  const [skippedHabitIds, setSkippedHabitIds] = useState<number[]>([]);
   const [chosenNextStepKey, setChosenNextStepKey] = useState<string | null>(null);
 
   const { nextStep, nextStepOptions } = useMemo(() => {
@@ -404,42 +417,41 @@ function Today({
       reason: "Couldn't load the recommendation. Your tasks and habits are listed below.",
     };
     try {
-      const options = listNextStepCandidates(nextStepBaseInput);
+      const options = listNextStepCandidates(nextStepBaseInput).filter((option) =>
+        option.kind === "task"
+          ? !activeSnoozes.taskIds.has(option.taskId)
+          : !activeSnoozes.habitIds.has(option.habitId),
+      );
       const pinned = chosenNextStepKey
         ? options.find((option) => nextStepKey(option) === chosenNextStepKey) ?? null
         : null;
       if (pinned) return { nextStep: pinned, nextStepOptions: options };
       return {
-        nextStep: recommendNextStep({ ...nextStepBaseInput, skippedTaskIds, skippedHabitIds }),
+        nextStep: recommendNextStep({
+          ...nextStepBaseInput,
+          skippedTaskIds: activeSnoozes.taskIds,
+          skippedHabitIds: activeSnoozes.habitIds,
+        }),
         nextStepOptions: options,
       };
     } catch {
       return { nextStep: fallback, nextStepOptions: [] };
     }
-  }, [nextStepBaseInput, chosenNextStepKey, skippedTaskIds, skippedHabitIds]);
+  }, [nextStepBaseInput, chosenNextStepKey, activeSnoozes]);
 
   function skipNextStep() {
     if (nextStep.kind === "task") {
-      setSkippedTaskIds((current) =>
-        current.includes(nextStep.taskId) ? current : [...current, nextStep.taskId],
-      );
+      onSnoozeItem({ kind: "task", id: nextStep.taskId });
     } else if (nextStep.kind === "habit") {
-      setSkippedHabitIds((current) =>
-        current.includes(nextStep.habitId) ? current : [...current, nextStep.habitId],
-      );
+      onSnoozeItem({ kind: "habit", id: nextStep.habitId });
     }
     setChosenNextStepKey(null);
   }
 
   // Picking an alternative pins it until it is completed, deleted, or
-  // becomes ineligible; choosing a previously skipped item unskips it.
+  // becomes ineligible. Snoozed items are absent from the picker.
   function chooseNextStep(key: string) {
     setChosenNextStepKey(key);
-    if (key.startsWith("task:")) {
-      setSkippedTaskIds((current) => current.filter((id) => `task:${id}` !== key));
-    } else if (key.startsWith("habit:")) {
-      setSkippedHabitIds((current) => current.filter((id) => `habit:${id}` !== key));
-    }
   }
 
   function startNextStep() {
@@ -966,7 +978,11 @@ function Today({
             {formatFullDate(today)}
           </p>
           <h1 style={{ fontFamily: "var(--font-display)" }}>{greeting}, it&rsquo;s {dayName}</h1>
-          <p>A quiet day with nothing due. Begin with one small win.</p>
+          <p>
+            {!hasActiveMandatoryHabits
+              ? habitEmptyMessage
+              : "A quiet day with nothing due. Begin with one small win."}
+          </p>
         </header>
 
         <div className="today-atelier-grid">
@@ -975,7 +991,7 @@ function Today({
               A quiet day — plan your first win
             </h2>
             <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: "0 0 20px" }}>
-              Add a task for today, create a habit, or start a focus session.
+              Add a task for today or start a focus session. You can manage mandatory habits in My Habits.
             </p>
             <form
               onSubmit={handleQuickTaskSubmit}
@@ -988,7 +1004,7 @@ function Today({
                 placeholder="Add a Task for Today"
                 aria-label="Add a Task for Today"
                 maxLength={120}
-                style={{ flex: 1, minWidth: 0, minHeight: 40, padding: "8px 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", fontSize: 14 }}
+                style={{ flex: 1, minWidth: 0, minHeight: 40, padding: "10px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", fontSize: 14 }}
               />
               <button
                 type="submit"
@@ -1079,7 +1095,7 @@ function Today({
             {todayHabits.length === 0 ? (
               <div className="row-card" style={{ padding: "var(--space-4)", textAlign: "center" }}>
                 <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: "0 0 12px" }}>
-                  No habits scheduled for today.
+                  {habitEmptyMessage}
                 </p>
                 <button
                   type="button"
@@ -1087,7 +1103,7 @@ function Today({
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: "var(--radius-pill)", border: "1px solid transparent", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
                 >
                   <Plus size={14} aria-hidden="true" />
-                  Start one small habit →
+                  Manage habits →
                 </button>
               </div>
             ) : (
@@ -1179,7 +1195,7 @@ function Today({
                   placeholder="Add a Task for Today"
                   aria-label="Add a Task for Today"
                   maxLength={120}
-                  style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", color: "var(--text-body)", fontSize: "var(--type-sm)", outline: "none" }}
+                  style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "none", borderRadius: "var(--radius-md)", background: "transparent", color: "var(--text-body)", fontSize: "var(--type-sm)" }}
                 />
                 <button
                   type="submit"
@@ -1245,7 +1261,7 @@ function Today({
                 strokeDashoffset={ringCircumference * (1 - progressPercent / 100)}
                 transform="rotate(-90 36 36)"
               />
-              <text x="36" y="36" textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="700" fill="var(--text-primary)">
+              <text x="36" y="36" textAnchor="middle" dominantBaseline="central" fontSize="13" fontWeight="700" fill="var(--text-primary)">
                 {progressPercent}%
               </text>
             </svg>

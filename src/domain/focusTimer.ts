@@ -112,6 +112,28 @@ export function formatCountdownClock(ms: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/** Parse an inline countdown value as whole minutes or minutes:seconds. */
+export function parseCountdownDuration(value: string): number | null {
+  const input = value.trim();
+  const match = /^(\d{1,3})(?::(\d{1,2}))?$/.exec(input);
+  if (!match) return null;
+
+  const minutes = Number(match[1]);
+  const seconds = match[2] === undefined ? 0 : Number(match[2]);
+  if (
+    !Number.isInteger(minutes) ||
+    !Number.isInteger(seconds) ||
+    seconds > 59
+  ) {
+    return null;
+  }
+
+  const durationMs = (minutes * 60 + seconds) * 1000;
+  return durationMs >= 60_000 && durationMs <= MAX_FOCUS_DURATION_MINUTES * 60_000
+    ? durationMs
+    : null;
+}
+
 /**
  * Keep a visible gap between the countdown glyphs and the ring stroke.
  * The fitted text box occupies at most this fraction of the ring's inner
