@@ -140,7 +140,7 @@ test("the shared toggle handler updates tasks functionally (no stale-state repla
   const handler = appSource.match(/function handleToggleTask[\s\S]*?\n  \}/);
   assert.ok(handler, "App must define handleToggleTask");
   assert.ok(
-    handler[0].includes("setTasks((current)") && handler[0].includes("toggleTaskCompletion(task)"),
+    handler[0].includes("commitTaskChanges((currentTasks)") && handler[0].includes("toggleTaskCompletion(task)"),
     "toggle must map over current state with the shared toggle helper",
   );
 });

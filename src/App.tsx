@@ -73,7 +73,6 @@ import {
 import {
   createMilestone,
   updateMilestone,
-  toggleMilestone,
   deleteMilestone,
   detachTasksFromDeletedMilestone,
 } from "./domain/goals";
@@ -90,6 +89,7 @@ import {
   disassociateProjectFocusSessions,
 } from "./domain/projects";
 import { createTask, completeTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
+import { synchronizeMilestoneTaskCompletion } from "./domain/milestoneCompletion";
 import { buildFocusSessionRecord, MAX_FOCUS_DURATION_MINUTES, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
 import {
   alignHabit,
@@ -1001,7 +1001,9 @@ function App() {
   // Legacy goalId fields are preserved verbatim.
   const [projectStatusDate, setProjectStatusDate] = useState(() => getDateKey(new Date()));
   const [initialRelationships] = useState(() => {
-    const relationships = normalizeRelationships(loadProjects(), loadMilestones(), loadTasks());
+    const normalized = normalizeRelationships(loadProjects(), loadMilestones(), loadTasks());
+    const completion = synchronizeMilestoneTaskCompletion(normalized.tasks, normalized.milestones);
+    const relationships = { ...normalized, ...completion };
     return {
       ...relationships,
       projects: recalculateProjectStatuses(
@@ -1061,10 +1063,14 @@ function App() {
     // existed) detach to standalone here; the habit and its history are kept.
     return localLoadHabits().map((habit) => alignHabit(habit, initialRelationships.projects));
   });
+
   const [projectRecords, setProjects] = useState<Project[]>(() => initialRelationships.projects);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(() => initialRelationships.tasks);
-  const [milestones, setMilestones] = useState<Milestone[]>(() => initialRelationships.milestones);
+  const [taskMilestoneState, setTaskMilestoneState] = useState(() => ({
+    tasks: initialRelationships.tasks,
+    milestones: initialRelationships.milestones,
+  }));
+  const { tasks, milestones } = taskMilestoneState;
   const projects = useMemo(
     () => recalculateProjectStatuses(projectRecords, milestones, tasks, projectStatusDate),
     [projectRecords, milestones, tasks, projectStatusDate],
@@ -1323,13 +1329,32 @@ function App() {
     setProjects((current) => [...current, alignProject(createProject(data))]);
   }
 
+  function commitTaskChanges(
+    updateTasks: (currentTasks: Task[], currentMilestones: Milestone[]) => Task[],
+    updateMilestones?: (currentMilestones: Milestone[]) => Milestone[],
+  ) {
+    setTaskMilestoneState((current) => {
+      const synchronized = synchronizeMilestoneTaskCompletion(
+        updateTasks(current.tasks, current.milestones),
+        updateMilestones ? updateMilestones(current.milestones) : current.milestones,
+      );
+      if (synchronized.tasks === current.tasks && synchronized.milestones === current.milestones) {
+        return current;
+      }
+      return synchronized;
+    });
+  }
+
   function handleAddTask(data: Omit<Task, "id" | "createdAt" | "completed">) {
-    setTasks((current) => [...current, alignTask(createTask(data), milestones, projects)]);
+    commitTaskChanges((currentTasks, currentMilestones) => [
+      ...currentTasks,
+      alignTask(createTask(data), currentMilestones, projects),
+    ]);
   }
 
   function handleToggleTask(taskId: string) {
     const isCurrentlyComplete = tasks.find((task) => task.id === taskId)?.completed ?? false;
-    setTasks((current) => current.map((task) =>
+    commitTaskChanges((currentTasks) => currentTasks.map((task) =>
       task.id === taskId ? toggleTaskCompletion(task) : task,
     ));
     if (!isCurrentlyComplete) {
@@ -1343,13 +1368,13 @@ function App() {
   }
 
   function handleEditTask(taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) {
-    setTasks((current) => current.map((task) =>
-      task.id === taskId ? alignTask(updateTask(task, data), milestones, projects) : task,
+    commitTaskChanges((currentTasks, currentMilestones) => currentTasks.map((task) =>
+      task.id === taskId ? alignTask(updateTask(task, data), currentMilestones, projects) : task,
     ));
   }
 
   function handleDeleteTask(taskId: string) {
-    setTasks((current) => deleteTask(current, taskId));
+    commitTaskChanges((currentTasks) => deleteTask(currentTasks, taskId));
     setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "task", id: taskId }));
   }
 
@@ -1360,37 +1385,62 @@ function App() {
   }
 
   function handleAddMilestone(data: Omit<Milestone, "id" | "completed">) {
-    setMilestones((current) => [...current, alignMilestone(createMilestone(data), projects)]);
+    setTaskMilestoneState((current) => ({
+      ...current,
+      milestones: [...current.milestones, alignMilestone(createMilestone(data), projects)],
+    }));
   }
 
   function handleEditMilestone(milestoneId: string, data: Omit<Milestone, "id" | "completed">) {
     const existing = milestones.find((milestone) => milestone.id === milestoneId);
     if (!existing) return;
     const updatedMilestone = alignMilestone(updateMilestone(existing, data), projects);
-    const nextMilestones = milestones.map((milestone) =>
-      milestone.id === milestoneId ? updatedMilestone : milestone,
-    );
-    setMilestones(nextMilestones);
     // A Milestone is the source of truth for its Tasks' inherited links:
     // re-resolve child Tasks when the Milestone moves so no stale reference
     // survives that progress would count under both old and new parents.
     if (updatedMilestone.projectId !== existing.projectId) {
-      setTasks((current) => propagateMilestoneMove(current, updatedMilestone, nextMilestones, projects));
+      commitTaskChanges(
+        (currentTasks, currentMilestones) => {
+          const nextMilestones = currentMilestones.map((milestone) =>
+            milestone.id === milestoneId ? updatedMilestone : milestone,
+          );
+          return propagateMilestoneMove(currentTasks, updatedMilestone, nextMilestones, projects);
+        },
+        (currentMilestones) => currentMilestones.map((milestone) =>
+          milestone.id === milestoneId ? updatedMilestone : milestone,
+        ),
+      );
+    } else {
+      setTaskMilestoneState((current) => ({
+        ...current,
+        milestones: current.milestones.map((milestone) =>
+          milestone.id === milestoneId ? updatedMilestone : milestone,
+        ),
+      }));
     }
   }
 
   function handleDeleteMilestone(milestoneId: string) {
-    const milestone = milestones.find((item) => item.id === milestoneId);
-    if (milestone) {
-      setTasks((current) => detachTasksFromDeletedMilestone(current, milestone));
-    }
-    setMilestones((current) => deleteMilestone(current, milestoneId));
+    commitTaskChanges(
+      (currentTasks, currentMilestones) => {
+        const milestone = currentMilestones.find((item) => item.id === milestoneId);
+        return milestone ? detachTasksFromDeletedMilestone(currentTasks, milestone) : currentTasks;
+      },
+      (currentMilestones) => deleteMilestone(currentMilestones, milestoneId),
+    );
   }
 
   function handleToggleMilestone(milestoneId: string) {
-    setMilestones((current) => current.map((milestone) =>
-      milestone.id === milestoneId ? toggleMilestone(milestone) : milestone,
-    ));
+    setTaskMilestoneState((current) => {
+      const synchronized = synchronizeMilestoneTaskCompletion(
+        current.tasks,
+        current.milestones,
+        milestoneId,
+      );
+      return synchronized.tasks === current.tasks && synchronized.milestones === current.milestones
+        ? current
+        : synchronized;
+    });
   }
 
   function handleOnboardingComplete(createdHabit?: Habit) {
@@ -2080,7 +2130,7 @@ function App() {
   }
 
   function handleCompleteTaskFromFocus(taskId: string) {
-    setTasks((current) => current.map((task) =>
+    commitTaskChanges((currentTasks) => currentTasks.map((task) =>
       task.id === taskId ? completeTask(task) : task,
     ));
   }
@@ -2766,7 +2816,7 @@ function App() {
                 ))
               }
               onUpdateTask={(updatedTask) =>
-                setTasks((current) => current.map((task) =>
+                commitTaskChanges((currentTasks) => currentTasks.map((task) =>
                   task.id === updatedTask.id ? updatedTask : task,
                 ))
               }
@@ -3416,8 +3466,11 @@ function App() {
                 const project = projects.find((item) => item.id === projectId);
                 if (!project) return;
                 // Milestones, Tasks, and Habits are detached (kept), never deleted with the Project.
-                setMilestones((current) => detachMilestonesFromDeletedProject(current, project));
-                setTasks((current) => detachTasksFromDeletedProject(current, project, milestones));
+                commitTaskChanges(
+                  (currentTasks, currentMilestones) =>
+                    detachTasksFromDeletedProject(currentTasks, project, currentMilestones),
+                  (currentMilestones) => detachMilestonesFromDeletedProject(currentMilestones, project),
+                );
                 setHabits((current) => detachHabitsFromDeletedProject(current, project));
                 setFocusSessions((current) => disassociateProjectFocusSessions(
                   current,
