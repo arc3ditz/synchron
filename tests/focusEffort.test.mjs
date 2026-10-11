@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { QUICK_FOCUS_MINUTES, buildFocusSessionRecord } from "../src/domain/focusTimer.ts";
+import { buildFocusSessionRecord } from "../src/domain/focusTimer.ts";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
@@ -28,13 +28,14 @@ const milestones = [
 
 // --- Context payload: task, habit, and untitled sessions ---
 
-test("quick focus carries task context with the short commitment", () => {
-  const handler = section(appSource, "function startQuickFocus(");
-  assert.ok(handler.includes("entity.taskId !== undefined"), "task ids take the task branch");
-  assert.ok(handler.includes("{ taskId: entity.taskId, title: entity.title }"), "taskId and title travel together");
-  assert.ok(handler.includes("durationMinutes = entity.durationMinutes ?? QUICK_FOCUS_MINUTES"), "short commitment defaults, never touches saved default");
+test("focus navigation carries task context with the linked timer", () => {
+  const starter = section(appSource, "function startFocusSession(");
+  assert.ok(starter.includes("setInitialFocusEntityId(entityId)"), "navigation links the entity");
+  assert.ok(starter.includes("setTimerPresetDurationMinutes"), "navigation may set a preset duration");
+  assert.ok(starter.includes('navigateToView("Timer")'), "navigation lands on Timer");
+  assert.ok(!starter.includes("setTimerAutoStartAction"), "navigation does NOT auto-start");
   const record = buildFocusSessionRecord(
-    { sessionType: "Timer", durationMinutes: QUICK_FOCUS_MINUTES, habitName: "Deep work", taskId: "task-1" },
+    { sessionType: "Timer", durationMinutes: 15, habitName: "Deep work", taskId: "task-1" },
     { tasks, milestones },
     { id: 1, timestamp: 1000 },
   );
@@ -42,11 +43,11 @@ test("quick focus carries task context with the short commitment", () => {
   assert.equal(record.projectId, "project-1", "project resolves through the linked task");
 });
 
-test("quick focus carries habit context without forcing a task", () => {
-  const handler = section(appSource, "function startQuickFocus(");
-  assert.ok(handler.includes("{ habitId: entity.habitId, title: entity.title }"), "habitId and title travel together");
+test("focus navigation carries habit context without forcing a task", () => {
+  const starter = section(appSource, "function startFocusSession(");
+  assert.ok(starter.includes("setInitialFocusEntityId"), "habitId travels through the entity object");
   const record = buildFocusSessionRecord(
-    { sessionType: "Timer", durationMinutes: QUICK_FOCUS_MINUTES, habitName: "Run", habitId: 7 },
+    { sessionType: "Timer", durationMinutes: 15, habitName: "Run", habitId: 7 },
     { tasks, milestones },
     { id: 2, timestamp: 2000 },
   );
@@ -55,8 +56,6 @@ test("quick focus carries habit context without forcing a task", () => {
 });
 
 test("unlinked focus stays possible: title-only or empty entity", () => {
-  const handler = section(appSource, "function startQuickFocus(");
-  assert.ok(handler.includes("entity.title"), "title-only entities land as General Focus with a label");
   const starter = section(appSource, "function startFocusSession(");
   assert.ok(starter.includes("setInitialFocusEntityId(entityId)"), "plain starts link without arming auto-start");
   assert.ok(!starter.includes("setTimerAutoStartAction"), "unlinked browsing never auto-starts the timer");
@@ -73,9 +72,9 @@ test("unlinked focus stays possible: title-only or empty entity", () => {
 
 test("hero Start and row Focus both land on the linked Timer", () => {
   const hero = section(todaySource, "function startNextStep()");
-  assert.ok(hero.includes("onQuickFocus({ taskId: nextStep.taskId"), "hero task Start carries the task link");
-  assert.ok(hero.includes("onQuickFocus({ habitId: nextStep.habitId"), "hero habit Start carries the habit link");
-  assert.ok(hero.includes("QUICK_FOCUS_MINUTES"), "hero carries the short commitment");
+  assert.ok(hero.includes("onStartFocus({ taskId: nextStep.taskId"), "hero task Start carries the task link");
+  assert.ok(hero.includes("durationMinutes: 15"), "hero carries the 15-minute duration");
+  assert.ok(hero.includes("onStartFocus({ habitId: nextStep.habitId"), "hero habit Start carries the habit link");
   assert.ok(todaySource.includes("onStartFocus({ taskId: task.id"), "row Focus links the task without auto-starting");
   assert.ok(todaySource.includes("onStartFocus({ habitId:"), "habit entry points link the habit");
 });
@@ -91,14 +90,13 @@ test("active timer state survives tab changes", () => {
     appSource.includes('className="focus-view"'),
     "Timer view toggles visibility instead of unmounting",
   );
-  assert.ok(!timerSource.includes("QUICK_FOCUS_MINUTES"), "no duplicate quick-start engine inside the timer");
 });
 
 // --- Lifecycle: early stop and pause never complete or log ---
 
-test("auto-start switches to Timer mode safely and clears exactly once", () => {
+test("auto-start switches to Timer mode safely and clears exactly once (for notifications)", () => {
   const effect = timerSource.match(/if \(!autoStartAction\) return;[\s\S]*?onAutoStartHandled\?\.\(\);/);
-  assert.ok(effect, "one-shot effect intact");
+  assert.ok(effect, "one-shot effect intact for notifications");
   assert.ok(effect[0].includes('setMode("Timer")'), "Pomodoro-safe mode commit before start");
   assert.ok(effect[0].includes("handleTimerDurationChange(String(durationMinutes))"), "duration applied to the shared timer");
   assert.ok(effect[0].includes("handleStart()"), "starts without an extra tap");

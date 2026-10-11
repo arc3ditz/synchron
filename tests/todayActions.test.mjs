@@ -90,19 +90,6 @@ test("skipping a recommendation persists its return time without completing it",
 
 // --- Timer start reuses the existing instance; stop never completes ---
 
-test("quick focus reuses the existing timer with a one-shot auto-start", () => {
-  const handler = section(appSource, "function startQuickFocus(");
-  assert.ok(handler.includes("setInitialFocusEntityId"), "entity links through the existing timer");
-  assert.ok(handler.includes("setTimerAutoStartAction"), "duration arms the one-shot auto-start");
-  assert.ok(handler.includes('navigateToView("Timer")'), "lands on the existing Timer view");
-  assert.ok(!handler.includes("setFocusSessions"), "starting never logs a session");
-  assert.ok(!handler.includes("completeTask"), "starting never completes work");
-  assert.ok(
-    appSource.includes("onAutoStartHandled={() => setTimerAutoStartAction(null)}"),
-    "auto-start clears after firing so it can never restart or double-log",
-  );
-});
-
 test("stopping or resetting the timer never completes the underlying item", () => {
   for (const fn of ["function handlePause()", "function handleReset()"]) {
     const body = section(timerSource, fn);

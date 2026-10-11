@@ -48,7 +48,7 @@ test("primary creation path is Name + Frequency; the rest is optional", () => {
   );
 });
 
-test("frequency stays in the inline creation row and priority stays in More options", () => {
+test("frequency and category are in options row, priority is inline", () => {
   const creation = appSource.slice(
     appSource.indexOf("{/* Keep the habit name, requirement, and primary action visible."),
   );
@@ -58,10 +58,10 @@ test("frequency stays in the inline creation row and priority stays in More opti
     creation.indexOf("{activeHabits.length"),
   );
   assert.ok(primaryRow.includes('aria-label="New Habit Name"'));
-  assert.ok(primaryRow.includes("renderFrequencyControls("));
+  assert.ok(!primaryRow.includes("renderFrequencyControls("), "frequency controls are in options row");
   assert.match(primaryRow, />\s*Add\s*<\/button>/);
-  assert.ok(!primaryRow.includes('aria-label="Habit Requirement"'));
-  assert.match(optionsRow, /Habit requirement\s*<\/label>/);
+  assert.ok(optionsRow.includes("renderFrequencyControls("), "frequency controls are in options row");
+  assert.ok(optionsRow.includes("renderCategorySelect("), "category controls are in options row");
   assert.ok(optionsRow.includes('aria-label="Habit Requirement"'));
   assert.ok(optionsRow.includes('value="Optional"') && optionsRow.includes('value="Mandatory"'));
   assert.ok(optionsRow.includes("renderCategorySelect("));

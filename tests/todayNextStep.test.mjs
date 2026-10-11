@@ -105,24 +105,28 @@ test("Today hero has one prominent Start and quiet complete/skip actions", () =>
     1,
     "exactly one primary button (Start) in the hero",
   );
-  assert.ok(hero[0].includes("Start ·"), "primary action starts the recommendation");
+  assert.ok(hero[0].includes("Start Focus Timer"), "primary action starts the timer");
   assert.ok(hero[0].includes("completeNextStep"), "completing stays available but secondary");
   assert.ok(hero[0].includes("skipNextStep"), "skipping stays available but quiet");
   assert.ok(hero[0].includes("Not now"), "skip reads as a quiet deferral");
 });
 
-test("Today quick-starts the recommended item through the existing focus flow", () => {
+test("Today starts the recommended item with 15-minute prefill, no auto-start", () => {
   assert.ok(
-    todaySource.includes("onQuickFocus({ taskId: nextStep.taskId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES })"),
-    "task Start must quick-start with the task link and short commitment",
+    todaySource.includes("onStartFocus({ taskId: nextStep.taskId, title: nextStep.title }, { durationMinutes: 15 })"),
+    "task Start must navigate with the task link and 15-minute duration",
   );
   assert.ok(
-    todaySource.includes("onQuickFocus({ habitId: nextStep.habitId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES })"),
-    "habit Start must quick-start with the habit link and short commitment",
+    todaySource.includes("onStartFocus({ habitId: nextStep.habitId, title: nextStep.title }, { durationMinutes: 15 })"),
+    "habit Start must navigate with the habit link and 15-minute duration",
   );
   assert.ok(
-    todaySource.includes("QUICK_FOCUS_MINUTES"),
-    "hero must reuse the shared short-commitment constant, not a magic number",
+    !todaySource.includes("onQuickFocus"),
+    "hero must NOT use the auto-start quick-focus path",
+  );
+  assert.ok(
+    !todaySource.includes("QUICK_FOCUS_MINUTES"),
+    "hero must NOT use the 5-minute constant",
   );
 });
 
@@ -151,7 +155,7 @@ test("Today exposes only mandatory habits to its list, progress, and recommendat
   assert.ok(todaySource.includes("activeSnoozes.habitIds.has(habit.id)"), "snoozed habits hide from Today");
   assert.ok(todaySource.includes("activeSnoozes.taskIds.has(task.id)"), "snoozed tasks hide from Today");
   assert.ok(todaySource.includes("calculateHabitSummary(todayHabits, todayKey)"), "habit progress uses the shared summary");
-  assert.ok(todaySource.includes("todaySummary.doneCount} / {todaySummary.total} habits done"), "task counts do not inflate habit progress");
+  assert.ok(todaySource.includes("todaySummary.doneCount} / {todaySummary.total} Habits Done"), "task counts do not inflate habit progress");
   assert.ok(!todaySource.includes("showMandatoryHabitsInImportantItems"), "Today has no visibility preference");
   assert.ok(
     todaySource.includes("options.find((option) => nextStepKey(option) === chosenNextStepKey)"),

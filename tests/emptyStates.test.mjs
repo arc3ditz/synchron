@@ -34,7 +34,7 @@ test("Today partial empties point at the next useful action", () => {
     "habit empty line explains the mandatory-only Today list",
   );
   assert.ok(
-    todaySource.includes("Manage habits →"),
+    todaySource.includes("Manage Habits →"),
     "empty habit list offers access to the existing habit manager",
   );
   assert.ok(

@@ -199,6 +199,7 @@ export function loadHabits(): Habit[] {
       ...habit,
       completedDates,
       projectId: typeof habit.projectId === "string" ? habit.projectId : undefined,
+      type: habit.type ?? "Daily",
     };
     if (next.projectId === undefined) delete next.projectId;
     if (completedAt !== undefined) {

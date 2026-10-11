@@ -6,7 +6,7 @@ import {
   calculateStreak,
   formatFullDate,
 } from "../utils/dates";
-import { getFocusSessionsForLogicalToday, QUICK_FOCUS_MINUTES } from "../domain/focusTimer";
+import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
 import { FORM_CONTROL } from "../theme";
 import {
   isTaskStaleBacklog,
@@ -41,9 +41,6 @@ type TodayProps = {
   onAddTask: (data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onQuickTaskFocusReady?: (focus: (() => void) | null) => void;
   onStartFocus: (entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }, options?: { durationMinutes?: number }) => void;
-  // Low-friction start for the hero recommendation: links the item on the
-  // existing Focus Timer with a short commitment and auto-starts it.
-  onQuickFocus: (entity: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number }) => void;
   onNavigateToHabits: () => void;
   onNavigateToProjects: () => void;
   onNavigateToHistory: () => void;
@@ -187,7 +184,6 @@ function Today({
   onAddTask,
   onQuickTaskFocusReady,
   onStartFocus,
-  onQuickFocus,
   onNavigateToHabits,
   onNavigateToProjects,
   onNavigateToHistory,
@@ -253,10 +249,16 @@ function Today({
     [todayHabits, todayTasks, milestones, projects, focusSessions, todayKey, dayResetHour, today],
   );
 
-  // Completed tasks are absent from the active Today selection; habits keep
-  // their slots and logged sessions are history, so only task blocks are filtered.
+  // Scheduled Today shows only upcoming work: completed tasks, completed habits,
+  // and already-recorded focus sessions are excluded. Sessions are history and
+  // belong in the History/Analytics views, not the upcoming schedule.
   const upcomingTimelineBlocks = useMemo(
-    () => timelineBlocks.filter((block) => block.kind !== "task" || !block.completed),
+    () => timelineBlocks.filter((block) => {
+      if (block.kind === "session") return false; // Sessions are history, not upcoming
+      if (block.kind === "task") return !block.completed;
+      if (block.kind === "habit") return !block.completed;
+      return false;
+    }),
     [timelineBlocks],
   );
 
@@ -442,9 +444,9 @@ function Today({
 
   function startNextStep() {
     if (nextStep.kind === "task") {
-      onQuickFocus({ taskId: nextStep.taskId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES });
+      onStartFocus({ taskId: nextStep.taskId, title: nextStep.title }, { durationMinutes: 15 });
     } else if (nextStep.kind === "habit") {
-      onQuickFocus({ habitId: nextStep.habitId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES });
+      onStartFocus({ habitId: nextStep.habitId, title: nextStep.title }, { durationMinutes: 15 });
     } else if (nextStep.kind === "milestone") {
       onStartFocus({
         milestoneId: nextStep.milestoneId,
@@ -671,12 +673,12 @@ function Today({
             <button
               type="button"
               onClick={startNextStep}
-              aria-label={`Start ${QUICK_FOCUS_MINUTES}-minute focus on ${nextStep.title}`}
-              title={`Start a ${QUICK_FOCUS_MINUTES}-minute focus session — the timer stays fully adjustable`}
+              aria-label={`Start Focus Timer on ${nextStep.title}`}
+              title="Start Focus Timer with 15 minutes prefilled"
               style={{ ...styles.submitButton, color: "var(--color-accent-contrast)" }}
             >
               <Play size={15} aria-hidden="true" />
-              Start · {QUICK_FOCUS_MINUTES} min focus
+              Start Focus Timer
             </button>
             {nextStep.kind !== "milestone" && (
               <button

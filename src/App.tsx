@@ -94,7 +94,7 @@ import {
 import { createTask, completeTask, setTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
 import { synchronizeMilestoneTaskCompletion } from "./domain/milestoneCompletion";
 import { calculateHabitSummary } from "./domain/today";
-import { buildFocusSessionRecord, MAX_FOCUS_DURATION_MINUTES, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
+import { buildFocusSessionRecord, MAX_FOCUS_DURATION_MINUTES } from "./domain/focusTimer";
 import {
   alignHabit,
   alignMilestone,
@@ -1846,25 +1846,6 @@ function App() {
     navigateToView("Timer");
   }
 
-  // Low-friction start for the Next Step hero: link the recommended item on
-  // the existing Timer, apply a short commitment without touching the saved
-  // default duration, and auto-start once. No setup screens or confirmations.
-  // Completion still follows existing rules — the timer never auto-completes.
-  function startQuickFocus(entity: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number }) {
-    const durationMinutes = entity.durationMinutes ?? QUICK_FOCUS_MINUTES;
-    setInitialFocusEntityId(
-      entity.taskId !== undefined
-        ? { taskId: entity.taskId, title: entity.title }
-        : entity.habitId !== undefined
-          ? { habitId: entity.habitId, title: entity.title }
-          : entity.title
-            ? { title: entity.title }
-            : undefined,
-    );
-    setTimerAutoStartAction({ ...entity, durationMinutes });
-    navigateToView("Timer");
-  }
-
   function focusQuickTaskInput() {
     navigateToView("Today");
     // The Today view stays mounted; wait a frame so it is visible and
@@ -2854,9 +2835,6 @@ function App() {
               }}
               onStartFocus={(entityId, options) => {
                 startFocusSession(entityId, options);
-              }}
-              onQuickFocus={(entity) => {
-                startQuickFocus(entity);
               }}
               onNavigateToHabits={() => navigateToView("Habits")}
               onNavigateToProjects={() => navigateToView("Projects")}
