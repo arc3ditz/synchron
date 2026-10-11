@@ -3,9 +3,10 @@ import { Archive, ArchiveRestore, Check, ChevronLeft, Pencil, Plus, Trash2 } fro
 
 import type { Milestone, Project, Task } from "../types";
 import { FORM_CONTROL } from "../theme";
-import { calculateProjectProgress, type ProjectData } from "../domain/projects";
+import { calculateProjectProgress, selectProjectTasks, type ProjectData } from "../domain/projects";
 import { formatFullDate } from "../utils/dates";
 import DatePicker from "./DatePicker";
+import { PROJECT_STATUS_LABELS, TASK_PRIORITY_LABELS } from "../utils/displayLabels";
 
 type ProjectsProps = {
   projects: Project[];
@@ -258,11 +259,7 @@ export default function Projects({
   }
 
   function projectTasksFor(project: Project): Task[] {
-    const ids = new Set(milestones.filter((m) => m.projectId === project.id).map((m) => m.id));
-    return tasks.filter((task) =>
-      task.projectId === project.id ||
-      (task.milestoneId !== undefined && ids.has(task.milestoneId)),
-    );
+    return selectProjectTasks(project, milestones, tasks);
   }
 
   function renderProgressBar(percent: number, label: string) {
@@ -283,7 +280,7 @@ export default function Projects({
   function renderStatusPill(project: Project) {
     return (
       <span className={`project-status-badge ${STATUS_BADGE_CLASS[project.status]}`} style={{ textTransform: "capitalize" }}>
-        {project.status}
+        {PROJECT_STATUS_LABELS[project.status]}
       </span>
     );
   }
@@ -298,12 +295,12 @@ export default function Projects({
           type="button"
           onClick={() => onSelectProject(project.id)}
           aria-current={active ? "true" : undefined}
-          aria-label={`Open project "${project.name}"`}
+          aria-label={`Open Project "${project.name}"`}
           style={{ display: "grid", flex: 1, minWidth: 0, gap: 6, padding: 0, border: "none", background: "transparent", color: "var(--text-primary)", textAlign: "left", cursor: "pointer" }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <span className="truncate-1" style={{ fontWeight: 600 }}>{project.name}</span>
-            <span className={`project-status-badge ${STATUS_BADGE_CLASS[project.status]}`} style={{ textTransform: "capitalize", flexShrink: 0 }}>{project.status}</span>
+            <span className={`project-status-badge ${STATUS_BADGE_CLASS[project.status]}`} style={{ textTransform: "capitalize", flexShrink: 0 }}>{PROJECT_STATUS_LABELS[project.status]}</span>
           </span>
           <span style={{ fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
             Tasks {progress.taskCompleted}/{progress.taskTotal} · Milestones {progress.milestoneCompleted}/{progress.milestoneTotal}
@@ -418,7 +415,7 @@ export default function Projects({
             {task.title}
           </span>
           <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
-            <span className={PRIORITY_BADGE_CLASS[task.priority]}>{task.priority}</span>
+            <span className={PRIORITY_BADGE_CLASS[task.priority]}>{TASK_PRIORITY_LABELS[task.priority]}</span>
             {task.dueDate && <time dateTime={task.dueDate}>Due {formatFullDate(task.dueDate)}</time>}
             {task.estimatedMinutes && <span>{task.estimatedMinutes} min</span>}
             {linkedMilestone && <span>{linkedMilestone.title}</span>}
@@ -468,7 +465,7 @@ export default function Projects({
         </div>
         {projectMilestones.length === 0 ? (
           <div className="atelier-group ui-empty-state" style={{ padding: "var(--space-6) var(--space-4)" }}>
-            <strong>No milestones yet</strong>
+            <strong>No Milestones Yet</strong>
             <span className="atelier-sub">Define key checkpoints for this project</span>
           </div>
         ) : (
@@ -584,7 +581,7 @@ export default function Projects({
               className="form-control"
               value={milestoneTitle}
               onChange={(event) => setMilestoneTitle(event.target.value)}
-              placeholder="Milestone title"
+              placeholder="Milestone Title"
               aria-label="Milestone Title"
             />
             <DatePicker
@@ -626,7 +623,7 @@ export default function Projects({
         </div>
         {unassigned.length === 0 ? (
           <div className="atelier-group ui-empty-state" style={{ padding: "var(--space-6) var(--space-4)" }}>
-            <strong>No ungrouped tasks</strong>
+            <strong>No Ungrouped Tasks</strong>
             <span className="atelier-sub">Add a task below — milestones are optional</span>
           </div>
         ) : (
@@ -644,7 +641,7 @@ export default function Projects({
               className="form-control"
               value={taskTitle}
               onChange={(event) => setTaskTitle(event.target.value)}
-              placeholder="Task title"
+              placeholder="Task Title"
               aria-label="Task Title"
             />
             {projectMilestones.length > 0 && (
@@ -824,12 +821,12 @@ export default function Projects({
             {project.startDate && project.targetDate && " · "}
             {project.targetDate && <>Target: {formatFullDate(project.targetDate)}</>}
             {(project.startDate || project.targetDate) && " · "}
-            Status: {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+            Status: {PROJECT_STATUS_LABELS[project.status]}
           </p>
 
           <div style={{ display: "grid", gap: 6 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-              <span style={{ color: "var(--text-primary)", fontSize: 13, fontWeight: 700 }}>{progress.percent}% complete</span>
+              <span style={{ color: "var(--text-primary)", fontSize: 13, fontWeight: 700 }}>{progress.percent}% Complete</span>
               <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>{progress.completed} of {progress.total} items</span>
             </div>
             {renderProgressBar(progress.percent, `"${project.name}" progress`)}
@@ -916,7 +913,7 @@ export default function Projects({
               className="form-control"
               value={projectName}
               onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Project name"
+              placeholder="Project Name"
               aria-label="Project Name"
             />
             {showProjectDetails ? (
@@ -932,7 +929,7 @@ export default function Projects({
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8 }}>
                   <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
-                    Start Date (optional)
+                    Start Date (Optional)
                     <DatePicker
                       className="form-control"
                       value={projectStartDate}
@@ -941,7 +938,7 @@ export default function Projects({
                     />
                   </label>
                   <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)" }}>
-                    Target Date (optional)
+                    Target Date (Optional)
                     <DatePicker
                       className="form-control"
                       value={projectTargetDate}
@@ -960,7 +957,7 @@ export default function Projects({
                 aria-expanded={false}
               >
                 <Plus size={14} />
-                Add details (optional)
+                Add Details (Optional)
               </button>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -974,11 +971,11 @@ export default function Projects({
 
         <div className="projects-pane">
           <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
-            <nav aria-label="Project list" style={{ display: "grid", gap: 8 }}>
-              <h2 className="section-eyebrow">All projects · {activeProjects.length}</h2>
+            <nav aria-label="Project List" style={{ display: "grid", gap: 8 }}>
+              <h2 className="section-eyebrow">All Projects · {activeProjects.length}</h2>
               {activeProjects.length === 0 ? (
                 <div className="atelier-group ui-empty-state">
-                  <strong>No projects yet</strong>
+                  <strong>No Projects Yet</strong>
                   <span className="atelier-sub">Create one to group milestones and tasks toward an outcome.</span>
                 </div>
               ) : (
@@ -1012,14 +1009,14 @@ export default function Projects({
           <div style={{ minWidth: 0, display: "grid", gap: 8 }}>
             {selectedProject ? (
               <>
-                <h2 className="section-eyebrow" style={{ margin: 0 }}>Project details</h2>
+                <h2 className="section-eyebrow" style={{ margin: 0 }}>Project Details</h2>
                 {renderDetail(selectedProject)}
               </>
             ) : (
-              <section aria-label="Project details" style={{ display: "grid", alignContent: "start", gap: 8 }}>
-                <h2 className="section-eyebrow" style={{ margin: 0 }}>Project details</h2>
+              <section aria-label="Project Details" style={{ display: "grid", alignContent: "start", gap: 8 }}>
+                <h2 className="section-eyebrow" style={{ margin: 0 }}>Project Details</h2>
                 <div className="atelier-group ui-empty-state">
-                  <strong>{activeProjects.length === 0 ? "No project selected" : "Select a project"}</strong>
+                  <strong>{activeProjects.length === 0 ? "No Project Selected" : "Select a Project"}</strong>
                   <span className="atelier-sub">Choose a project from the list to see milestones, tasks, and progress.</span>
                 </div>
               </section>

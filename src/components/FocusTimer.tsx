@@ -19,6 +19,13 @@ import {
   MAX_FOCUS_DURATION_MINUTES,
   parseCountdownDuration,
 } from "../domain/focusTimer";
+import {
+  focusSessionCompletionKey,
+  hasFocusSessionCompletion,
+  rememberFocusSessionCompletion,
+  type FocusTimerSnapshot,
+} from "../domain/focusTimerRecovery";
+import { loadFocusTimerSnapshot, saveFocusTimerSnapshot } from "../utils/storage";
 import { playSfx, primeAudioContext as primeSfxContext } from "../utils/sfx";
 
 type FocusTimerProps = {
@@ -41,6 +48,10 @@ type FocusTimerProps = {
   // the timer or log twice.
   autoStartAction?: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number } | null;
   onAutoStartHandled?: () => void;
+  // One-shot duration prefill without starting: set the idle Timer controls
+  // once, then clear via onPresetDurationHandled. Never auto-starts.
+  presetDurationMinutes?: number | null;
+  onPresetDurationHandled?: () => void;
   onTimerShortcutReady?: (handler: (() => boolean) | null) => void;
 };
 
@@ -280,7 +291,7 @@ const styles: Record<string, CSSProperties> = {
   },
   fieldGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: "var(--space-3)",
   },
   fieldLabel: {
@@ -295,24 +306,26 @@ const styles: Record<string, CSSProperties> = {
   },
   durationGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
     gap: "var(--space-3)",
   },
   durationField: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 96px)",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 10,
   },
   durationCaption: {
+    minWidth: 0,
     fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
+    overflowWrap: "anywhere",
   },
   durationInput: {
     ...FORM_CONTROL,
-    flex: "0 0 96px",
-    width: 96,
-    minWidth: 96,
+    width: "100%",
+    minWidth: 0,
+    maxWidth: 96,
     fontVariantNumeric: "tabular-nums",
   },
   durationInputDisabled: {
@@ -365,31 +378,31 @@ function FocusTimer({
   initialEntityId,
   autoStartAction,
   onAutoStartHandled,
+  presetDurationMinutes,
+  onPresetDurationHandled,
   onTimerShortcutReady,
 }: FocusTimerProps) {
-  const [mode, setMode] = useState<Mode>("Timer");
-  const [timerMinutes, setTimerMinutes] = useState(defaultFocusDuration);
-  const [focusMinutes, setFocusMinutes] = useState(defaultFocusDuration);
-  const [breakMinutes, setBreakMinutes] = useState(DEFAULT_BREAK_MINUTES);
-  const [timerRemainingMs, setTimerRemainingMs] = useState(
-    defaultFocusDuration * 60000,
-  );
-  const [timerTotalMs, setTimerTotalMs] = useState(defaultFocusDuration * 60000);
-  const [pomodoroRemainingMs, setPomodoroRemainingMs] = useState(
-    defaultFocusDuration * 60000,
-  );
-  const [pomodoroTotalMs, setPomodoroTotalMs] = useState(defaultFocusDuration * 60000);
+  const [restoredSnapshot] = useState(() => loadFocusTimerSnapshot(defaultFocusDuration));
+  const [mode, setMode] = useState<Mode>(restoredSnapshot.mode);
+  const [timerMinutes, setTimerMinutes] = useState(restoredSnapshot.timer.minutes);
+  const [focusMinutes, setFocusMinutes] = useState(restoredSnapshot.pomodoro.focusMinutes);
+  const [breakMinutes, setBreakMinutes] = useState(restoredSnapshot.pomodoro.breakMinutes);
+  const [timerRemainingMs, setTimerRemainingMs] = useState(restoredSnapshot.timer.remainingMs);
+  const [timerTotalMs, setTimerTotalMs] = useState(restoredSnapshot.timer.totalMs);
+  const [pomodoroRemainingMs, setPomodoroRemainingMs] = useState(restoredSnapshot.pomodoro.remainingMs);
+  const [pomodoroTotalMs, setPomodoroTotalMs] = useState(restoredSnapshot.pomodoro.totalMs);
   const [countdownEditDraft, setCountdownEditDraft] = useState<string | null>(null);
+  const isCountdownEditing = countdownEditDraft !== null;
   const [countdownEditError, setCountdownEditError] = useState("");
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [pomodoroRunning, setPomodoroRunning] = useState(false);
-  const [pomodoroSession, setPomodoroSession] = useState<Session>("Focus");
-  const [selectedHabitId, setSelectedHabitId] = useState<number | "">("");
+  const [timerRunning, setTimerRunning] = useState(restoredSnapshot.timer.running);
+  const [pomodoroRunning, setPomodoroRunning] = useState(restoredSnapshot.pomodoro.running);
+  const [pomodoroSession, setPomodoroSession] = useState<Session>(restoredSnapshot.pomodoro.session);
+  const [selectedHabitId, setSelectedHabitId] = useState<number | "">(restoredSnapshot.selection.habitId);
   // Legacy goal link preserved on records only; no Goal selector in the UI.
-  const [selectedGoalId, setSelectedGoalId] = useState<string>("");
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [selectedGoalId, setSelectedGoalId] = useState(restoredSnapshot.selection.goalId);
+  const [selectedProjectId, setSelectedProjectId] = useState(restoredSnapshot.selection.projectId);
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState(restoredSnapshot.selection.milestoneId);
+  const [selectedTaskId, setSelectedTaskId] = useState(restoredSnapshot.selection.taskId);
   // Task linked to the most recently logged session. Used only to offer a
   // manual "mark complete" affordance — a Task is never completed automatically.
   const [lastSessionTaskId, setLastSessionTaskId] = useState<string | null>(null);
@@ -425,21 +438,22 @@ function FocusTimer({
     }
   }
 
-  const timerEndTimestampRef = useRef<number | null>(null);
-  const pomodoroEndTimestampRef = useRef<number | null>(null);
-  const timerRunningRef = useRef(false);
-  const pomodoroRunningRef = useRef(false);
-  const pomodoroSessionRef = useRef<Session>("Focus");
-  const timerRemainingRef = useRef(defaultFocusDuration * 60000);
-  const pomodoroRemainingRef = useRef(defaultFocusDuration * 60000);
-  const timerTotalMsRef = useRef(defaultFocusDuration * 60000);
-  const pomodoroTotalMsRef = useRef(defaultFocusDuration * 60000);
-  const timerMinutesRef = useRef(defaultFocusDuration);
-  const focusMinutesRef = useRef(defaultFocusDuration);
-  const focusDurationMsRef = useRef(defaultFocusDuration * 60000);
-  const breakDurationMsRef = useRef(DEFAULT_BREAK_MINUTES * 60000);
+  const timerEndTimestampRef = useRef<number | null>(restoredSnapshot.timer.endAt);
+  const pomodoroEndTimestampRef = useRef<number | null>(restoredSnapshot.pomodoro.endAt);
+  const timerRunningRef = useRef(restoredSnapshot.timer.running);
+  const pomodoroRunningRef = useRef(restoredSnapshot.pomodoro.running);
+  const pomodoroSessionRef = useRef<Session>(restoredSnapshot.pomodoro.session);
+  const timerRemainingRef = useRef(restoredSnapshot.timer.remainingMs);
+  const pomodoroRemainingRef = useRef(restoredSnapshot.pomodoro.remainingMs);
+  const timerTotalMsRef = useRef(restoredSnapshot.timer.totalMs);
+  const pomodoroTotalMsRef = useRef(restoredSnapshot.pomodoro.totalMs);
+  const timerMinutesRef = useRef(restoredSnapshot.timer.minutes);
+  const focusMinutesRef = useRef(restoredSnapshot.pomodoro.focusMinutes);
+  const focusDurationMsRef = useRef(restoredSnapshot.pomodoro.focusDurationMs);
+  const breakDurationMsRef = useRef(restoredSnapshot.pomodoro.breakDurationMs);
+  const loggedSessionKeysRef = useRef(new Set(restoredSnapshot.loggedSessionKeys));
   const appliedDefaultFocusDurationRef = useRef(defaultFocusDuration);
-  const breakMinutesRef = useRef(DEFAULT_BREAK_MINUTES);
+  const breakMinutesRef = useRef(restoredSnapshot.pomodoro.breakMinutes);
   const updateTimerRef = useRef<(now: number) => void>(() => {});
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
   const quickAdjustStepInputFocusedRef = useRef(false);
@@ -453,10 +467,10 @@ function FocusTimer({
   const [countdownFontSize, setCountdownFontSize] = useState<number | null>(null);
 
   useEffect(() => {
-    if (countdownEditDraft === null) return;
+    if (!isCountdownEditing) return;
     countdownEditInputRef.current?.focus();
     countdownEditInputRef.current?.select();
-  }, [countdownEditDraft]);
+  }, [isCountdownEditing]);
 
   useEffect(() => {
     const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
@@ -519,9 +533,6 @@ function FocusTimer({
       }
     }
   }, [defaultFocusDuration]);
-
-  // Track the last logged session to prevent duplicate entries
-  const lastLoggedSessionRef = useRef<{ mode: Mode; session: Session; endTimestamp: number } | null>(null);
 
   function getSelectedHabitName(): string {
     if (selectedHabitId === "") return "General Focus";
@@ -619,18 +630,6 @@ function FocusTimer({
     selectedTask !== undefined &&
     !selectedTask.completed;
 
-  function shouldLogSession(mode: Mode, session: Session, endTimestamp: number): boolean {
-    const lastLogged = lastLoggedSessionRef.current;
-    if (!lastLogged) return true;
-
-    // Don't log if it's the same session completion we already logged
-    return lastLogged.mode !== mode || lastLogged.session !== session || lastLogged.endTimestamp !== endTimestamp;
-  }
-
-  function markSessionLogged(mode: Mode, session: Session, endTimestamp: number) {
-    lastLoggedSessionRef.current = { mode, session, endTimestamp };
-  }
-
   const requestNotificationPermissionIfNeeded = useCallback(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission === "default") {
@@ -674,6 +673,61 @@ function FocusTimer({
     setPomodoroSession(session);
   }
 
+  const buildFocusTimerSnapshot = useCallback((): FocusTimerSnapshot => {
+    return {
+      version: 1,
+      mode,
+      timer: {
+        totalMs: timerTotalMsRef.current,
+        remainingMs: timerRemainingRef.current,
+        minutes: timerMinutesRef.current,
+        running: timerRunningRef.current,
+        endAt: timerEndTimestampRef.current,
+      },
+      pomodoro: {
+        totalMs: pomodoroTotalMsRef.current,
+        remainingMs: pomodoroRemainingRef.current,
+        session: pomodoroSessionRef.current,
+        focusMinutes: focusMinutesRef.current,
+        breakMinutes: breakMinutesRef.current,
+        focusDurationMs: focusDurationMsRef.current,
+        breakDurationMs: breakDurationMsRef.current,
+        running: pomodoroRunningRef.current,
+        endAt: pomodoroEndTimestampRef.current,
+      },
+      selection: {
+        habitId: selectedHabitId,
+        goalId: selectedGoalId,
+        projectId: selectedProjectId,
+        milestoneId: selectedMilestoneId,
+        taskId: selectedTaskId,
+      },
+      loggedSessionKeys: [...loggedSessionKeysRef.current],
+    };
+  }, [
+    mode,
+    selectedHabitId,
+    selectedGoalId,
+    selectedProjectId,
+    selectedMilestoneId,
+    selectedTaskId,
+  ]);
+
+  function shouldLogSession(modeToLog: Mode, session: Session, endTimestamp: number): boolean {
+    return !hasFocusSessionCompletion(
+      [...loggedSessionKeysRef.current],
+      focusSessionCompletionKey(modeToLog, session, endTimestamp),
+    );
+  }
+
+  function markSessionLogged(modeToLog: Mode, session: Session, endTimestamp: number) {
+    const key = focusSessionCompletionKey(modeToLog, session, endTimestamp);
+    loggedSessionKeysRef.current = new Set(
+      rememberFocusSessionCompletion([...loggedSessionKeysRef.current], key),
+    );
+    saveFocusTimerSnapshot(buildFocusTimerSnapshot());
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   function updateTimer(now: number) {
     const end = timerEndTimestampRef.current;
@@ -687,18 +741,18 @@ function FocusTimer({
       timerEndTimestampRef.current = null;
       setTimerState(0, false);
 
-      // Log the completed Timer session
+      // Persist the completion identity before notifying app state, so a
+      // restart in the same render cannot emit the same completion twice.
       if (shouldLogSession("Timer", "Focus", end)) {
+        markSessionLogged("Timer", "Focus", end);
         handleSessionComplete(
           "Timer",
           Math.round(timerTotalMsRef.current / 60000),
           getSelectedHabitName(),
         );
-        markSessionLogged("Timer", "Focus", end);
+        playSfx("timerComplete");
+        void notifyTimerFinished();
       }
-
-      playSfx("timerComplete");
-      void notifyTimerFinished();
     }
   }
 
@@ -721,12 +775,12 @@ function FocusTimer({
 
       // Log completed Focus sessions only (not Break sessions)
       if (sessionCompleting === "Focus" && shouldLogSession("Pomodoro", "Focus", sessionEndTimestamp)) {
+        markSessionLogged("Pomodoro", "Focus", sessionEndTimestamp);
         handleSessionComplete(
           "Pomodoro Focus",
           Math.round(sessionTotalMs / 60000),
           getSelectedHabitName(),
         );
-        markSessionLogged("Pomodoro", "Focus", sessionEndTimestamp);
       }
 
       sessionTotalMs = getSessionTotalMs(
@@ -764,24 +818,26 @@ function FocusTimer({
     requestNotificationPermissionIfNeeded();
     primeSfxContext();
 
+    const remainingMs = mode === "Timer" ? timerRemainingRef.current : pomodoroRemainingRef.current;
+    const totalMs = mode === "Timer" ? timerTotalMsRef.current : pomodoroTotalMsRef.current;
+    const startRemainingMs = remainingMs > 0 ? remainingMs : totalMs;
+
     // Match the Start/Resume button label below: resuming partial progress
     // plays the resume sound, while a full bar is always a fresh start.
     // Deriving this from remaining/total (instead of a flag) keeps the
     // sound correct across completions, resets, duration changes, and modes.
-    const startRemainingMs = mode === "Timer" ? timerRemainingRef.current : pomodoroRemainingRef.current;
-    const startTotalMs = mode === "Timer" ? timerTotalMsRef.current : pomodoroTotalMsRef.current;
-    playSfx(startRemainingMs > 0 && startRemainingMs < startTotalMs ? "pauseResume" : "start");
+    playSfx(startRemainingMs < totalMs ? "pauseResume" : "start");
 
     const now = Date.now();
     if (mode === "Timer") {
-      if (timerRemainingRef.current <= 0) return;
-      timerEndTimestampRef.current = now + timerRemainingRef.current;
-      setTimerState(timerRemainingRef.current, true);
+      if (startRemainingMs <= 0) return;
+      timerEndTimestampRef.current = now + startRemainingMs;
+      setTimerState(startRemainingMs, true);
     } else {
-      if (pomodoroRemainingRef.current <= 0) return;
-      pomodoroEndTimestampRef.current = now + pomodoroRemainingRef.current;
+      if (startRemainingMs <= 0) return;
+      pomodoroEndTimestampRef.current = now + startRemainingMs;
       setPomodoroState(
-        pomodoroRemainingRef.current,
+        startRemainingMs,
         true,
         pomodoroSessionRef.current,
       );
@@ -863,6 +919,35 @@ function FocusTimer({
       window.cancelAnimationFrame(frameId);
     };
   }, [autoStartAction, defaultFocusDuration, handleStart, handleTimerDurationChange, mode, onAutoStartHandled]);
+
+  useEffect(() => {
+    if (presetDurationMinutes == null) return;
+    if (timerRunningRef.current || pomodoroRunningRef.current) {
+      onPresetDurationHandled?.();
+      return;
+    }
+
+    // Mirror the one-shot auto-start: commit Timer mode first so the 15:00
+    // prefill lands on the visible duration input/countdown, not Pomodoro.
+    if (mode !== "Timer") {
+      const modeFrameId = window.requestAnimationFrame(() => {
+        setMode("Timer");
+      });
+      return () => {
+        window.cancelAnimationFrame(modeFrameId);
+      };
+    }
+
+    const durationMinutes = clampFocusDurationMinutes(presetDurationMinutes, defaultFocusDuration);
+    const frameId = window.requestAnimationFrame(() => {
+      handleTimerDurationChange(String(durationMinutes));
+      onPresetDurationHandled?.();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [presetDurationMinutes, defaultFocusDuration, handleTimerDurationChange, mode, onPresetDurationHandled]);
 
   function handleFocusDurationChange(value: string) {
     const parsed = clampFocusDurationMinutes(value, defaultFocusDuration);
@@ -953,8 +1038,12 @@ function FocusTimer({
   useEffect(() => {
     function tick() {
       const now = Date.now();
-      if (timerRunningRef.current) updateTimerRef.current(now);
-      if (pomodoroRunningRef.current) updatePomodoroRef.current(now);
+      if (timerRunningRef.current || timerEndTimestampRef.current !== null) {
+        updateTimerRef.current(now);
+      }
+      if (pomodoroRunningRef.current || pomodoroEndTimestampRef.current !== null) {
+        updatePomodoroRef.current(now);
+      }
     }
 
     tick();
@@ -973,6 +1062,28 @@ function FocusTimer({
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
+
+  useEffect(() => {
+    saveFocusTimerSnapshot(buildFocusTimerSnapshot());
+  }, [
+    mode,
+    timerMinutes,
+    timerRemainingMs,
+    timerTotalMs,
+    timerRunning,
+    focusMinutes,
+    breakMinutes,
+    pomodoroRemainingMs,
+    pomodoroTotalMs,
+    pomodoroRunning,
+    pomodoroSession,
+    selectedHabitId,
+    selectedGoalId,
+    selectedProjectId,
+    selectedMilestoneId,
+    selectedTaskId,
+    buildFocusTimerSnapshot,
+  ]);
 
   const isRunning = mode === "Timer" ? timerRunning : pomodoroRunning;
   const remainingMs = mode === "Timer" ? timerRemainingMs : pomodoroRemainingMs;
@@ -1041,9 +1152,15 @@ function FocusTimer({
     return () => observer.disconnect();
   }, [fitCountdownToRing]);
 
-  // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
+  // A completed timer can start again at its selected duration without Reset.
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
-  const primaryButtonText = isRunning ? "Pause" : isPaused ? "Resume" : "Start";
+  const primaryButtonText = isRunning
+    ? "Pause"
+    : isPaused
+      ? "Resume"
+      : remainingMs <= 0
+        ? "Start Again"
+        : "Start";
   const timerShortcutActionRef = useRef<() => boolean>(() => false);
   timerShortcutActionRef.current = () => {
     const primaryControl = primaryControlRef.current;
@@ -1070,7 +1187,7 @@ function FocusTimer({
     ? selectedTask.title
     : selectedHabit
       ? selectedHabit.name
-      : "Nothing linked yet";
+      : "Nothing Linked Yet";
   const activeDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
   const pomodoroDurationMs = pomodoroSession === "Focus"
     ? focusDurationMsRef.current
@@ -1083,10 +1200,10 @@ function FocusTimer({
     <div style={styles.stage}>
       <div>
         <p style={styles.eyebrow}>Focus</p>
-        <h1 style={styles.title}>Settle in for one session</h1>
+        <h1 style={styles.title}>Settle In for One Session</h1>
       </div>
       <p style={styles.sub}>
-        A single quiet timer. Link a task, habit, milestone, or project, then press Start.
+        Choose a duration and press Start. Linking a task, project, milestone, or habit is optional.
       </p>
 
       <div style={styles.segment} role="group" aria-label="Timer Mode">
@@ -1158,7 +1275,7 @@ function FocusTimer({
                 setCountdownEditError("");
                 setCountdownEditDraft(countdownText);
               }}
-              aria-label={`Remaining time ${countdownText}. Activate to edit in minutes and seconds.`}
+              aria-label={`Remaining Time ${countdownText}. Activate to edit in minutes and seconds.`}
               title={isRunning ? "Pause the timer to edit the duration" : "Edit remaining time"}
             >
               <span ref={digitsRef}>{countdownText}</span>
@@ -1223,8 +1340,8 @@ function FocusTimer({
       {mode === "Pomodoro" && (
         <>
           <p style={styles.phaseLine}>
-            {pomodoroSession === "Focus" ? `Focusing · ${pomodoroDurationLabel}` : `On break · ${pomodoroDurationLabel}`}
-            {isRunning ? " · running" : isPaused ? " · paused" : ""}
+            {pomodoroSession === "Focus" ? `Focusing · ${pomodoroDurationLabel}` : `On Break · ${pomodoroDurationLabel}`}
+            {isRunning ? " · Running" : isPaused ? " · Paused" : ""}
           </p>
           <div style={styles.dots} aria-label={`${filledDots} of 4 sessions in this round`}>
             {pomodoroDots.map((dot) => (
@@ -1243,7 +1360,7 @@ function FocusTimer({
           <span style={styles.contextMeta}> · {selectedTaskContextParts.join(" › ")}</span>
         )}
         {!selectedTask && selectedHabit && (
-          <span style={styles.contextMeta}> · habit</span>
+          <span style={styles.contextMeta}> · Habit</span>
         )}
         {showTaskCompleteAffordance && (
           <>
@@ -1252,9 +1369,9 @@ function FocusTimer({
               type="button"
               style={styles.inlineAction}
               onClick={() => onCompleteTask?.(selectedTask.id)}
-              aria-label={`Mark task ${selectedTask.title} complete`}
+              aria-label={`Mark Task ${selectedTask.title} Complete`}
             >
-              Mark complete
+              Mark Complete
             </button>
           </>
         )}
@@ -1269,7 +1386,6 @@ function FocusTimer({
           type="button"
           className="focus-primary-control ui-button ui-button--primary"
           onClick={isRunning ? handlePause : handleStart}
-          disabled={!isRunning && remainingMs <= 0}
           style={{ minWidth: 160, borderRadius: "var(--radius-pill)" }}
         >
           {primaryButtonText}
@@ -1309,8 +1425,8 @@ function FocusTimer({
         </button>
       </div>
 
-      <section style={styles.panel} aria-label="Linked context">
-        <h2 style={styles.panelTitle}>Link this session</h2>
+      <section style={styles.panel} aria-label="Linked Context">
+        <h2 style={styles.panelTitle}>Link This Session (Optional)</h2>
         <div style={styles.fieldGrid}>
           <div style={styles.field}>
             <label style={styles.fieldLabel} htmlFor="project-select">
@@ -1324,7 +1440,7 @@ function FocusTimer({
               disabled={isRunning}
               aria-label="Select a Project to Link This Session to"
             >
-              <option value="">No project</option>
+              <option value="">No Project</option>
               {(projects ?? []).filter((project) => project.status !== "archived").map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -1344,7 +1460,7 @@ function FocusTimer({
               disabled={isRunning}
               aria-label="Select a Milestone to Link This Session to"
             >
-              <option value="">No milestone</option>
+              <option value="">No Milestone</option>
               {availableMilestones.map((milestone) => (
                 <option key={milestone.id} value={milestone.id}>
                   {milestone.title}
@@ -1366,7 +1482,7 @@ function FocusTimer({
               disabled={isRunning}
               aria-label="Select Task"
             >
-              <option value="">No task</option>
+              <option value="">No Task</option>
               {availableTasks.filter((task) => !task.completed).map((task) => (
                 <option key={task.id} value={task.id}>
                   {task.title}
@@ -1390,7 +1506,7 @@ function FocusTimer({
               disabled={isRunning}
               aria-label="Select a Habit to Focus On"
             >
-              <option value="">General focus</option>
+              <option value="">General Focus</option>
               {habits.map((habit) => (
                 <option key={habit.id} value={habit.id}>
                   {habit.name}
@@ -1422,12 +1538,12 @@ function FocusTimer({
         })}
       </div>
 
-      <section style={styles.panel} aria-label="Duration settings">
+      <section style={styles.panel} aria-label="Duration Settings">
         <h2 style={styles.panelTitle}>Duration</h2>
         {mode === "Timer" ? (
           <div style={styles.durationField}>
             <label style={styles.durationCaption} htmlFor="focus-timer-duration">
-              Timer (minutes)
+              Timer (Minutes)
             </label>
             <input
               id="focus-timer-duration"
@@ -1460,7 +1576,7 @@ function FocusTimer({
           <div style={styles.durationGrid}>
             <div style={styles.durationField}>
               <label style={styles.durationCaption} htmlFor="focus-duration">
-                Focus (minutes)
+                Focus (Minutes)
               </label>
               <input
                 id="focus-duration"
@@ -1491,7 +1607,7 @@ function FocusTimer({
             </div>
             <div style={styles.durationField}>
               <label style={styles.durationCaption} htmlFor="break-duration">
-                Break (minutes)
+                Break (Minutes)
               </label>
               <input
                 id="break-duration"
@@ -1524,7 +1640,7 @@ function FocusTimer({
         )}
         <div style={styles.durationField}>
           <label style={styles.durationCaption} htmlFor="quick-adjust-step">
-            Adjust step (minutes)
+            Adjust Step (Minutes)
           </label>
           <input
             id="quick-adjust-step"

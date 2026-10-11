@@ -1,3 +1,5 @@
+import type { Habit, Milestone, Project, Task } from "../types";
+
 export type TodaySnooze =
   | { kind: "habit"; id: number; returnAt: number }
   | { kind: "task"; id: string; returnAt: number };
@@ -5,6 +7,13 @@ export type TodaySnooze =
 export type TodaySnoozeTarget =
   | { kind: "habit"; id: number }
   | { kind: "task"; id: string };
+
+export interface TodaySnoozeEntities {
+  habits: (Pick<Habit, "id"> & Partial<Pick<Habit, "isArchived" | "projectId">>)[];
+  tasks: (Pick<Task, "id" | "completed"> & Partial<Pick<Task, "projectId" | "milestoneId">>)[];
+  milestones: (Pick<Milestone, "id"> & Partial<Pick<Milestone, "projectId">>)[];
+  projects: Pick<Project, "id" | "status">[];
+}
 
 export const DEFAULT_SNOOZE_RETURN_MINUTES = 240;
 export const SNOOZE_RETURN_MINUTES = [30, 60, 120, 240, 480] as const;
@@ -32,16 +41,29 @@ export function getActiveTodaySnoozes(
   return { habitIds, taskIds };
 }
 
-export function getTodaySnoozeIds(
+export function pruneIneligibleTodaySnoozes(
   snoozes: readonly TodaySnooze[],
-): { habitIds: ReadonlySet<number>; taskIds: ReadonlySet<string> } {
-  const habitIds = new Set<number>();
-  const taskIds = new Set<string>();
-  for (const snooze of snoozes) {
-    if (snooze.kind === "habit") habitIds.add(snooze.id);
-    else taskIds.add(snooze.id);
-  }
-  return { habitIds, taskIds };
+  entities: TodaySnoozeEntities,
+): TodaySnooze[] {
+  const habitsById = new Map(entities.habits.map((habit) => [habit.id, habit]));
+  const projectsById = new Map(entities.projects.map((project) => [project.id, project]));
+  const milestonesById = new Map(entities.milestones.map((milestone) => [milestone.id, milestone]));
+  const tasksById = new Map(entities.tasks.map((task) => [task.id, task]));
+
+  return snoozes.filter((snooze) => {
+    if (snooze.kind === "habit") {
+      const habit = habitsById.get(snooze.id);
+      return Boolean(habit && !habit.isArchived &&
+        (habit.projectId === undefined ||
+          projectsById.get(habit.projectId)?.status === "active"));
+    }
+
+    const task = tasksById.get(snooze.id);
+    if (!task || task.completed) return false;
+    const projectId = task.projectId ?? milestonesById.get(task.milestoneId ?? "")?.projectId;
+    return projectId === undefined ||
+      projectsById.get(projectId)?.status === "active";
+  });
 }
 
 export function snoozeTodayItem(
@@ -57,8 +79,9 @@ export function snoozeTodayItem(
 }
 
 export function removeTodaySnooze(
-  snoozes: readonly TodaySnooze[],
+  snoozes: TodaySnooze[],
   item: TodaySnoozeTarget,
 ): TodaySnooze[] {
-  return snoozes.filter((snooze) => snooze.kind !== item.kind || snooze.id !== item.id);
+  const remaining = snoozes.filter((snooze) => snooze.kind !== item.kind || snooze.id !== item.id);
+  return remaining.length === snoozes.length ? snoozes : remaining;
 }

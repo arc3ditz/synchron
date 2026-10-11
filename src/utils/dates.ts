@@ -136,6 +136,15 @@ export function isHabitScheduledOnDate(
   return habit.customDays?.includes(WEEKDAYS[weekday]) ?? false;
 }
 
+function isValidCalendarDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day;
+}
+
 /**
  * Calculate streak for a habit
  * @param habit - The habit object
@@ -148,8 +157,8 @@ export function calculateStreak(
   streakFreeze = false,
   dayResetHour = 0,
 ): number {
-  const dateSet = new Set(habit.completedDates);
-  const freezeSet = new Set(habit.streakFreezeDates ?? []);
+  const dateSet = new Set(habit.completedDates.filter(isValidCalendarDateKey));
+  const freezeSet = new Set((habit.streakFreezeDates ?? []).filter(isValidCalendarDateKey));
   const todayKey = getTodayKey(dayResetHour);
 
   if (getFrequencyType(habit) === "custom" && (habit.customDays?.length ?? 0) === 0) {

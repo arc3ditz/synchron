@@ -22,6 +22,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const projectsSource = readFileSync(path.join(root, "src/components/Projects.tsx"), "utf8");
 const tasksSource = readFileSync(path.join(root, "src/components/Tasks.tsx"), "utf8");
 const datePickerSource = readFileSync(path.join(root, "src/components/DatePicker.tsx"), "utf8");
+const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
 
 const TODAY = "2026-10-09";
 
@@ -52,7 +53,7 @@ test("a Project is created with a name alone; dates and description stay optiona
 
 test("the Projects create form asks for a name first and hides details", () => {
   assert.match(projectsSource, /aria-label="Project Name"/, "name field stays the primary input");
-  assert.ok(projectsSource.includes("Add details (optional)"), "details sit behind an opt-in toggle");
+  assert.ok(projectsSource.includes("Add Details (Optional)"), "details sit behind an opt-in toggle");
   // Description and dates still exist as optional fields, never required.
   assert.ok(projectsSource.includes('aria-label="Project Description"'), "description remains available");
   assert.ok(projectsSource.includes('ariaLabel="Project Start Date (Optional)"'), "start date remains available");
@@ -61,7 +62,7 @@ test("the Projects create form asks for a name first and hides details", () => {
     projectsSource.indexOf("Create a Project"),
     projectsSource.indexOf("Create a Project") + 4000,
   );
-  assert.ok(!/required/.test(createForm.replace('aria-label="Project Name"', "").split("Add details")[1] ?? ""),
+  assert.ok(!/required/.test(createForm.replace('aria-label="Project Name"', "").split("Add Details")[1] ?? ""),
     "no required attribute on optional detail fields");
 });
 
@@ -71,8 +72,16 @@ test("Projects and Tasks use the shared manual and calendar date picker", () => 
   assert.match(projectsSource, /import DatePicker from "\.\/DatePicker"/);
   assert.match(tasksSource, /import DatePicker from "\.\/DatePicker"/);
   assert.match(datePickerSource, /inputMode="numeric"/);
-  assert.match(datePickerSource, /aria-label="Previous month"/);
-  assert.match(datePickerSource, /aria-label="Next month"/);
+  assert.match(datePickerSource, /aria-label="Previous Month"/);
+  assert.match(datePickerSource, /aria-label="Next Month"/);
+});
+
+test("project cards, details, and persisted source records use shared project calculations", () => {
+  assert.ok(projectsSource.includes("selectProjectTasks(project, milestones, tasks)"));
+  assert.equal(projectsSource.split("calculateProjectProgress(project, milestones, tasks)").length - 1, 2);
+  assert.ok(appSource.includes("recalculateProjectStatuses(projectRecords, milestones, tasks, projectStatusDate)"));
+  assert.ok(appSource.includes("saveProjects(projectRecords)"), "persist status source records, not derived automatic status");
+  assert.ok(appSource.includes("projectRecords.find((project) => project.id === projectId)"), "editing must not copy derived status into source state");
 });
 
 test("no Goal selection remains anywhere in the Projects screen", () => {

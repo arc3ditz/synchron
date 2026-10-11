@@ -19,7 +19,7 @@ function section(source, start, end = "\n  }") {
 // --- Quick creation: minimal keys, minimal inputs ---
 
 test("habit name input saves on Enter without extra clicks", () => {
-  assert.ok(appSource.includes('aria-label="New habit name"'), "name input stays labelled and findable");
+  assert.ok(appSource.includes('aria-label="New Habit Name"'), "name input stays labelled and findable");
   assert.ok(
     appSource.includes('if (event.key === "Enter") addHabit()'),
     "Enter in the name field saves immediately",
@@ -27,9 +27,9 @@ test("habit name input saves on Enter without extra clicks", () => {
 });
 
 test("primary creation path is Name + Frequency; the rest is optional", () => {
-  assert.ok(appSource.includes("More options"), "advanced settings hide behind one disclosure");
+  assert.ok(appSource.includes("More Options"), "advanced settings hide behind one disclosure");
   assert.ok(appSource.includes("showHabitOptions"), "disclosure is local UI state, not new storage");
-  assert.ok(appSource.includes("Fewer options"), "disclosure collapses back");
+  assert.ok(appSource.includes("Fewer Options"), "disclosure collapses back");
   const addHabit = section(appSource, "function addHabit()");
   assert.ok(addHabit.includes("const name = newHabit.trim()"), "blank names still rejected");
   assert.ok(addHabit.includes("frequencyType: newFrequencyType"), "frequency default preserved");
@@ -49,28 +49,30 @@ test("primary creation path is Name + Frequency; the rest is optional", () => {
 });
 
 test("frequency stays in the inline creation row and priority stays in More options", () => {
-  const creation = appSource.slice(appSource.indexOf("{/* Primary creation path:"));
+  const creation = appSource.slice(
+    appSource.indexOf("{/* Keep the habit name, requirement, and primary action visible."),
+  );
   const primaryRow = creation.slice(0, creation.indexOf("{showHabitOptions ?"));
   const optionsRow = creation.slice(
     creation.indexOf("{showHabitOptions ?"),
     creation.indexOf("{activeHabits.length"),
   );
-  assert.ok(primaryRow.includes('aria-label="New habit name"'));
+  assert.ok(primaryRow.includes('aria-label="New Habit Name"'));
   assert.ok(primaryRow.includes("renderFrequencyControls("));
   assert.match(primaryRow, />\s*Add\s*<\/button>/);
-  assert.ok(!primaryRow.includes('aria-label="Habit requirement"'));
+  assert.ok(!primaryRow.includes('aria-label="Habit Requirement"'));
   assert.match(optionsRow, /Habit requirement\s*<\/label>/);
-  assert.ok(optionsRow.includes('aria-label="Habit requirement"'));
+  assert.ok(optionsRow.includes('aria-label="Habit Requirement"'));
   assert.ok(optionsRow.includes('value="Optional"') && optionsRow.includes('value="Mandatory"'));
   assert.ok(optionsRow.includes("renderCategorySelect("));
-  assert.ok(optionsRow.includes('aria-label="Project (optional)"'));
+  assert.ok(optionsRow.includes('aria-label="Project (Optional)"'));
   assert.match(primaryRow, /flexWrap:\s*"wrap"/, "the primary controls wrap at narrower widths");
 });
 
 // --- Finding habits: lightweight text search, no new metadata ---
 
 test("habit search filters by name without new properties or filters", () => {
-  assert.ok(appSource.includes('aria-label="Search habits"'), "search input is labelled");
+  assert.ok(appSource.includes('aria-label="Search Habits"'), "search input is labelled");
   assert.ok(
     appSource.includes("habit.name.toLowerCase().includes(searchQuery)"),
     "matching is a case-insensitive name substring",

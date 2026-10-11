@@ -83,8 +83,9 @@ test("session logging is guarded against duplicates", () => {
   assert.ok(timerSource.includes("shouldLogSession"), "completion handler checks before logging");
   assert.ok(timerSource.includes("markSessionLogged"), "each completion is recorded once");
   assert.ok(
-    timerSource.includes("lastLoggedSessionRef"),
-    "the guard survives re-renders via a ref, not a re-created flag",
+    timerSource.includes("loggedSessionKeysRef") &&
+      timerSource.includes("saveFocusTimerSnapshot"),
+    "completion identities survive re-renders and app restarts",
   );
 });
 

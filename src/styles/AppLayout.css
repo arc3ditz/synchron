@@ -35,6 +35,7 @@
   display: none;
 }
 @media (max-width: 899px) {
+  .sidebar { z-index: 40; }
   .sidebar-primary, .sidebar-utility { display: contents; }
   .sidebar-group { display: contents; }
   .sidebar-section-label { display: none; }
@@ -403,4 +404,23 @@ section.atelier-group { padding: var(--space-4); }
 @media (max-width: 400px) {
   .page-toolbar { padding: 8px 10px; gap: 8px; }
   .today-quick-action-list { gap: 4px 6px; }
+}
+@media (max-width: 480px) {
+  .sidebar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-content: initial;
+    row-gap: 4px;
+  }
+  .sidebar-item {
+    min-height: 44px;
+    padding: 4px;
+    gap: 2px;
+    font-size: 10px;
+  }
+  .sidebar-item > span:not(.sidebar-shortcut) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .main-content { padding-bottom: 150px; }
 }

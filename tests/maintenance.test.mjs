@@ -38,14 +38,15 @@ test("stale means overdue beyond the shared threshold, nothing else", () => {
 test("stale work is quieted, never hidden, deleted, or rescheduled", () => {
   for (const [name, source] of [["Tasks", tasksSource], ["Today", todaySource]]) {
     assert.ok(source.includes("isTaskStaleBacklog"), `${name} must reuse the shared definition`);
-    assert.ok(source.includes("Backlog since"), `${name} must label stale work truthfully`);
+    assert.ok(source.includes("Backlog Since"), `${name} must label stale work truthfully`);
   }
   // No destructive handling anywhere near the stale path.
   for (const source of [tasksSource, todaySource, appSource]) {
     assert.ok(!source.includes("isTaskStaleBacklog(task") || !/deleteTask\(.*stale|stale.*deleteTask/i.test(source));
   }
   assert.ok(tasksSource.includes("statusFilter"), "completed work stays reachable via filters");
-  assert.ok(todaySource.includes("Completed ("), "completed work stays visible on Today");
+  assert.ok(todaySource.includes("selectTodayTasks(tasks"), "Today uses the shared task eligibility selector");
+  assert.ok(!todaySource.includes("Completed ("), "Today does not retain a completed-task subsection");
 });
 
 // --- Rescheduling from Today rows: one tap into the existing prefilled modal ---

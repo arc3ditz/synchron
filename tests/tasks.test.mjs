@@ -5,7 +5,9 @@ import {
   createTask,
   deleteTask,
   filterTasksByMilestone,
+  getValidTaskDueDate,
   getTaskPlanningCategory,
+  setTaskCompletion,
   isTaskDueTodayOrOverdue,
   isTaskOverdue,
   resolveTaskContext,
@@ -208,6 +210,21 @@ test("toggleTaskCompletion flips both ways without touching context", () => {
   assert.equal(reopened.id, task.id);
 });
 
+test("repeated completion requests are idempotent while a later reopen remains valid", () => {
+  const task = {
+    id: "requested",
+    title: "Requested",
+    completed: false,
+    priority: "medium",
+    createdAt: "2026-01-01",
+  };
+  const completed = setTaskCompletion(task, true);
+  assert.equal(setTaskCompletion(completed, true), completed);
+  const reopened = setTaskCompletion(completed, false);
+  assert.equal(reopened.completed, false);
+  assert.equal(setTaskCompletion(reopened, false), reopened);
+});
+
 test("completeTask is idempotent and never reopens", () => {
   const task = createTask({ title: "T", priority: "medium" });
   const done = completeTask(task);
@@ -345,9 +362,62 @@ test("Today includes due-today and overdue Tasks but not future ones", () => {
 
   const selected = selectTodayTasks(tasks, { milestones: [], todayKey: TODAY });
   assert.deepEqual(selected.map((task) => task.id).sort(), ["overdue", "today"]);
+  assert.equal(getTaskPlanningCategory(tasks[1], TODAY), "overdue");
+  assert.equal(getTaskPlanningCategory(tasks[0], TODAY), "scheduled");
+  assert.equal(getTaskPlanningCategory(tasks[2], TODAY), "scheduled");
+  assert.equal(getTaskPlanningCategory(tasks[3], TODAY), "uncategorized");
 });
 
-test("Today includes Tasks under active Milestones and keeps completed ones for reopening", () => {
+test("malformed due dates are not treated as overdue or scheduled Today", () => {
+  const task = {
+    id: "invalid-date",
+    dueDate: "2025-02-30",
+    title: "Invalid date",
+    completed: false,
+    priority: "medium",
+    createdAt: "2025-01-01",
+  };
+
+  assert.equal(getValidTaskDueDate(task), undefined);
+  assert.equal(isTaskOverdue(task, TODAY), false);
+  assert.equal(isTaskDueTodayOrOverdue(task, TODAY), false);
+  assert.equal(getTaskPlanningCategory(task, TODAY), "uncategorized");
+  assert.deepEqual(selectTodayTasks([task], { milestones: [], todayKey: TODAY }), []);
+});
+
+test("completed overdue tasks are history, not active overdue work", () => {
+  const completed = {
+    id: "completed-overdue",
+    dueDate: "2025-05-10",
+    title: "Already done",
+    completed: true,
+    priority: "medium",
+    createdAt: "2025-01-01",
+  };
+  assert.equal(getTaskPlanningCategory(completed, TODAY), "completed");
+  assert.deepEqual(
+    selectTodayTasks([completed], { milestones: [], todayKey: TODAY }),
+    [],
+  );
+});
+
+test("Today task membership preserves scheduled, backlog, and undated classifications", () => {
+  const tasks = [
+    { id: "scheduled", dueDate: TODAY, title: "Scheduled", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "backlog", isBacklog: true, title: "Backlog", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "normal", title: "Undated normal", completed: false, priority: "medium", createdAt: "2025-01-01" },
+    { id: "done-scheduled", dueDate: TODAY, title: "Done", completed: true, priority: "medium", createdAt: "2025-01-01" },
+  ];
+
+  const selected = selectTodayTasks(tasks, { milestones: [], todayKey: TODAY });
+  assert.deepEqual(selected.map((task) => task.id), ["scheduled"]);
+  assert.equal(getTaskPlanningCategory(tasks[0], TODAY), "scheduled");
+  assert.equal(getTaskPlanningCategory(tasks[1], TODAY), "backlog");
+  assert.equal(getTaskPlanningCategory(tasks[2], TODAY), "uncategorized");
+  assert.equal(getTaskPlanningCategory(tasks[3], TODAY), "completed");
+});
+
+test("Today includes only incomplete Tasks under active Milestones and due today", () => {
   const milestones = [
     { id: "m-active", title: "Active", completed: false },
     { id: "m-done", title: "Done", completed: true },
@@ -360,7 +430,7 @@ test("Today includes Tasks under active Milestones and keeps completed ones for 
   ];
 
   const selected = selectTodayTasks(tasks, { milestones, todayKey: TODAY });
-  assert.deepEqual(selected.map((task) => task.id).sort(), ["done-today", "via-active"]);
+  assert.deepEqual(selected.map((task) => task.id), ["via-active"]);
 });
 
 test("Today ordering puts overdue first, then due date, then priority", () => {

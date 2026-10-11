@@ -14,13 +14,17 @@ export function toggleTaskCompletion(task: Task): Task {
   return { ...task, completed: !task.completed };
 }
 
+export function setTaskCompletion(task: Task, completed: boolean): Task {
+  if (task.completed === completed) return task;
+  return { ...task, completed };
+}
+
 /**
  * Idempotent completion for the Task ↔ Focus flow: completing an already
  * completed Task is a no-op. Never toggles back to incomplete.
  */
 export function completeTask(task: Task): Task {
-  if (task.completed) return task;
-  return { ...task, completed: true };
+  return setTaskCompletion(task, true);
 }
 
 export function updateTask(
@@ -64,11 +68,25 @@ const TASK_PRIORITY_RANK: Record<Task["priority"], number> = {
  * A Task with no dueDate is never overdue.
  */
 export function isTaskOverdue(task: Pick<Task, "dueDate">, todayKey: string): boolean {
-  return task.dueDate !== undefined && task.dueDate < todayKey;
+  const dueDate = getValidTaskDueDate(task);
+  return dueDate !== undefined && dueDate < todayKey;
 }
 
 export function isTaskDueTodayOrOverdue(task: Pick<Task, "dueDate">, todayKey: string): boolean {
-  return task.dueDate !== undefined && task.dueDate <= todayKey;
+  const dueDate = getValidTaskDueDate(task);
+  return dueDate !== undefined && dueDate <= todayKey;
+}
+
+export function getValidTaskDueDate(task: Pick<Task, "dueDate">): string | undefined {
+  const value = task.dueDate;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+    ? value
+    : undefined;
 }
 
 export type TaskPlanningCategory = "overdue" | "scheduled" | "backlog" | "uncategorized" | "completed";
@@ -78,17 +96,18 @@ export function getTaskPlanningCategory(
   todayKey: string,
 ): TaskPlanningCategory {
   if (task.completed) return "completed";
-  if (task.dueDate !== undefined && task.dueDate < todayKey) return "overdue";
-  if (task.dueDate !== undefined) return "scheduled";
+  const dueDate = getValidTaskDueDate(task);
+  if (dueDate !== undefined && dueDate < todayKey) return "overdue";
+  if (dueDate !== undefined) return "scheduled";
   return task.isBacklog === true ? "backlog" : "uncategorized";
 }
 
 /**
- * Single Today membership definition for Tasks: due today or overdue, or
- * attached to an active (incomplete) Milestone unless explicitly deferred.
- * Completed Tasks stay included so Today can show (and reopen) what was
- * finished; callers split pending/completed. Future-due Tasks without an
- * active Milestone stay out of Today. Milestones no longer require a Goal link.
+ * Single Today membership definition for actionable Tasks: incomplete and due
+ * today or overdue, or attached to an active (incomplete) Milestone unless
+ * explicitly deferred. Completed Tasks remain in storage for Tasks, History,
+ * and analytics, but are not Today actions. Future-due Tasks without an active
+ * Milestone stay out of Today. Milestones no longer require a Goal link.
  */
 export function selectTodayTasks(
   tasks: Task[],
@@ -100,8 +119,10 @@ export function selectTodayTasks(
       .map((milestone) => milestone.id),
   );
   return tasks.filter((task) =>
-    isTaskDueTodayOrOverdue(task, input.todayKey) ||
-    (!task.isBacklog && task.milestoneId !== undefined && activeMilestoneIds.has(task.milestoneId)),
+    !task.completed && (
+      isTaskDueTodayOrOverdue(task, input.todayKey) ||
+      (!task.isBacklog && task.milestoneId !== undefined && activeMilestoneIds.has(task.milestoneId))
+    ),
   );
 }
 

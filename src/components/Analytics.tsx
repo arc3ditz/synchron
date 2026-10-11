@@ -34,6 +34,12 @@ type AnalyticsProps = {
   weekStart: "Sunday" | "Monday";
 };
 
+const INSIGHT_TYPE_LABELS: Record<ActionableInsight["type"], string> = {
+  positive: "Positive",
+  warning: "Warning",
+  actionable: "Actionable",
+};
+
 const HORIZONS: TimeHorizon[] = ["This Week", "This Month", "Last 30 Days", "All Time"];
 
 function formatHours(minutes: number): string {
@@ -45,7 +51,7 @@ function formatHours(minutes: number): string {
 }
 
 function formatSessionCount(count: number): string {
-  return `${count} ${count === 1 ? "session" : "sessions"}`;
+  return `${count} ${count === 1 ? "Session" : "Sessions"}`;
 }
 
 function Analytics({
@@ -155,25 +161,25 @@ function Analytics({
   }
 
   const statBand = [
-    { label: "Focus time", value: formatHours(timeBucketFlexTotal), sub: formatSessionCount(totalSessions) },
+    { label: "Focus Time", value: formatHours(timeBucketFlexTotal), sub: formatSessionCount(totalSessions) },
     {
-      label: "Completion rate",
+      label: "Completion Rate",
       value: habitPerformance.overallCompletionRate === null ? "—" : `${habitPerformance.overallCompletionRate}%`,
-      sub: `${habitPerformance.strongestHabits.length} top · ${habitPerformance.weakestHabits.length} lagging`,
+      sub: `${habitPerformance.strongestHabits.length} Top · ${habitPerformance.weakestHabits.length} Lagging`,
     },
-    { label: "Peak window", value: timeOfDayInsights.peakFocusWindow ?? "—", sub: "Most focused time" },
-    { label: "Friction day", value: weekdayFriction.highestFrictionDay ?? "—", sub: "Most incomplete items" },
+    { label: "Peak Window", value: timeOfDayInsights.peakFocusWindow ?? "—", sub: "Most Focused Time" },
+    { label: "Friction Day", value: weekdayFriction.highestFrictionDay ?? "—", sub: "Most Incomplete Items" },
   ];
 
   return (
     <div className="atelier-page analytics-view">
       <div className="page-head">
         <p className="atelier-eyebrow">Analytics</p>
-        <h1 className="atelier-greeting">Patterns, not pressure.</h1>
+        <h1 className="atelier-greeting">Patterns, Not Pressure.</h1>
         <p>Track your focus patterns and habit consistency.</p>
       </div>
 
-      <div className="category-tabs" role="tablist" aria-label="Time horizon">
+      <div className="category-tabs" role="tablist" aria-label="Time Horizon">
         {HORIZONS.map((horizon) => (
           <button
             key={horizon}
@@ -223,7 +229,7 @@ function Analytics({
       </div>
 
       {actionableInsights.length > 0 && (
-        <section style={{ marginBottom: 16 }} aria-label="Actionable insights">
+        <section style={{ marginBottom: 16 }} aria-label="Actionable Insights">
           <h2
             style={{
               display: "flex",
@@ -262,7 +268,7 @@ function Analytics({
                       <h3 style={{ margin: 0, fontSize: "var(--type-sm)", fontWeight: 600, color: "var(--text-primary)" }}>
                         {insight.title}
                       </h3>
-                      <span className={badgeClass}>{insight.type satisfies ActionableInsight["type"]}</span>
+                      <span className={badgeClass}>{INSIGHT_TYPE_LABELS[insight.type]}</span>
                     </div>
                     <p style={{ margin: "4px 0 0", fontSize: "var(--type-sm)", color: "var(--text-secondary)", lineHeight: 1.5 }}>
                       {insight.description}

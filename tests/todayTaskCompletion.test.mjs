@@ -12,6 +12,7 @@ import { loadTasks, saveTasks } from "../src/utils/storage.ts";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const todaySource = readFileSync(path.join(root, "src/components/Today.tsx"), "utf8");
+const tasksSource = readFileSync(path.join(root, "src/components/Tasks.tsx"), "utf8");
 const appSource = readFileSync(path.join(root, "src/App.tsx"), "utf8");
 
 const TODAY = "2025-05-14";
@@ -36,10 +37,10 @@ function selectSorted(tasks) {
   );
 }
 
-// Mirrors Today's active/incomplete section: the pending partition of the
-// already-sorted Today selection.
+// Mirrors Today's actionable section: the shared selector returns only
+// incomplete tasks eligible for Today.
 function activeSection(tasks) {
-  return selectSorted(tasks).filter((task) => !task.completed);
+  return selectSorted(tasks);
 }
 
 class MemoryStorage {
@@ -77,10 +78,10 @@ test("completing a task removes it from Today's active section without deleting 
     task.id === "t-1" ? toggleTaskCompletion(task) : task,
   );
 
-  // Gone from the active section...
+  // Gone from the shared Today selection and its actionable count...
   assert.deepEqual(activeSection(next).map((task) => task.id), ["t-2"]);
-  // ...but still selected for Today so the completed-items view can show (and reopen) it.
-  assert.deepEqual(selectSorted(next).map((task) => task.id).sort(), ["t-1", "t-2"]);
+  // ...but remains stored with its completion state for other views and analytics.
+  assert.equal(next.length, 2);
   assert.equal(next.find((task) => task.id === "t-1").completed, true);
 });
 
@@ -123,24 +124,38 @@ test("completed tasks persist through save/load and stay out of the active secti
   });
 });
 
-test("Today derives pending/completed from one sorted selection (no separate queries)", () => {
+test("Today uses the shared incomplete-task selection without a completed task section", () => {
   assert.ok(
-    todaySource.includes("pendingTodayTasks") && todaySource.includes("completedTodayTasks"),
-    "Today must keep distinct pending/completed partitions",
+    todaySource.includes("selectTodayTasks(tasks, { milestones, todayKey })"),
+    "the shared selector drives Today task membership",
   );
+  assert.ok(!todaySource.includes("completedTodayTasks"), "completed tasks are not listed on Today");
+  assert.ok(todaySource.includes("const pendingTodayTasks = todayTasks"), "actionable counts use open tasks");
   assert.ok(
     !todaySource.includes("deleteTask("),
     "completing on Today must never route through deletion",
   );
-  const partition = todaySource.match(/for \(const task of todayTasks\)[\s\S]{0,200}?completed\.push\(task\)/);
-  assert.ok(partition, "partitions must derive from the same sorted todayTasks selection");
 });
 
 test("the shared toggle handler updates tasks functionally (no stale-state replacement)", () => {
   const handler = appSource.match(/function handleToggleTask[\s\S]*?\n  \}/);
   assert.ok(handler, "App must define handleToggleTask");
   assert.ok(
-    handler[0].includes("commitTaskChanges((currentTasks)") && handler[0].includes("toggleTaskCompletion(task)"),
-    "toggle must map over current state with the shared toggle helper",
+    handler[0].includes("commitTaskChanges((currentTasks)") &&
+      handler[0].includes("setTaskCompletion(task, requestedCompleted)") &&
+      handler[0].includes("return changed ? nextTasks : currentTasks"),
+    "repeated callbacks from a stale render set the same requested state without a second write",
   );
+});
+
+test("overdue, due-today, and upcoming work are visibly distinct and date refreshes", () => {
+  assert.ok(tasksSource.includes('label: "Overdue"'));
+  assert.ok(tasksSource.includes('label: "Due Today"'));
+  assert.ok(tasksSource.includes('label: "Upcoming"'));
+  assert.ok(todaySource.includes("Overdue · Due"));
+  assert.ok(todaySource.includes("Upcoming · Due"));
+  assert.ok(appSource.includes("setTodayDateKey(currentDateKey)"));
+  assert.ok(appSource.includes("window.addEventListener(\"focus\", syncHabitDay)"));
+  assert.ok(appSource.includes("document.addEventListener(\"visibilitychange\", syncHabitDay)"));
+  assert.ok(appSource.includes("window.setInterval(syncHabitDay, 30_000)"));
 });

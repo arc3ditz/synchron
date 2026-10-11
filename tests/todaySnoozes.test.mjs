@@ -4,9 +4,11 @@ import {
   DEFAULT_SNOOZE_RETURN_MINUTES,
   SNOOZE_RETURN_MINUTES,
   getActiveTodaySnoozes,
+  pruneIneligibleTodaySnoozes,
   snoozeTodayItem,
 } from "../src/domain/todaySnoozes.ts";
 import { selectTodayMandatoryHabits } from "../src/domain/today.ts";
+import { selectTodayTasks } from "../src/domain/tasks.ts";
 import { loadTodaySnoozes, saveTodaySnoozes } from "../src/utils/storage.ts";
 
 const TODAY = "2026-10-09";
@@ -68,6 +70,11 @@ test("task and habit snoozes stay hidden until their absolute return times", () 
     [],
     "an overdue snooze is eligible immediately, including after a closed-app interval",
   );
+  assert.deepEqual(
+    [...getActiveTodaySnoozes(afterOneHour, now + 60 * 60 * 1000 - 1).taskIds],
+    ["task-1"],
+    "a snooze remains hidden until the exact return timestamp",
+  );
 });
 
 test("changing the preference does not move existing snooze timestamps", () => {
@@ -93,10 +100,63 @@ test("valid snoozes persist while overdue and malformed records are discarded on
       { kind: "task", id: "", returnAt: now + 60_000 },
     ];
     saveTodaySnoozes(persisted);
-    const restored = loadTodaySnoozes();
+    const restored = loadTodaySnoozes(now);
     assert.deepEqual(restored, persisted.slice(0, 1));
     assert.deepEqual([...getActiveTodaySnoozes(restored, now).taskIds], []);
   } finally {
     delete globalThis.localStorage;
   }
+});
+
+test("an overdue persisted snooze is eligible immediately after an app restart", () => {
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    const startedAt = 1_800_000_000_000;
+    saveTodaySnoozes(snoozeTodayItem([], { kind: "task", id: "task-1" }, startedAt, 60));
+    const reloadedAfterReturn = loadTodaySnoozes(startedAt + 60 * 60 * 1000);
+    assert.deepEqual(reloadedAfterReturn, []);
+    const reappeared = selectTodayTasks([{
+      id: "task-1",
+      title: "Return",
+      dueDate: TODAY,
+      completed: false,
+      priority: "medium",
+      createdAt: "2026-01-01",
+    }], { milestones: [], todayKey: TODAY });
+    assert.deepEqual(reappeared.map((task) => task.id), ["task-1"]);
+    assert.deepEqual(
+      [...getActiveTodaySnoozes(reloadedAfterReturn, startedAt + 60 * 60 * 1000).taskIds],
+      [],
+    );
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
+
+test("completed, deleted, and archived targets lose their snooze instead of resurfacing", () => {
+  const snoozes = [
+    { kind: "task", id: "complete", returnAt: 1000 },
+    { kind: "task", id: "deleted", returnAt: 1000 },
+    { kind: "task", id: "archived-project", returnAt: 1000 },
+    { kind: "habit", id: 1, returnAt: 1000 },
+    { kind: "habit", id: 2, returnAt: 1000 },
+  ];
+  const retained = pruneIneligibleTodaySnoozes(snoozes, {
+    tasks: [
+      { id: "complete", completed: true },
+      { id: "archived-project", completed: false, projectId: "p-archived" },
+    ],
+    habits: [
+      { id: 1, isArchived: true },
+      { id: 2, isArchived: false },
+    ],
+    milestones: [],
+    projects: [{ id: "p-archived", status: "archived" }],
+  });
+  assert.deepEqual(retained.map((snooze) => `${snooze.kind}:${snooze.id}`), ["habit:2"]);
 });

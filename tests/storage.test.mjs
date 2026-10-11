@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadStorageData } from "../src/utils/storage.ts";
+import { loadStorageData, saveStorageData } from "../src/utils/storage.ts";
 
 class MemoryStorage {
   values = new Map();
@@ -52,5 +52,25 @@ test("corrupted JSON preserves original value and does not overwrite it with fal
     // A later save of fallback writes to the main key; backup is untouched.
     storage.setItem("goals", JSON.stringify([]));
     assert.equal(storage.getItem("goalsCorruptedBackup"), "{not valid json");
+  });
+
+  test("persistence failures are surfaced instead of silently ignored", () => {
+    globalThis.localStorage = {
+      setItem() {
+        throw new Error("quota exceeded");
+      },
+    };
+    const originalConsoleError = console.error;
+    const errors = [];
+    console.error = (...args) => errors.push(args);
+    try {
+      saveStorageData("focusSessions", []);
+      assert.equal(errors.length, 1);
+      assert.equal(errors[0][0], 'Failed to persist "focusSessions"');
+      assert.equal(errors[0][1].message, "quota exceeded");
+    } finally {
+      console.error = originalConsoleError;
+      delete globalThis.localStorage;
+    }
   });
 });

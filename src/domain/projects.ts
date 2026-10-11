@@ -98,6 +98,26 @@ export function filterTasksByProject(tasks: Task[], projectId: string): Task[] {
   return tasks.filter((task) => task.projectId === projectId);
 }
 
+/**
+ * Select each task belonging to a project exactly once, whether linked
+ * directly or through one of its milestones.
+ */
+export function selectProjectTasks(
+  project: Project,
+  milestones: Milestone[],
+  tasks: Task[],
+): Task[] {
+  const milestoneIds = new Set(
+    milestones
+      .filter((milestone) => milestone.projectId === project.id)
+      .map((milestone) => milestone.id),
+  );
+  return tasks.filter((task) =>
+    task.projectId === project.id ||
+    (task.milestoneId !== undefined && milestoneIds.has(task.milestoneId)),
+  );
+}
+
 export interface ProjectProgress {
   total: number;
   completed: number;
@@ -156,11 +176,7 @@ export function calculateProjectProgress(
   tasks: Task[],
 ): ProjectProgress {
   const projectMilestones = milestones.filter((milestone) => milestone.projectId === project.id);
-  const milestoneIds = new Set(projectMilestones.map((milestone) => milestone.id));
-  const projectTasks = tasks.filter((task) =>
-    task.projectId === project.id ||
-    (task.milestoneId !== undefined && milestoneIds.has(task.milestoneId)),
-  );
+  const projectTasks = selectProjectTasks(project, milestones, tasks);
 
   const milestoneCompleted = projectMilestones.filter((milestone) => milestone.completed).length;
   const taskCompleted = projectTasks.filter((task) => task.completed).length;

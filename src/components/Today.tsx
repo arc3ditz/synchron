@@ -5,23 +5,30 @@ import type { FocusSessionRecord, Habit, Milestone, Project, Task } from "../typ
 import {
   calculateStreak,
   formatFullDate,
-  getTodayKey,
 } from "../utils/dates";
 import { getFocusSessionsForLogicalToday, QUICK_FOCUS_MINUTES } from "../domain/focusTimer";
 import { FORM_CONTROL } from "../theme";
-import { isTaskStaleBacklog, listNextStepCandidates, nextStepKey, recommendNextStep } from "../domain/nextStep";
+import {
+  isTaskStaleBacklog,
+  listTodayNextActions,
+  nextStepKey,
+  selectTodayNextAction,
+} from "../domain/nextStep";
 import { getWelcomeBackSubtitle, getWelcomeBackTitle } from "../domain/welcomeBack";
 import { COMPLETION_CONFIRMATION_MS, getCompletionMessage } from "../domain/completionFeedback";
 import {
-  getTodaySnoozeIds,
+  getActiveTodaySnoozes,
   type TodaySnooze,
   type TodaySnoozeTarget,
 } from "../domain/todaySnoozes";
-import { selectTodayMandatoryHabits } from "../domain/today";
+import { calculateHabitSummary, selectTodayMandatoryHabits } from "../domain/today";
 import { buildDailyTimeline, totalPlannedMinutes as sumPlannedMinutes, type TimelineBlock } from "../domain/timeline";
+import { TASK_PRIORITY_LABELS } from "../utils/displayLabels";
 import { isTaskOverdue, resolveTaskContext, selectTodayTasks, sortTodayTasks } from "../domain/tasks";
 
 type TodayProps = {
+  todayKey: string;
+  snoozeNow: number;
   viewMode: "grid" | "list";
   habits: Habit[];
   tasks: Task[];
@@ -30,9 +37,10 @@ type TodayProps = {
   focusSessions: FocusSessionRecord[];
   onToggleHabit: (id: number, dateKey?: string) => void;
   onToggleTask: (id: string) => void;
+  onToggleMilestone: (id: string) => void;
   onAddTask: (data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onQuickTaskFocusReady?: (focus: (() => void) | null) => void;
-  onStartFocus: (entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }) => void;
+  onStartFocus: (entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }, options?: { durationMinutes?: number }) => void;
   // Low-friction start for the hero recommendation: links the item on the
   // existing Focus Timer with a short commitment and auto-starts it.
   onQuickFocus: (entity: { taskId?: string; habitId?: number; title?: string; durationMinutes?: number }) => void;
@@ -165,6 +173,8 @@ function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
 }
 
 function Today({
+  todayKey,
+  snoozeNow,
   viewMode,
   habits,
   tasks,
@@ -173,6 +183,7 @@ function Today({
   focusSessions,
   onToggleHabit,
   onToggleTask,
+  onToggleMilestone,
   onAddTask,
   onQuickTaskFocusReady,
   onStartFocus,
@@ -189,11 +200,10 @@ function Today({
   onUpdateTask,
   welcomeBack = null,
 }: TodayProps) {
-  const todayKey = getTodayKey(dayResetHour);
   const today = useMemo(() => new Date(), []);
   const activeSnoozes = useMemo(
-    () => getTodaySnoozeIds(todaySnoozes),
-    [todaySnoozes],
+    () => getActiveTodaySnoozes(todaySnoozes, snoozeNow),
+    [todaySnoozes, snoozeNow],
   );
   // Session-only dismissal: hides the calm welcome for this mount without
   // touching habits, tasks, or progress.
@@ -243,9 +253,8 @@ function Today({
     [todayHabits, todayTasks, milestones, projects, focusSessions, todayKey, dayResetHour, today],
   );
 
-  // Completed tasks drop out of the upcoming schedule the moment they are
-  // done; they stay visible under Completed below. Habits keep their slots
-  // and logged sessions are history, so only task blocks are filtered here.
+  // Completed tasks are absent from the active Today selection; habits keep
+  // their slots and logged sessions are history, so only task blocks are filtered.
   const upcomingTimelineBlocks = useMemo(
     () => timelineBlocks.filter((block) => block.kind !== "task" || !block.completed),
     [timelineBlocks],
@@ -265,20 +274,7 @@ function Today({
     return `${mins}m`;
   };
 
-  // One memoized, order-preserving partition of today's already-sorted
-  // tasks. Completing a task moves it from pending to completed (and
-  // uncompleting moves it back) without re-sorting or refetching, and the
-  // stable array identities keep downstream memos (Next Up, counts) from
-  // recomputing on unrelated renders.
-  const { pendingTodayTasks, completedTodayTasks } = useMemo(() => {
-    const pending: Task[] = [];
-    const completed: Task[] = [];
-    for (const task of todayTasks) {
-      if (task.completed) completed.push(task);
-      else pending.push(task);
-    }
-    return { pendingTodayTasks: pending, completedTodayTasks: completed };
-  }, [todayTasks]);
+  const pendingTodayTasks = todayTasks;
 
   // Quiet backlog grouping: stale overdue stays fully visible and counted,
   // but collapsed behind one toggle so a large old backlog cannot greet the
@@ -353,7 +349,7 @@ function Today({
   }, [lastCompletion]);
 
   function isFinalCompletion(): boolean {
-    const openCount = pendingTodayTasks.length + (todayHabits.length - completedHabitCount);
+    const openCount = pendingTodayTasks.length + (todayHabits.length - todaySummary.doneCount);
     return openCount <= 1;
   }
 
@@ -383,13 +379,7 @@ function Today({
     setLastCompletion({ itemKey, message: getCompletionMessage(habit.name, isFinalCompletion()) });
   }
 
-  const completedHabitCount = todayHabits.filter((habit) =>
-    habit.completedDates.includes(todayKey),
-  ).length;
-  const completedTaskCount = todayTasks.filter((task) => task.completed).length;
-  const completedCount = completedHabitCount + completedTaskCount;
-  const totalCount = todayHabits.length + todayTasks.length;
-  const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+  const todaySummary = calculateHabitSummary(todayHabits, todayKey);
 
   // Day-reset aware: matches the Focus timer's own "today" definition.
   const todayFocusTime = useMemo(() => {
@@ -397,9 +387,8 @@ function Today({
       .reduce((total, session) => total + session.durationMinutes, 0);
   }, [focusSessions, dayResetHour, today]);
 
-  // The single next action: most urgent pending Task (already sorted:
-  // overdue → due → priority), else the next incomplete Habit. Mandatory
-  // Habits are preferred when the user opts into them as important items.
+  // The Today selector uses mandatory habits, overdue work, today's work,
+  // active project work, and then standalone tasks in that order.
   const nextStepBaseInput = useMemo(() => ({
     habits: todayHabits,
     tasks,
@@ -413,25 +402,22 @@ function Today({
   const { nextStep, nextStepOptions } = useMemo(() => {
     const fallback = {
       kind: "none" as const,
-      title: "Next step unavailable",
+      title: "Next Step Unavailable",
       reason: "Couldn't load the recommendation. Your tasks and habits are listed below.",
     };
     try {
-      const options = listNextStepCandidates(nextStepBaseInput).filter((option) =>
-        option.kind === "task"
-          ? !activeSnoozes.taskIds.has(option.taskId)
-          : !activeSnoozes.habitIds.has(option.habitId),
-      );
+      const selectorInput = {
+        ...nextStepBaseInput,
+        skippedTaskIds: activeSnoozes.taskIds,
+        skippedHabitIds: activeSnoozes.habitIds,
+      };
+      const options = listTodayNextActions(selectorInput);
       const pinned = chosenNextStepKey
         ? options.find((option) => nextStepKey(option) === chosenNextStepKey) ?? null
         : null;
       if (pinned) return { nextStep: pinned, nextStepOptions: options };
       return {
-        nextStep: recommendNextStep({
-          ...nextStepBaseInput,
-          skippedTaskIds: activeSnoozes.taskIds,
-          skippedHabitIds: activeSnoozes.habitIds,
-        }),
+        nextStep: selectTodayNextAction(selectorInput),
         nextStepOptions: options,
       };
     } catch {
@@ -459,6 +445,12 @@ function Today({
       onQuickFocus({ taskId: nextStep.taskId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES });
     } else if (nextStep.kind === "habit") {
       onQuickFocus({ habitId: nextStep.habitId, title: nextStep.title, durationMinutes: QUICK_FOCUS_MINUTES });
+    } else if (nextStep.kind === "milestone") {
+      onStartFocus({
+        milestoneId: nextStep.milestoneId,
+        projectId: nextStep.projectId,
+        title: nextStep.title,
+      });
     } else {
       onStartFocus();
     }
@@ -478,6 +470,10 @@ function Today({
       const habit = habits.find((item) => item.id === nextStep.habitId);
       if (!habit || habit.completedDates.includes(todayKey)) return;
       handleHabitToggle(habit, false, todayKey);
+    } else if (nextStep.kind === "milestone") {
+      const milestone = milestones.find((item) => item.id === nextStep.milestoneId);
+      if (!milestone || milestone.completed) return;
+      onToggleMilestone(milestone.id);
     }
   }
 
@@ -530,15 +526,15 @@ function Today({
   };
 
   const overdueCount = pendingTodayTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
-  const habitsLeft = todayHabits.length - completedHabitCount;
+  const habitsLeft = todaySummary.total - todaySummary.doneCount;
   const dayName = today.toLocaleDateString(undefined, { weekday: "long" });
   const greeting = greetingForHour(today.getHours());
 
   const briefingParts: string[] = [];
-  if (overdueCount > 0) briefingParts.push(`${overdueCount} overdue`);
-  briefingParts.push(`${pendingTodayTasks.length} ${pendingTodayTasks.length === 1 ? "task" : "tasks"} open`);
-  briefingParts.push(`${habitsLeft} ${habitsLeft === 1 ? "habit" : "habits"} left`);
-  if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
+  if (overdueCount > 0) briefingParts.push(`${overdueCount} Overdue`);
+  briefingParts.push(`${pendingTodayTasks.length} ${pendingTodayTasks.length === 1 ? "Task" : "Tasks"} Open`);
+  briefingParts.push(`${habitsLeft} ${habitsLeft === 1 ? "Habit" : "Habits"} Left`);
+  if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m Focused`);
 
   // Grid mode lets the available habit-section width determine its columns;
   // list mode keeps the grouped single-column row presentation.
@@ -548,7 +544,7 @@ function Today({
     if (welcomeBack === null || welcomeBack === undefined || welcomeDismissed) return null;
     return (
       <section
-        aria-label="Welcome back"
+        aria-label="Welcome Back"
         data-testid="welcome-back"
         className="atelier-group row-card"
         style={{ padding: "var(--space-4)", marginBottom: "var(--space-4)", display: "flex", alignItems: "flex-start", gap: "var(--space-3)" }}
@@ -564,7 +560,7 @@ function Today({
         <button
           type="button"
           onClick={() => setWelcomeDismissed(true)}
-          aria-label="Dismiss welcome back message"
+          aria-label="Dismiss Welcome Back Message"
           style={{ border: "none", background: "transparent", color: "var(--color-accent)", fontSize: "var(--type-sm)", fontWeight: "var(--font-medium)", cursor: "pointer", padding: "4px 0" }}
         >
           Dismiss
@@ -577,10 +573,9 @@ function Today({
   // checkbox, truthful reason, and duration only when the item carries one.
   function renderNextStep() {
     if (nextStep.kind === "none") {
-      if (totalCount === 0) return null;
       return (
         <section
-          aria-label="Next step"
+          aria-label="Next Step"
           aria-live="polite"
           data-testid="next-step"
           className="atelier-group row-card"
@@ -588,21 +583,13 @@ function Today({
         >
           <div style={{ flex: 1, minWidth: 220 }}>
             <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 6px" }}>
-              Up next
+              Up Next
             </p>
             <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.4rem, 3vw, 1.9rem)", fontWeight: 500, letterSpacing: "-0.01em", color: "var(--text-primary)", margin: "0 0 6px" }}>
-              All clear for today. Nicely done.
+              Nothing Needs Attention Right Now.
             </h2>
             <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: 0 }}>{nextStep.reason}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => onStartFocus()}
-            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 22px", borderRadius: "var(--radius-pill)", border: "1px solid transparent", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          >
-            <Play size={15} aria-hidden="true" />
-            Start focus
-          </button>
         </section>
       );
     }
@@ -610,7 +597,7 @@ function Today({
     const isTask = nextStep.kind === "task";
     const currentKey = nextStepKey(nextStep);
     const linkedTask = isTask ? tasks.find((task) => task.id === nextStep.taskId) : undefined;
-    const linkedHabit = !isTask && nextStep.kind === "habit"
+    const linkedHabit = nextStep.kind === "habit"
       ? habits.find((habit) => habit.id === nextStep.habitId)
       : undefined;
     const chain = linkedTask ? taskChain(linkedTask) : null;
@@ -619,7 +606,7 @@ function Today({
 
     return (
       <section
-        aria-label="Next step"
+        aria-label="Next Step"
         aria-live="polite"
         data-testid="next-step"
         className="atelier-group row-card"
@@ -632,20 +619,20 @@ function Today({
           aria-label={`Mark done: ${nextStep.title}`}
           aria-checked={heroCompleted}
           role="checkbox"
-          title="Mark done"
+          title="Mark Done"
         >
           <Check size={15} aria-hidden="true" />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--color-accent)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 6px" }}>
-            Up next · {isTask ? "Task" : "Habit"}
+            Up Next · {isTask ? "Task" : linkedHabit ? "Habit" : "Milestone"}
           </p>
           <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.4rem, 3vw, 1.9rem)", fontWeight: 500, letterSpacing: "-0.01em", lineHeight: 1.15, color: "var(--text-primary)", margin: "0 0 8px", overflowWrap: "anywhere" }}>
             {nextStep.title}
           </h2>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "var(--type-sm)", color: "var(--text-secondary)" }}>
             <span>{nextStep.reason}</span>
-            {nextStep.durationMinutes !== undefined && (
+            {nextStep.kind !== "milestone" && nextStep.durationMinutes !== undefined && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
                 <Clock size={12} aria-hidden="true" />
                 {nextStep.durationMinutes} min
@@ -653,7 +640,7 @@ function Today({
             )}
             {!isTask && linkedHabit && (
               <span className="streak-pill">
-                {streak}-day streak
+                {streak}-Day Streak
               </span>
             )}
           </div>
@@ -664,9 +651,9 @@ function Today({
           )}
           {nextStepOptions.length > 1 && (
             <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
-              <span>Choose another</span>
+              <span>Choose Another</span>
               <select
-                aria-label="Choose another task or habit"
+                aria-label="Choose Another Task, Habit, or Milestone"
                 value={currentKey}
                 onChange={(event) => chooseNextStep(event.target.value)}
                 className="form-control"
@@ -674,7 +661,7 @@ function Today({
               >
                 {nextStepOptions.slice(0, 8).map((option) => (
                   <option key={nextStepKey(option)} value={nextStepKey(option)}>
-                    {option.kind === "task" ? "Task" : "Habit"}: {option.title}
+                    {option.kind === "task" ? "Task" : option.kind === "habit" ? "Habit" : "Milestone"}: {option.title}
                   </option>
                 ))}
               </select>
@@ -691,14 +678,16 @@ function Today({
               <Play size={15} aria-hidden="true" />
               Start · {QUICK_FOCUS_MINUTES} min focus
             </button>
-            <button
-              type="button"
-              onClick={skipNextStep}
-              aria-label={`Skip for now: ${nextStep.title}`}
-              style={{ display: "inline-flex", alignItems: "center", padding: "12px 18px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-secondary)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-            >
-              Not now
-            </button>
+            {nextStep.kind !== "milestone" && (
+              <button
+                type="button"
+                onClick={skipNextStep}
+                aria-label={`Skip for now: ${nextStep.title}`}
+                style={{ display: "inline-flex", alignItems: "center", padding: "12px 18px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-secondary)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                Not now
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -720,7 +709,7 @@ function Today({
         <button
           type="button"
           onClick={() => setLastCompletion(null)}
-          aria-label="Dismiss completion message"
+          aria-label="Dismiss Completion Message"
           style={styles.textButton}
         >
           Dismiss
@@ -770,7 +759,7 @@ function Today({
             {task.title}
           </h3>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
-            <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{task.priority}</span>
+            <span style={{ fontWeight: 600 }}>{TASK_PRIORITY_LABELS[task.priority]}</span>
             {task.dueDate && (
               <time
                 dateTime={task.dueDate}
@@ -780,7 +769,13 @@ function Today({
                     ? { color: "var(--text-muted)" }
                     : undefined}
               >
-                {stale ? `Backlog since ${formatFullDate(task.dueDate)}` : overdue ? `Overdue · due ${formatFullDate(task.dueDate)}` : `Due ${formatFullDate(task.dueDate)}`}
+                {stale
+                  ? `Backlog Since ${formatFullDate(task.dueDate)}`
+                  : overdue
+                    ? `Overdue · Due ${formatFullDate(task.dueDate)}`
+                    : task.dueDate === todayKey
+                      ? "Due Today"
+                      : `Upcoming · Due ${formatFullDate(task.dueDate)}`}
               </time>
             )}
             {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
@@ -807,7 +802,7 @@ function Today({
               type="button"
               onClick={() => openScheduleModal("task", task.id)}
               aria-label={`${task.scheduledTime ? "Reschedule" : "Schedule"} task ${task.title}`}
-              title={task.scheduledTime ? "Reschedule" : "Schedule time"}
+              title={task.scheduledTime ? "Reschedule" : "Schedule Time"}
               style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
             >
               <MoreVertical size={14} aria-hidden="true" />
@@ -890,7 +885,7 @@ function Today({
         <button
           type="button"
           onClick={() => openScheduleModal(block.kind, block.kind === "task" ? block.taskId : block.habitId)}
-          aria-label={`Reschedule ${kindLabel.toLowerCase()}`}
+          aria-label={`Reschedule ${kindLabel}`}
           style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer", flexShrink: 0 }}
         >
           <MoreVertical size={14} aria-hidden="true" />
@@ -986,9 +981,9 @@ function Today({
         </header>
 
         <div className="today-atelier-grid">
-          <section aria-label="Get started" className="atelier-group row-card" style={{ padding: "clamp(20px, 3vw, 32px)", textAlign: "center" }}>
+          <section aria-label="Get Started" className="atelier-group row-card" style={{ padding: "clamp(20px, 3vw, 32px)", textAlign: "center" }}>
             <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.4rem", fontWeight: 500, color: "var(--text-primary)", margin: "0 0 8px" }}>
-              A quiet day — plan your first win
+              A Quiet Day — Plan Your First Win
             </h2>
             <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: "0 0 20px" }}>
               Add a task for today or start a focus session. You can manage mandatory habits in My Habits.
@@ -1025,11 +1020,13 @@ function Today({
               </button>
               <button
                 type="button"
-                onClick={() => onStartFocus()}
+                onClick={() => onStartFocus(undefined, { durationMinutes: 15 })}
+                aria-label="Start Focus Timer with 15 minutes"
+                title="Start Focus Timer with 15 minutes"
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-pill)", background: "transparent", color: "var(--text-body)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
               >
                 <Play size={14} aria-hidden="true" />
-                Start Focus
+                Start • Focus Timer
               </button>
               <button
                 type="button"
@@ -1040,7 +1037,7 @@ function Today({
               </button>
             </div>
           </section>
-          <aside aria-label="Fresh start actions" className="atelier-group row-card" style={{ padding: "var(--space-4)" }}>
+          <aside aria-label="Fresh Start Actions" className="atelier-group row-card" style={{ padding: "var(--space-4)" }}>
             <h2 style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 12px" }}>
               Explore Synchron
             </h2>
@@ -1085,7 +1082,7 @@ function Today({
 
       <div className="today-atelier-grid">
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-          <section aria-label="Today's habits" className="atelier-group">
+          <section aria-label="Today's Habits" className="atelier-group">
             <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>
               Habits · {habitsLeft} left
             </p>
@@ -1103,7 +1100,7 @@ function Today({
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: "var(--radius-pill)", border: "1px solid transparent", background: "var(--color-accent)", color: "var(--color-accent-contrast)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
                 >
                   <Plus size={14} aria-hidden="true" />
-                  Manage habits →
+                  Manage Habits →
                 </button>
               </div>
             ) : (
@@ -1165,7 +1162,7 @@ function Today({
                           type="button"
                           onClick={() => openScheduleModal("habit", habit.id)}
                           aria-label={`${habit.scheduledTime ? "Reschedule" : "Schedule"} habit ${habit.name}`}
-                          title={habit.scheduledTime ? "Reschedule" : "Schedule time"}
+                          title={habit.scheduledTime ? "Reschedule" : "Schedule Time"}
                           style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
                         >
                           <MoreVertical size={14} aria-hidden="true" />
@@ -1178,7 +1175,7 @@ function Today({
             )}
           </section>
 
-          <section aria-label="Today's tasks" className="atelier-group">
+          <section aria-label="Today's Tasks" className="atelier-group">
             <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>
               Tasks · {pendingTodayTasks.length} open
             </p>
@@ -1205,7 +1202,7 @@ function Today({
                   Add
                 </button>
               </form>
-              {pendingTodayTasks.length === 0 && completedTodayTasks.length === 0 && (
+              {pendingTodayTasks.length === 0 && (
                 <div className="row-item">
                   <p style={{ fontSize: "var(--type-sm)", color: "var(--text-secondary)", margin: 0 }}>
                     No tasks for today. Add one small task above whenever you&rsquo;re ready.
@@ -1222,7 +1219,7 @@ function Today({
                     aria-label={`${showBacklog ? "Hide" : "Show"} backlog: ${backlogTodayTasks.length} older overdue ${backlogTodayTasks.length === 1 ? "task" : "tasks"}`}
                     style={{ alignSelf: "flex-start", padding: "7px 14px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-pill)", background: "transparent", color: "var(--text-body)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                   >
-                    {showBacklog ? "Hide backlog" : `Show backlog (${backlogTodayTasks.length})`}
+                    {showBacklog ? "Hide Backlog" : `Show Backlog (${backlogTodayTasks.length})`}
                   </button>
                   {showBacklog && (
                     <div className="row-card">
@@ -1231,23 +1228,13 @@ function Today({
                   )}
                 </div>
               )}
-              {completedTodayTasks.length > 0 && (
-                <>
-                  <div className="row-item" style={{ paddingTop: 14, paddingBottom: 6 }}>
-                    <h3 style={{ margin: 0, fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
-                      Completed ({completedTodayTasks.length})
-                    </h3>
-                  </div>
-                  {completedTodayTasks.map((task) => renderTaskRow(task, true))}
-                </>
-              )}
             </div>
           </section>
         </div>
 
-        <aside aria-label="Today overview" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        <aside aria-label="Today Overview" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           <section aria-label="Progress" className="atelier-group row-card" style={{ padding: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-            <svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label={`${progressPercent}% complete`}>
+            <svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label={`${todaySummary.percent}% of habits complete`}>
               <circle cx="36" cy="36" r={ringRadius} fill="none" stroke="var(--bg-inset)" strokeWidth="7" />
               <circle
                 cx="36"
@@ -1258,20 +1245,20 @@ function Today({
                 strokeWidth="7"
                 strokeLinecap="round"
                 strokeDasharray={ringCircumference}
-                strokeDashoffset={ringCircumference * (1 - progressPercent / 100)}
+                strokeDashoffset={ringCircumference * (1 - todaySummary.percent / 100)}
                 transform="rotate(-90 36 36)"
               />
               <text x="36" y="36" textAnchor="middle" dominantBaseline="central" fontSize="13" fontWeight="700" fill="var(--text-primary)">
-                {progressPercent}%
+                {todaySummary.percent}%
               </text>
             </svg>
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: "0 0 2px", fontSize: "var(--type-sm)", fontWeight: 600, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
-                {completedCount} / {totalCount} done
+                {todaySummary.doneCount} / {todaySummary.total} Habits Done
               </p>
               <p style={{ margin: 0, fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}>
-                {habitsLeft} {habitsLeft === 1 ? "habit" : "habits"} · {pendingTodayTasks.length} {pendingTodayTasks.length === 1 ? "task" : "tasks"} to go
-                {todayFocusTime > 0 ? ` · ${todayFocusTime}m focused` : ""}
+                {habitsLeft} {habitsLeft === 1 ? "Habit" : "Habits"} · {pendingTodayTasks.length} {pendingTodayTasks.length === 1 ? "Task" : "Tasks"} To Go
+                {todayFocusTime > 0 ? ` · ${todayFocusTime}m Focused` : ""}
               </p>
             </div>
           </section>
@@ -1292,28 +1279,28 @@ function Today({
             </section>
           )}
 
-          <section aria-label="Quick actions" className="atelier-group row-card" style={{ padding: "var(--space-4)" }}>
+          <section aria-label="Quick Actions" className="atelier-group row-card" style={{ padding: "var(--space-4)" }}>
             <h2 style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 12px" }}>
               Quick Actions
             </h2>
             <div className="today-quick-action-list" style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px" }}>
-              <button type="button" onClick={focusQuickTaskInput} aria-label="Add task" title="Add task" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={focusQuickTaskInput} aria-label="Add Task" title="Add Task" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 <Plus size={13} aria-hidden="true" />
                 Add Task
               </button>
-              <button type="button" onClick={() => onStartFocus()} aria-label="Start focus session" title="Start focus session" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={() => onStartFocus()} aria-label="Start Focus Session" title="Start Focus Session" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 <Play size={13} aria-hidden="true" />
                 Start Focus Session
               </button>
-              <button type="button" onClick={onNavigateToHabits} aria-label="Configure habits" title="Configure habits" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={onNavigateToHabits} aria-label="Configure Habits" title="Configure Habits" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 <ListChecks size={13} aria-hidden="true" />
                 Configure Habits
               </button>
-              <button type="button" onClick={onNavigateToHistory} aria-label="View history" title="View history" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={onNavigateToHistory} aria-label="View History" title="View History" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 <HistoryIcon size={13} aria-hidden="true" />
                 View History
               </button>
-              <button type="button" onClick={onNavigateToAnalytics} aria-label="Receive analytics" title="Receive analytics" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={onNavigateToAnalytics} aria-label="Receive Analytics" title="Receive Analytics" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 <BarChart3 size={13} aria-hidden="true" />
                 Receive Analytics
               </button>

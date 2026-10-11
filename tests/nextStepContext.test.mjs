@@ -115,7 +115,7 @@ test("milestone-linked task keeps its milestone reason and beats standalone", ()
   }));
   assert.equal(rec.kind, "task");
   assert.equal(rec.taskId, "linked");
-  assert.match(rec.reason, /Active milestone/);
+  assert.match(rec.reason, /Active Milestone/);
 });
 
 test("taskContextKind resolves links against existing entities only", () => {
@@ -148,7 +148,7 @@ test("dangling links get no boost and never invent a milestone reason", () => {
   }));
   assert.equal(danglingSolo.kind, "task");
   assert.equal(danglingSolo.taskId, "dangling");
-  assert.match(danglingSolo.reason, /Available task/);
+  assert.match(danglingSolo.reason, /Available Task/);
   assert.doesNotMatch(danglingSolo.reason, /milestone/i);
 
   // With a time block it is relevant, but standalone: a project-linked task

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Habit, Priority, FrequencyType } from "../types";
 import { FORM_CONTROL } from "../theme";
+import { FREQUENCY_LABELS } from "../utils/displayLabels";
 
 type Step = "welcome" | "focus" | "habit" | "ready";
 
@@ -42,22 +43,22 @@ const HABIT_SUGGESTIONS: Record<string, string[]> = {
 const LOOP_STEPS = [
   {
     icon: CalendarDays,
-    title: "Today brings it together",
+    title: "Today Brings It Together",
     description: "Your habits and tasks land in one place — open Today and pick what's next.",
   },
   {
     icon: Play,
-    title: "Focus to execute",
+    title: "Focus to Execute",
     description: "Start a Focus session on any action and work it through with the timer.",
   },
   {
     icon: Check,
-    title: "Complete to build momentum",
+    title: "Complete to Build Momentum",
     description: "Checking things off grows streaks and moves work forward.",
   },
   {
     icon: BarChart3,
-    title: "Review, adjust, repeat",
+    title: "Review, Adjust, Repeat",
     description: "History and Analytics show your trend — tune the plan and keep going.",
   },
 ];
@@ -151,10 +152,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
           <>
             <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
               <p className="atelier-eyebrow" style={{ margin: 0 }}>
-                How Synchron works
+                How Synchron Works
               </p>
               <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.7rem, 4vw, 2.2rem)" }}>
-                Turn plans into daily action
+                Turn Plans Into Daily Action
               </h1>
               <p className="atelier-sub" style={{ margin: 0 }}>
                 Capture tasks and habits, focus on the work, and complete it. Today brings it all together — streaks
@@ -177,10 +178,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
           <>
             <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
               <p className="atelier-eyebrow" style={{ margin: 0 }}>
-                Step 1 · Your focus
+                Step 1 · Your Focus
               </p>
               <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 1.9rem)" }}>
-                What do you want?
+                What Do You Want?
               </h1>
               <p className="atelier-sub" style={{ margin: 0 }}>
                 Pick an area — your first habit will support it.
@@ -236,10 +237,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
           <>
             <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
               <p className="atelier-eyebrow" style={{ margin: 0 }}>
-                Step 2 · Your first habit
+                Step 2 · Your First Habit
               </p>
               <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 1.9rem)" }}>
-                What will you do repeatedly?
+                What Will You Do Repeatedly?
               </h1>
               <p className="atelier-sub" style={{ margin: 0 }}>
                 Habits handle the recurring actions. One-off wins belong in Tasks.
@@ -285,9 +286,9 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
                   value={habitFrequency}
                   onChange={(e) => setHabitFrequency(e.target.value as FrequencyType)}
                 >
-                  <option value="daily">Every Day</option>
-                  <option value="weekdays">Weekdays</option>
-                  <option value="weekends">Weekends</option>
+                  <option value="daily">{FREQUENCY_LABELS.daily}</option>
+                  <option value="weekdays">{FREQUENCY_LABELS.weekdays}</option>
+                  <option value="weekends">{FREQUENCY_LABELS.weekends}</option>
                 </select>
               </div>
               {selectedFocus && HABIT_SUGGESTIONS[selectedFocus] && (
@@ -351,10 +352,10 @@ function Onboarding({ onComplete, onSkip, onNavigateToToday }: OnboardingProps) 
                 <CalendarDays size={30} />
               </span>
               <p className="atelier-eyebrow" style={{ margin: 0 }}>
-                Step 3 · Your daily loop
+                Step 3 · Your Daily Loop
               </p>
               <h1 className="atelier-greeting" style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 1.9rem)" }}>
-                Your habit is on Today
+                Your Habit Is on Today
               </h1>
               <p className="atelier-sub" style={{ margin: 0 }}>
                 Complete it, or start a Focus session on it. Then repeat — that loop is the whole product.

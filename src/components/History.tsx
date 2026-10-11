@@ -87,7 +87,7 @@ function History({
   const logDateRange =
     sortedCompletionDates.length > 0
       ? `${formatFullDate(new Date(`${sortedCompletionDates[0]}T12:00:00`))} - ${formatFullDate(new Date(`${sortedCompletionDates[sortedCompletionDates.length - 1]}T12:00:00`))}`
-      : "No logs yet";
+      : "No Logs Yet";
 
   const groupedSessions = useMemo(() => {
     const groups = new Map<string, FocusSessionRecord[]>();
@@ -135,7 +135,7 @@ function History({
     <div className="atelier-page">
       <div className="page-head">
         <p className="atelier-eyebrow">History</p>
-        <h1 className="atelier-greeting">Every day on record.</h1>
+        <h1 className="atelier-greeting">Every Day on Record.</h1>
         <p>Review your completed habit days.</p>
       </div>
 
@@ -192,7 +192,7 @@ function History({
       {!selectedHabit || !hasCompletions ? (
         <div className="ui-empty-state">
           <HistoryIcon size={22} style={{ color: "var(--text-dim)" }} />
-          <p style={{ margin: 0, fontWeight: 500 }}>{selectedHabit ? "No completed days yet" : "Choose a Habit to Begin"}</p>
+          <p style={{ margin: 0, fontWeight: 500 }}>{selectedHabit ? "No Completed Days Yet" : "Choose a Habit to Begin"}</p>
           <p className="atelier-sub" style={{ margin: 0 }}>
             {selectedHabit
               ? "Completed days will appear here once you mark this habit done."
@@ -265,12 +265,12 @@ function History({
                   }}
                   aria-label={
                     date
-                      ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
+                      ? `${formatFullDate(date)}: ${!isScheduled ? "Not Scheduled" : isCompleted ? "Completed" : "Scheduled, Not Completed"}`
                       : undefined
                   }
                   title={
                     date
-                      ? `${formatFullDate(date)}: ${!isScheduled ? "not scheduled" : isCompleted ? "completed" : "scheduled, not completed"}`
+                      ? `${formatFullDate(date)}: ${!isScheduled ? "Not Scheduled" : isCompleted ? "Completed" : "Scheduled, Not Completed"}`
                       : undefined
                   }
                 >
@@ -283,7 +283,7 @@ function History({
         </div>
       )}
 
-      <section style={{ marginTop: 24 }} aria-label="Focus sessions">
+      <section style={{ marginTop: 24 }} aria-label="Focus Sessions">
         <h3 className="ui-section-header" style={{ fontSize: "var(--type-md)" }}>
           Focus Sessions
           <span className="ui-badge">{sortedFocusSessions.length}</span>

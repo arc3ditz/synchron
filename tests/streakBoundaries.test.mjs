@@ -55,6 +55,25 @@ function assertEnginesAgree(habit, expected, label) {
   assert.equal(periodStreak(habit), expected, `${label} (period streak)`);
 }
 
+function withFixedNow(value, callback) {
+  const RealDate = globalThis.Date;
+  const timestamp = value.getTime();
+  globalThis.Date = class extends RealDate {
+    constructor(...args) {
+      super(...(args.length === 0 ? [timestamp] : args));
+    }
+
+    static now() {
+      return timestamp;
+    }
+  };
+  try {
+    callback();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
+
 test("a freeze never resurrects a streak broken by a missed day", () => {
   // Missed yesterday sits between the freeze and today: only today counts.
   assertEnginesAgree(makeHabit([-4, 0], [-2]), 1, "freeze before a gap");
@@ -113,6 +132,27 @@ test("completing and uncompleting preserves streakFreezeDates", () => {
   assertEnginesAgree(undone, 1, "freeze from yesterday still bridges");
 });
 
+test("reopening a historical completion immediately recalculates both streaks", () => {
+  const habit = makeHabit([-3, -2, -1, 0]);
+  assertEnginesAgree(habit, 4, "before historical edit");
+
+  const reopened = markHabitIncomplete(habit, at(-2));
+  assert.deepEqual(reopened.completedDates, [at(-3), at(-1), at(0)]);
+  assertEnginesAgree(reopened, 2, "after historical edit");
+});
+
+test("adding or removing individual protection recalculates the bridged streak", () => {
+  const habit = makeHabit([-2, 0]);
+  assertEnginesAgree(habit, 1, "unprotected gap");
+
+  const protectedHabit = { ...habit, streakFreezeDates: [at(-1)] };
+  assertEnginesAgree(protectedHabit, 3, "protected bridge");
+  assert.equal(protectedHabit.completedDates.includes(at(-1)), false);
+
+  const unprotectedHabit = { ...protectedHabit, streakFreezeDates: [] };
+  assertEnginesAgree(unprotectedHabit, 1, "protection removed");
+});
+
 test("global freeze counts scheduled completions only and needs no individual dates", () => {
   const habit = makeHabit([-5, -3, -1], [-2]);
   assert.equal(calculateStreak(habit, true, 0), 3);
@@ -134,6 +174,13 @@ test("global freeze counts scheduled completions only and needs no individual da
   const lastSaturday = at(-(((dayOfWeek - 6 + 7) % 7) || 7));
   weekdayOnly.completedDates = [lastSaturday];
   assert.equal(calculateStreak(weekdayOnly, true, 0), 0);
+});
+
+test("global freeze ignores malformed and duplicate completion keys", () => {
+  const habit = makeHabit([], [], {
+    completedDates: ["not-a-date", "2025-02-30", at(-1), at(-1)],
+  });
+  assert.equal(calculateStreak(habit, true, 0), 1);
 });
 
 test("freeze and completion days resolve to the correct logical day across midnight", () => {
@@ -168,4 +215,46 @@ test("freeze and completion days resolve to the correct logical day across midni
     "the calendar-today freeze creates no occurrence on the logical yesterday",
   );
   assert.equal(getHabitPeriodStreak(dataset, habit, false), 2);
+});
+
+test("streak dates advance once at the configured reset boundary, including across DST", () => {
+  const previousTimeZone = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  try {
+    const habit = {
+      id: 2002,
+      name: "Reset boundary",
+      priority: "Optional",
+      type: "Daily",
+      createdAt: "2025-03-07",
+      completedDates: ["2025-03-08", "2025-03-09"],
+      streakFreezeDates: [],
+    };
+    const beforeReset = new Date(2025, 2, 9, 1, 59);
+    const afterReset = new Date(2025, 2, 9, 3, 0);
+
+    assert.equal(getHabitDateKey(beforeReset, 2), "2025-03-08");
+    assert.equal(getHabitDateKey(afterReset, 2), "2025-03-09");
+    withFixedNow(beforeReset, () => assert.equal(calculateStreak(habit, false, 2), 1));
+    withFixedNow(afterReset, () => assert.equal(calculateStreak(habit, false, 2), 2));
+
+    const dataset = queryAnalyticsData({
+      habits: [habit],
+      tasks: [],
+      focusSessions: [],
+      horizon: "This Week",
+      weekStart: "Monday",
+      dayResetHour: 2,
+      now: afterReset,
+    });
+    assert.deepEqual(
+      dataset.habitOccurrences.map(({ dateKey }) => dateKey),
+      ["2025-03-07", "2025-03-08", "2025-03-09"],
+      "DST traversal emits each local calendar date exactly once",
+    );
+    assert.equal(getHabitPeriodStreak(dataset, habit), 2);
+  } finally {
+    if (previousTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimeZone;
+  }
 });

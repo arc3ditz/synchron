@@ -42,7 +42,7 @@ test("Tasks page manages the full lifecycle through existing mechanisms", () => 
   assert.ok(tasksSource.includes("onDeleteTask(pendingDeletion.id)"), "Delete uses the shared deletion handler");
   assert.ok(tasksSource.includes("onToggleTask(task.id)"), "Complete/uncomplete uses the shared toggle handler");
   assert.ok(tasksSource.includes("resolveTaskContext"), "rows show Project / Milestone context");
-  assert.ok(tasksSource.includes("No tasks yet"), "page has a useful empty state");
+  assert.ok(tasksSource.includes("No Tasks Yet"), "page has a useful empty state");
 });
 
 test("Tasks page reuses design tokens (dark/light safe, no hardcoded colors)", () => {

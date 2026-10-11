@@ -53,7 +53,7 @@ test("hero Mark Done never toggles stale or already-complete items", () => {
 
 // --- Rapid toggles compose: no stale-closure lost update ---
 
-test("habit toggle updates from latest state, not a stale snapshot", () => {
+test("habit toggle applies one requested state against the latest store state", () => {
   const body = section(todaySource, "function handleHabitToggle");
   assert.ok(body, "row/timeline toggles keep passing actual status");
   const appToggle = section(appSource, "function toggleHabit(");
@@ -62,8 +62,9 @@ test("habit toggle updates from latest state, not a stale snapshot", () => {
     "habit store update must use the functional form so queued toggles compose",
   );
   assert.ok(
-    appToggle.includes("h.completedDates.includes(targetDateKey)"),
-    "per-item decision must re-derive inside the updater",
+    appToggle.includes("item.completedDates.includes(targetDateKey) === requestedCompleted") &&
+      appToggle.includes("return changed ? next : current"),
+    "repeated callbacks from one render are idempotent and skip unchanged persistence",
   );
   assert.ok(
     !appToggle.includes("const updatedHabits: Habit[] = habits.map"),
@@ -84,7 +85,7 @@ test("skipping a recommendation persists its return time without completing it",
     appSource.includes("snoozeTodayItem(current, item, Date.now(), appSettings.skippedItemReturnMinutes)"),
     "the configured interval becomes an absolute timestamp when the action occurs",
   );
-  assert.ok(appSource.includes("saveTodaySnoozes(todaySnoozes)"), "return timestamps persist through app storage");
+  assert.ok(appSource.includes("saveTodaySnoozes(activeTodaySnoozes)"), "eligible return timestamps persist through app storage");
 });
 
 // --- Timer start reuses the existing instance; stop never completes ---

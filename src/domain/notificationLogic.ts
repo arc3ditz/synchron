@@ -5,6 +5,8 @@
 
 import type { AppSettings, Habit, Project } from "../types";
 import { getTodayKey, isHabitScheduledOnDate } from "../utils/dates.ts";
+import { getActiveTodaySnoozes, type TodaySnooze } from "./todaySnoozes.ts";
+import { loadStorageData, saveStorageData, STORAGE_KEYS } from "../utils/storage.ts";
 import { onAction, registerActionTypes, sendNotification } from "@tauri-apps/plugin-notification";
 
 export type NotificationType = "timing" | "incomplete" | "availability";
@@ -18,7 +20,8 @@ type IntelligentNotificationSettings = Pick<
   // Day-reset hour is needed to key per-day dedupe. Optional so existing
   // partial settings in tests keep working; defaults to 0 (midnight).
   dayResetHour?: number;
-};
+  snoozes?: readonly TodaySnooze[];
+}
 
 export interface NotificationAction {
   type: "focus-habit";
@@ -146,6 +149,7 @@ const NOTIFICATION_COOLDOWNS_MS: Record<AppSettings["notificationFrequency"], nu
 };
 
 let lastIntelligentNotificationTime = 0;
+let intelligentNotificationHistoryLoaded = false;
 let getIsFocusTimerRunning = () => false;
 
 // Per-habit, per-day dedupe so the 5-minute poller cannot repeat the same
@@ -154,7 +158,44 @@ let getIsFocusTimerRunning = () => false;
 const sentIntelligentNotificationKeys = new Set<string>();
 let sentIntelligentNotificationDayKey: string | null = null;
 
+interface StoredIntelligentNotificationHistory {
+  dayKey: string;
+  keys: string[];
+  lastSentAt: number;
+}
+
+function persistIntelligentNotificationHistory(todayKey: string): void {
+  const history: StoredIntelligentNotificationHistory = {
+    dayKey: todayKey,
+    keys: [...sentIntelligentNotificationKeys],
+    lastSentAt: lastIntelligentNotificationTime,
+  };
+  saveStorageData(STORAGE_KEYS.INTELLIGENT_NOTIFICATION_HISTORY, history);
+}
+
+function loadIntelligentNotificationHistory(todayKey: string): void {
+  if (intelligentNotificationHistoryLoaded) return;
+  intelligentNotificationHistoryLoaded = true;
+
+  const stored = loadStorageData<unknown>(
+    STORAGE_KEYS.INTELLIGENT_NOTIFICATION_HISTORY,
+    null,
+  );
+  if (typeof stored !== "object" || stored === null) return;
+  const history = stored as Partial<StoredIntelligentNotificationHistory>;
+  if (typeof history.lastSentAt === "number" && Number.isFinite(history.lastSentAt)) {
+    lastIntelligentNotificationTime = history.lastSentAt;
+  }
+  if (history.dayKey !== todayKey || !Array.isArray(history.keys)) return;
+
+  sentIntelligentNotificationDayKey = todayKey;
+  for (const key of history.keys) {
+    if (typeof key === "string") sentIntelligentNotificationKeys.add(key);
+  }
+}
+
 function pruneSentNotificationHistory(todayKey: string): void {
+  loadIntelligentNotificationHistory(todayKey);
   if (sentIntelligentNotificationDayKey !== todayKey) {
     sentIntelligentNotificationDayKey = todayKey;
     sentIntelligentNotificationKeys.clear();
@@ -181,20 +222,79 @@ export function isIntelligentNotificationDuplicate(
   );
 }
 
-function markIntelligentNotificationSent(
+function canSendIntelligentNotification(
   type: NotificationType,
-  habitId: number | undefined,
-  todayKey: string,
-): void {
+  settings: IntelligentNotificationSettings,
+  now: number,
+): boolean {
+  if (!settings.enableIntelligentNotifications || getIsFocusTimerRunning()) return false;
+
+  const typeEnabled = type === "timing"
+    ? settings.habitReminders
+    : type === "incomplete"
+      ? settings.incompleteHabitReminders
+      : false;
+  if (!typeEnabled) return false;
+
+  const todayKey = getTodayKey(settings.dayResetHour ?? 0);
   pruneSentNotificationHistory(todayKey);
-  sentIntelligentNotificationKeys.add(
-    buildIntelligentNotificationDedupeKey(type, habitId, todayKey),
+  return now - lastIntelligentNotificationTime >=
+    NOTIFICATION_COOLDOWNS_MS[settings.notificationFrequency];
+}
+
+function claimIntelligentNotification(
+  notification: IntelligentNotification,
+  settings: IntelligentNotificationSettings,
+  now = Date.now(),
+): boolean {
+  const todayKey = getTodayKey(settings.dayResetHour ?? 0);
+  pruneSentNotificationHistory(todayKey);
+  const dedupeKey = buildIntelligentNotificationDedupeKey(
+    notification.type,
+    notification.habitId,
+    todayKey,
   );
+  if (
+    sentIntelligentNotificationKeys.has(dedupeKey) ||
+    !canSendIntelligentNotification(notification.type, settings, now)
+  ) return false;
+
+  lastIntelligentNotificationTime = now;
+  sentIntelligentNotificationKeys.add(dedupeKey);
+  persistIntelligentNotificationHistory(todayKey);
+  return true;
+}
+
+const NOTIFICATION_ACTION_DEDUPE_MS = 2_000;
+
+export function shouldHandleNotificationAction(
+  action: NotificationAction,
+  recentActions: Map<string, number>,
+  now = Date.now(),
+): boolean {
+  const key = JSON.stringify([
+    action.type,
+    action.habitId ?? "",
+    action.habitName ?? "",
+    action.title ?? "",
+    action.durationMinutes ?? "",
+  ]);
+  const lastHandledAt = recentActions.get(key);
+  if (lastHandledAt !== undefined && now - lastHandledAt < NOTIFICATION_ACTION_DEDUPE_MS) {
+    return false;
+  }
+  recentActions.set(key, now);
+  for (const [recentKey, timestamp] of recentActions) {
+    if (now - timestamp >= NOTIFICATION_ACTION_DEDUPE_MS) recentActions.delete(recentKey);
+  }
+  return true;
 }
 
 export function resetIntelligentNotificationDedupeForTesting(): void {
   sentIntelligentNotificationKeys.clear();
   sentIntelligentNotificationDayKey = null;
+  lastIntelligentNotificationTime = 0;
+  intelligentNotificationHistoryLoaded = false;
 }
 
 export function registerFocusTimerRunningState(getIsRunning: () => boolean): () => void {
@@ -209,20 +309,10 @@ export function shouldSendIntelligentNotification(
   settings: IntelligentNotificationSettings,
   now = Date.now(),
 ): boolean {
-  if (!settings.enableIntelligentNotifications || getIsFocusTimerRunning()) return false;
-
-  const typeEnabled = type === "timing"
-    ? settings.habitReminders
-    : type === "incomplete"
-      ? settings.incompleteHabitReminders
-      : false;
-  if (!typeEnabled) return false;
-
-  if (now - lastIntelligentNotificationTime < NOTIFICATION_COOLDOWNS_MS[settings.notificationFrequency]) {
-    return false;
-  }
+  if (!canSendIntelligentNotification(type, settings, now)) return false;
 
   lastIntelligentNotificationTime = now;
+  persistIntelligentNotificationHistory(getTodayKey(settings.dayResetHour ?? 0));
   return true;
 }
 
@@ -293,6 +383,20 @@ export function isHabitNotificationEligible(
   return project.status !== "completed" && project.status !== "archived";
 }
 
+function isHabitReminderEligible(
+  habit: Habit,
+  resetHour: number,
+  projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
+  snoozedHabitIds?: ReadonlySet<number>,
+): boolean {
+  const todayKey = getTodayKey(resetHour);
+  return !habit.isArchived &&
+    isHabitNotificationEligible(habit, projects) &&
+    !snoozedHabitIds?.has(habit.id) &&
+    !habit.completedDates.includes(todayKey) &&
+    isHabitScheduledOnDate(habit, todayKey);
+}
+
 /**
  * Determine if a habit timing notification should be sent
  */
@@ -301,18 +405,9 @@ export function shouldSendHabitTimingNotification(
   currentHour: number,
   resetHour: number,
   projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
+  snoozedHabitIds?: ReadonlySet<number>,
 ): boolean {
-  // Skip if archived
-  if (habit.isArchived) return false;
-
-  // Skip habits under a finished Project (temporary habits end with it).
-  if (!isHabitNotificationEligible(habit, projects)) return false;
-  // Skip if completed today
-  const todayKey = getTodayKey(resetHour);
-  if (habit.completedDates.includes(todayKey)) return false;
-  
-  // Skip if not scheduled today
-  if (!isHabitScheduledOnDate(habit, todayKey)) return false;
+  if (!isHabitReminderEligible(habit, resetHour, projects, snoozedHabitIds)) return false;
   
   // Get completion pattern
   const patternHour = getHabitCompletionPattern(habit);
@@ -365,16 +460,10 @@ function rankIncompleteHabits(
   resetHour: number,
   currentHour: number,
   projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
+  snoozedHabitIds?: ReadonlySet<number>,
 ): Habit[] {
-  const todayKey = getTodayKey(resetHour);
-
-  // Filter incomplete habits scheduled today
-  const incompleteHabits = habits.filter(
-    (habit) =>
-      !habit.isArchived &&
-      isHabitNotificationEligible(habit, projects) &&
-      !habit.completedDates.includes(todayKey) &&
-      isHabitScheduledOnDate(habit, todayKey),
+  const incompleteHabits = habits.filter((habit) =>
+    isHabitReminderEligible(habit, resetHour, projects, snoozedHabitIds),
   );
 
   if (incompleteHabits.length === 0) return [];
@@ -406,8 +495,9 @@ export function getIncompletePriorityHabit(
   resetHour: number,
   currentHour: number,
   projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
+  snoozedHabitIds?: ReadonlySet<number>,
 ): Habit | null {
-  return rankIncompleteHabits(habits, resetHour, currentHour, projects)[0] ?? null;
+  return rankIncompleteHabits(habits, resetHour, currentHour, projects, snoozedHabitIds)[0] ?? null;
 }
 
 /**
@@ -418,8 +508,9 @@ export function shouldSendFocusSuggestion(
   resetHour: number,
   currentHour: number,
   projects?: ReadonlyArray<Pick<Project, "id" | "status">>,
+  snoozedHabitIds?: ReadonlySet<number>,
 ): boolean {
-  const habit = getIncompletePriorityHabit(habits, resetHour, currentHour, projects);
+  const habit = getIncompletePriorityHabit(habits, resetHour, currentHour, projects, snoozedHabitIds);
   return habit !== null;
 }
 
@@ -487,6 +578,7 @@ export function getIntelligentNotification(
 
   const todayKey = getTodayKey(resetHour);
   pruneSentNotificationHistory(todayKey);
+  const snoozedHabitIds = getActiveTodaySnoozes(settings.snoozes ?? [], Date.now()).habitIds;
 
   // Check timing notifications first
   if (settings.habitReminders) {
@@ -498,15 +590,15 @@ export function getIntelligentNotification(
       ) {
         continue;
       }
-      if (shouldSendHabitTimingNotification(habit, currentHour, resetHour, projects)) {
+      if (shouldSendHabitTimingNotification(habit, currentHour, resetHour, projects, snoozedHabitIds)) {
         return generateHabitTimingNotification(habit, defaultFocusDuration);
       }
     }
   }
 
   // Check focus suggestion
-  if (settings.incompleteHabitReminders && shouldSendFocusSuggestion(habits, resetHour, currentHour, projects)) {
-    const ranked = rankIncompleteHabits(habits, resetHour, currentHour, projects);
+  if (settings.incompleteHabitReminders && shouldSendFocusSuggestion(habits, resetHour, currentHour, projects, snoozedHabitIds)) {
+    const ranked = rankIncompleteHabits(habits, resetHour, currentHour, projects, snoozedHabitIds);
     const habit = ranked.find(
       (candidate) =>
         !sentIntelligentNotificationKeys.has(
@@ -538,15 +630,9 @@ export async function sendIntelligentNotification(
   notification: IntelligentNotification,
   settings: IntelligentNotificationSettings,
 ): Promise<void> {
-  if (!shouldSendIntelligentNotification(notification.type, settings)) return;
-
-  // Record the attempt before delivery: whether Tauri or the browser
-  // fallback wins, retrying the same habit today would just be noise.
-  markIntelligentNotificationSent(
-    notification.type,
-    notification.habitId,
-    getTodayKey(settings.dayResetHour ?? 0),
-  );
+  // Claim before delivery so overlapping poll/visibility events cannot send
+  // the same nudge twice. The cooldown and dedupe key persist in one write.
+  if (!claimIntelligentNotification(notification, settings)) return;
 
   const action = notification.action;
 
@@ -588,6 +674,7 @@ export async function sendIntelligentNotification(
 }
 
 export function clearIntelligentNotificationCooldown(): void {
+  saveStorageData(STORAGE_KEYS.INTELLIGENT_NOTIFICATION_HISTORY, null);
   lastIntelligentNotificationTime = 0;
   resetIntelligentNotificationDedupeForTesting();
 }

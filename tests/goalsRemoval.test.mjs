@@ -65,7 +65,7 @@ test("standalone tasks and habits are fully usable without links", () => {
   });
   assert.equal(rec.kind, "task");
   assert.equal(rec.taskId, "solo");
-  assert.match(rec.reason, /Available task/);
+  assert.match(rec.reason, /Available Task/);
 });
 
 test("milestone-linked tasks without any Goal surface in Today", () => {

@@ -49,7 +49,7 @@ test("one undated standalone task is recommended as available work", () => {
   }));
   assert.equal(rec.kind, "task");
   assert.equal(rec.taskId, "solo");
-  assert.match(rec.reason, /Available task/);
+  assert.match(rec.reason, /Available Task/);
   assert.equal(rec.overdue, false);
   assert.equal(rec.dueDate, undefined);
   assert.equal(rec.scheduledTime, undefined);
@@ -93,7 +93,7 @@ test("a mix of undated tasks, overdue tasks, and habits leads with overdue", () 
   }));
   assert.equal(rec.kind, "task");
   assert.equal(rec.taskId, "overdue");
-  assert.match(rec.reason, /Overdue since 2026-10-08/);
+  assert.match(rec.reason, /Overdue Since 2026-10-08/);
 });
 
 // 4. A task linked to an active project is eligible and outranks pure standalone.
@@ -109,7 +109,7 @@ test("a task linked to an active project is recommended with its link", () => {
   }));
   assert.equal(rec.kind, "task");
   assert.equal(rec.taskId, "linked");
-  assert.match(rec.reason, /Linked project/);
+  assert.match(rec.reason, /Linked Project/);
 });
 
 // 5. Tasks in completed or archived projects stay ineligible.

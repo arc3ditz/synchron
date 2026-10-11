@@ -14,6 +14,14 @@ import {
   MIN_COUNTDOWN_FONT_PX,
   parseCountdownDuration,
 } from "../src/domain/focusTimer.ts";
+import {
+  createFocusTimerSnapshot,
+  focusSessionCompletionKey,
+  hasFocusSessionCompletion,
+  rememberFocusSessionCompletion,
+  restoreFocusTimerSnapshot,
+} from "../src/domain/focusTimerRecovery.ts";
+import { loadFocusTimerSnapshot, saveFocusTimerSnapshot } from "../src/utils/storage.ts";
 
 process.env.TZ = "Asia/Tokyo";
 
@@ -33,6 +41,184 @@ test("Daily Overview keeps after-midnight sessions in the prior logical day befo
     getFocusSessionsForLogicalToday(sessions, 4, now).map((session) => session.id),
     [1, 2],
   );
+});
+
+test("a running countdown recovers remaining time from its absolute end timestamp", () => {
+  const startedAt = 1_800_000_000_000;
+  const snapshot = createFocusTimerSnapshot(25);
+  snapshot.timer = {
+    totalMs: 25 * 60_000,
+    remainingMs: 25 * 60_000,
+    minutes: 25,
+    running: true,
+    endAt: startedAt + 25 * 60_000,
+  };
+
+  const restored = restoreFocusTimerSnapshot(snapshot, startedAt + 7 * 60_000, 25);
+  assert.equal(restored.timer.running, true);
+  assert.equal(restored.timer.remainingMs, 18 * 60_000);
+});
+
+test("paused countdown recovery keeps its frozen remaining time across closed-app time", () => {
+  const snapshot = createFocusTimerSnapshot(25);
+  snapshot.timer = {
+    totalMs: 25 * 60_000,
+    remainingMs: 9 * 60_000 + 25_000,
+    minutes: 25,
+    running: false,
+    endAt: null,
+  };
+
+  const restored = restoreFocusTimerSnapshot(snapshot, 1_900_000_000_000, 25);
+  assert.equal(restored.timer.running, false);
+  assert.equal(restored.timer.endAt, null);
+  assert.equal(restored.timer.remainingMs, 9 * 60_000 + 25_000);
+});
+
+test("running Pomodoro recovery derives the current phase from its persisted deadline", () => {
+  const now = 1_800_000_000_000;
+  const snapshot = createFocusTimerSnapshot(25);
+  snapshot.pomodoro = {
+    ...snapshot.pomodoro,
+    session: "Break",
+    totalMs: 5 * 60_000,
+    remainingMs: 5 * 60_000,
+    running: true,
+    endAt: now + 5 * 60_000,
+    focusDurationMs: 25 * 60_000,
+    breakDurationMs: 5 * 60_000,
+  };
+
+  const restored = restoreFocusTimerSnapshot(snapshot, now + 2 * 60_000, 25);
+  assert.equal(restored.pomodoro.running, true);
+  assert.equal(restored.pomodoro.session, "Break");
+  assert.equal(restored.pomodoro.remainingMs, 3 * 60_000);
+});
+
+test("an expired running timer is restored as pending completion and logged only once", () => {
+  const endedAt = 1_800_000_000_000;
+  const snapshot = createFocusTimerSnapshot(25);
+  snapshot.timer = {
+    totalMs: 25 * 60_000,
+    remainingMs: 0,
+    minutes: 25,
+    running: true,
+    endAt: endedAt,
+  };
+
+  const restored = restoreFocusTimerSnapshot(snapshot, endedAt + 1000, 25);
+  assert.equal(restored.timer.running, false);
+  assert.equal(restored.timer.remainingMs, 0);
+  assert.equal(restored.timer.endAt, endedAt, "the component can process the completion after hydration");
+
+  const key = focusSessionCompletionKey("Timer", "Focus", endedAt);
+  const marked = rememberFocusSessionCompletion(restored.loggedSessionKeys, key);
+  assert.equal(hasFocusSessionCompletion(marked, key), true);
+  assert.deepEqual(rememberFocusSessionCompletion(marked, key), marked);
+  assert.equal(
+    hasFocusSessionCompletion(marked, focusSessionCompletionKey("Timer", "Focus", endedAt + 86_400_000)),
+    false,
+    "a completed session on a later day remains a distinct event",
+  );
+});
+
+test("focus timer recovery state survives storage load and save", () => {
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    const now = 1_800_000_000_000;
+    const snapshot = createFocusTimerSnapshot(25);
+    snapshot.mode = "Pomodoro";
+    snapshot.pomodoro = {
+      ...snapshot.pomodoro,
+      totalMs: 25 * 60_000,
+      remainingMs: 11 * 60_000,
+      running: false,
+      endAt: null,
+      session: "Focus",
+    };
+    saveFocusTimerSnapshot(snapshot);
+    const restored = loadFocusTimerSnapshot(25, now);
+    assert.equal(restored.mode, "Pomodoro");
+    assert.equal(restored.pomodoro.remainingMs, 11 * 60_000);
+    assert.equal(restored.pomodoro.running, false);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
+
+test("selected timer and Pomodoro durations survive session recovery", () => {
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    const snapshot = createFocusTimerSnapshot(25);
+    snapshot.timer = {
+      totalMs: 40 * 60_000,
+      remainingMs: 40 * 60_000,
+      minutes: 40,
+      running: false,
+      endAt: null,
+    };
+    snapshot.pomodoro = {
+      ...snapshot.pomodoro,
+      focusMinutes: 35,
+      focusDurationMs: 35 * 60_000,
+      breakMinutes: 7,
+      breakDurationMs: 7 * 60_000,
+    };
+    saveFocusTimerSnapshot(snapshot);
+
+    const restored = loadFocusTimerSnapshot(25, 1_800_000_000_000);
+    assert.equal(restored.timer.minutes, 40);
+    assert.equal(restored.timer.totalMs, 40 * 60_000);
+    assert.equal(restored.pomodoro.focusMinutes, 35);
+    assert.equal(restored.pomodoro.breakMinutes, 7);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
+
+test("FocusTimer persists snapshots and marks completion identities before callbacks", () => {
+  assert.ok(timerSource.includes("loadFocusTimerSnapshot(defaultFocusDuration)"));
+  assert.ok(timerSource.includes("saveFocusTimerSnapshot(buildFocusTimerSnapshot())"));
+  assert.ok(timerSource.includes("timerRunningRef.current || timerEndTimestampRef.current !== null"));
+  assert.ok(timerSource.includes("pomodoroRunningRef.current || pomodoroEndTimestampRef.current !== null"));
+  const completion = timerSource.indexOf('markSessionLogged("Timer", "Focus", end)');
+  const callback = timerSource.indexOf('handleSessionComplete(\n          "Timer"');
+  assert.ok(completion >= 0 && callback > completion);
+  assert.ok(!timerSource.includes("lastLoggedSessionRef"));
+});
+
+test("starting, pausing, resuming, and restarting completed sessions use the same primary action", () => {
+  assert.ok(timerSource.includes("const startRemainingMs = remainingMs > 0 ? remainingMs : totalMs;"));
+  assert.ok(timerSource.includes("timerEndTimestampRef.current = now + startRemainingMs;"));
+  assert.ok(timerSource.includes("setTimerState(startRemainingMs, true);"));
+  assert.ok(timerSource.includes('timerEndTimestampRef.current = null;\n      setTimerState(timerRemainingRef.current, false);'));
+  assert.ok(timerSource.includes('isPaused\n      ? "Resume"'));
+  assert.ok(timerSource.includes('remainingMs <= 0\n        ? "Start Again"'));
+  assert.ok(!timerSource.includes('disabled={!isRunning && remainingMs <= 0}'));
+});
+
+test("starting focus does not require a linked project or task", () => {
+  assert.ok(timerSource.includes("Linking a task, project, milestone, or habit is optional."));
+  assert.ok(timerSource.includes('aria-label="Linked Context"'));
+  assert.ok(timerSource.includes("Link This Session (Optional)"));
+  assert.ok(timerSource.includes('<option value="">No Project</option>'));
+  assert.ok(timerSource.includes('<option value="">No Task</option>'));
+  const primaryButton = timerSource.slice(
+    timerSource.indexOf('className="focus-primary-control ui-button ui-button--primary"'),
+    timerSource.indexOf(">{primaryButtonText}", timerSource.indexOf('className="focus-primary-control ui-button ui-button--primary"')),
+  );
+  assert.ok(primaryButton.includes("onClick={isRunning ? handlePause : handleStart}"));
+  assert.ok(!timerSource.includes('disabled={!isRunning && remainingMs <= 0}'));
 });
 
 // --- Duration boundary: the timer never exceeds 999 minutes ---
@@ -67,10 +253,18 @@ test("attempts to enter 1000 minutes or more are rejected live and clamped on co
   assert.equal(clampFocusDurationMinutes("abc", 25), 25, "garbage keeps the fallback");
 });
 
-test("inline countdown input accepts minutes and minutes:seconds within supported limits", () => {
-  assert.equal(parseCountdownDuration("35:00"), 35 * 60000);
-  assert.equal(parseCountdownDuration("1:30"), 90000);
-  assert.equal(parseCountdownDuration("35"), 35 * 60000);
+test("inline countdown input accepts whole minutes and explicit minutes:seconds", () => {
+  for (const [value, expected] of [
+    ["25", "25:00"],
+    ["25:00", "25:00"],
+    ["35:30", "35:30"],
+    ["1:45", "01:45"],
+    ["1", "01:00"],
+  ]) {
+    const durationMs = parseCountdownDuration(value);
+    assert.notEqual(durationMs, null, `${value} is accepted`);
+    assert.equal(formatCountdownClock(durationMs), expected, `${value} confirms as ${expected}`);
+  }
   assert.equal(parseCountdownDuration("999:00"), 999 * 60000);
   for (const value of ["", "0", "0:59", "-1", "-1:30", "1:60", "abc", "1000:00", "999:01"]) {
     assert.equal(parseCountdownDuration(value), null, `${JSON.stringify(value)} is rejected`);
@@ -199,11 +393,20 @@ test("countdown editing is keyboard-accessible and linked context precedes durat
   assert.ok(timerSource.includes('event.key === "Escape"'), "Escape cancels the edit");
   assert.ok(timerSource.includes("commitCountdownEdit(event.currentTarget.value)"), "blur applies the edited duration");
 
-  const linkedContext = timerSource.indexOf('aria-label="Linked context"');
+  const linkedContext = timerSource.indexOf('aria-label="Linked Context"');
   const presets = timerSource.indexOf('aria-label="Duration Presets"');
-  const durationSettings = timerSource.indexOf('aria-label="Duration settings"');
+  const durationSettings = timerSource.indexOf('aria-label="Duration Settings"');
   assert.ok(linkedContext >= 0 && linkedContext < presets, "linked context is above quick presets");
   assert.ok(presets < durationSettings, "quick presets remain above duration settings");
+});
+
+test("countdown editor selects its initial value only when editing begins", () => {
+  const focusEffect = timerSource.slice(
+    timerSource.indexOf("if (!isCountdownEditing) return;"),
+    timerSource.indexOf("const getIsRunning", timerSource.indexOf("if (!isCountdownEditing) return;")),
+  );
+  assert.ok(focusEffect.includes("[isCountdownEditing]"), "typing does not retrigger focus and select");
+  assert.ok(focusEffect.includes("countdownEditInputRef.current?.select()"), "existing value remains easy to replace");
 });
 
 test("inline countdown editor has no border, outline, shadow, or opaque field surface", () => {

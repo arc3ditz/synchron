@@ -39,7 +39,9 @@ import StreakBadge from "./components/StreakBadge";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import Onboarding from "./components/Onboarding";
 import { CARD_SURFACE, FORM_CONTROL } from "./theme";
+import { restoreViewMode } from "./domain/appPreferences";
 import { configureSfx, playSfx } from "./utils/sfx";
+import { FREQUENCY_LABELS } from "./utils/displayLabels";
 import "./styles/AppLayout.css";
 import type {
   Priority,
@@ -54,12 +56,13 @@ import type {
   Task,
   FocusSessionRecord,
   Project,
-  Summary,
 } from "./types";
 import {
   STORAGE_KEYS,
   loadStorageData,
+  loadLastView,
   saveStorageData,
+  saveLastView,
   loadTodaySnoozes,
   saveTodaySnoozes,
   loadTasks,
@@ -88,8 +91,9 @@ import {
   detachTasksFromDeletedProject,
   disassociateProjectFocusSessions,
 } from "./domain/projects";
-import { createTask, completeTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
+import { createTask, completeTask, setTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
 import { synchronizeMilestoneTaskCompletion } from "./domain/milestoneCompletion";
+import { calculateHabitSummary } from "./domain/today";
 import { buildFocusSessionRecord, MAX_FOCUS_DURATION_MINUTES, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
 import {
   alignHabit,
@@ -113,12 +117,12 @@ import {
   ensureNotificationActionTypesRegistered,
   getIntelligentNotification,
   sendIntelligentNotification,
+  shouldHandleNotificationAction,
   subscribeToNativeNotificationActions,
   type NotificationAction,
 } from "./domain/notificationLogic";
 import {
-  markHabitComplete,
-  markHabitIncomplete,
+  setHabitCompletion,
   sanitizeCompletedAt,
 } from "./domain/completions";
 import { shouldShowWelcomeBack } from "./domain/welcomeBack";
@@ -127,6 +131,7 @@ import {
   SNOOZE_RETURN_MINUTES,
   removeTodaySnooze,
   snoozeTodayItem,
+  pruneIneligibleTodaySnoozes,
   type TodaySnooze,
   type TodaySnoozeTarget,
 } from "./domain/todaySnoozes";
@@ -172,13 +177,6 @@ type ShortcutContext = {
   toggleTimer: (() => boolean) | null;
   closeTransient: () => boolean;
   toggleSidebar: () => void;
-};
-
-const FREQUENCY_LABELS: Record<FrequencyType, string> = {
-  daily: "Daily",
-  weekdays: "Weekdays",
-  weekends: "Weekends",
-  custom: "Custom Days",
 };
 
 const typeBadgeBase: CSSProperties = {
@@ -934,24 +932,10 @@ function loadAppSettings(): AppSettings {
     theme: parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
       ? parsed.theme
       : "system",
-    viewMode: "grid",
+    viewMode: restoreViewMode(parsed.viewMode, DEFAULT_SETTINGS.viewMode),
     onboardingCompleted: typeof parsed.onboardingCompleted === "boolean"
       ? parsed.onboardingCompleted
       : DEFAULT_SETTINGS.onboardingCompleted,
-  };
-}
-
-function computeSummary(habits: Habit[], dateKey: string): Summary {
-  const total = habits.length;
-  const doneCount = habits.filter((habit) => habit.completedDates.includes(dateKey)).length;
-  const mandatory = habits.filter((habit) => habit.priority === "Mandatory");
-  const mandatoryDone = mandatory.filter((habit) => habit.completedDates.includes(dateKey)).length;
-  return {
-    total,
-    doneCount,
-    percent: total === 0 ? 0 : Math.round((doneCount / total) * 100),
-    mandatoryTotal: mandatory.length,
-    mandatoryDone,
   };
 }
 
@@ -989,9 +973,13 @@ function App() {
 
   const [appSettings, setAppSettings] = useState<AppSettings>(loadAppSettings);
   const [todaySnoozes, setTodaySnoozes] = useState<TodaySnooze[]>(loadTodaySnoozes);
+  const [snoozeNow, setSnoozeNow] = useState(Date.now);
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [view, setView] = useState<View>("Today");
+  const [view, setView] = useState<View>(loadLastView);
   const [selectedDateKey, setSelectedDateKey] = useState(() =>
+    getTodayKey(appSettings.dayResetHour),
+  );
+  const [todayDateKey, setTodayDateKey] = useState(() =>
     getTodayKey(appSettings.dayResetHour),
   );
   const lastLogicalDateKeyRef = useRef(getTodayKey(appSettings.dayResetHour));
@@ -1075,6 +1063,11 @@ function App() {
     () => recalculateProjectStatuses(projectRecords, milestones, tasks, projectStatusDate),
     [projectRecords, milestones, tasks, projectStatusDate],
   );
+  const activeTodaySnoozes = useMemo(
+    () => pruneIneligibleTodaySnoozes(todaySnoozes, { habits, tasks, milestones, projects })
+      .filter((snooze) => snooze.returnAt > snoozeNow),
+    [todaySnoozes, habits, tasks, milestones, projects, snoozeNow],
+  );
   const [focusSessions, setFocusSessions] = useState<FocusSessionRecord[]>(() => {
     const parsed = loadStorageData<FocusSessionRecord[]>(STORAGE_KEYS.FOCUS_SESSIONS, []);
     if (!Array.isArray(parsed)) return [];
@@ -1116,12 +1109,14 @@ function App() {
   const focusTimerAfterNavigationRef = useRef(false);
   const notificationIntervalRegisteredRef = useRef(false);
   const notificationListenerRegisteredRef = useRef(false);
+  const recentNotificationActionsRef = useRef(new Map<string, number>());
   // Latest habits/settings for the stable 5-minute poller below. Reading via
   // refs keeps the interval cadence steady: editing or completing a habit no
   // longer resets the timer or fires an immediate extra check.
   const habitsRef = useRef(habits);
   const projectsRef = useRef(projects);
   const appSettingsRef = useRef(appSettings);
+  const todaySnoozesRef = useRef(todaySnoozes);
   const registerTimerShortcut = useCallback((handler: (() => boolean) | null) => {
     timerShortcutRef.current = handler;
   }, []);
@@ -1170,6 +1165,9 @@ function App() {
     title?: string;
     durationMinutes?: number;
   } | null>(null);
+  // One-shot duration prefill without auto-start (e.g. Today empty-state
+  // CTA). Applied once to the idle Timer controls, then cleared.
+  const [timerPresetDurationMinutes, setTimerPresetDurationMinutes] = useState<number | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const stored = loadStorageData<boolean>("synchron-sidebar-collapsed", false);
     return stored === true;
@@ -1212,22 +1210,35 @@ function App() {
   }, [appSettings]);
 
   useEffect(() => {
-    saveTodaySnoozes(todaySnoozes);
-  }, [todaySnoozes]);
+    saveLastView(view);
+  }, [view]);
 
   useEffect(() => {
-    const now = Date.now();
-    const nextReturnAt = todaySnoozes.reduce(
-      (earliest, snooze) => snooze.returnAt > now ? Math.min(earliest, snooze.returnAt) : earliest,
+    saveTodaySnoozes(activeTodaySnoozes);
+  }, [activeTodaySnoozes]);
+
+  useEffect(() => {
+    function expireReturnedItems() {
+      const now = Date.now();
+      setSnoozeNow(now);
+      setTodaySnoozes((current) => current.filter((snooze) => snooze.returnAt > now));
+    }
+
+    const nextReturnAt = activeTodaySnoozes.reduce(
+      (earliest, snooze) => Math.min(earliest, snooze.returnAt),
       Number.POSITIVE_INFINITY,
     );
-    if (!Number.isFinite(nextReturnAt)) return;
-    const timerId = window.setTimeout(() => {
-      const currentTime = Date.now();
-      setTodaySnoozes((current) => current.filter((snooze) => snooze.returnAt > currentTime));
-    }, Math.max(0, nextReturnAt - now));
-    return () => window.clearTimeout(timerId);
-  }, [todaySnoozes]);
+    const timerId = Number.isFinite(nextReturnAt)
+      ? window.setTimeout(expireReturnedItems, Math.max(0, nextReturnAt - snoozeNow))
+      : null;
+    window.addEventListener("focus", expireReturnedItems);
+    document.addEventListener("visibilitychange", expireReturnedItems);
+    return () => {
+      if (timerId !== null) window.clearTimeout(timerId);
+      window.removeEventListener("focus", expireReturnedItems);
+      document.removeEventListener("visibilitychange", expireReturnedItems);
+    };
+  }, [activeTodaySnoozes, snoozeNow]);
 
   useEffect(() => {
     configureSfx({
@@ -1275,6 +1286,7 @@ function App() {
     function syncHabitDay() {
       setProjectStatusDate(getDateKey(new Date()));
       const currentDateKey = getTodayKey(appSettings.dayResetHour);
+      setTodayDateKey(currentDateKey);
       const previousDateKey = lastLogicalDateKeyRef.current;
       if (currentDateKey === previousDateKey) return;
 
@@ -1284,6 +1296,7 @@ function App() {
       );
     }
 
+    syncHabitDay();
     const intervalId = window.setInterval(syncHabitDay, 30_000);
     window.addEventListener("focus", syncHabitDay);
     document.addEventListener("visibilitychange", syncHabitDay);
@@ -1296,8 +1309,10 @@ function App() {
   }, [appSettings.dayResetHour]);
 
   useEffect(() => {
-    saveProjects(projects);
-  }, [projects]);
+    // Persist source records, not derived automatic status. Completion and
+    // date-based archival are recalculated from tasks/milestones on load.
+    saveProjects(projectRecords);
+  }, [projectRecords]);
 
   useEffect(() => {
     saveTasks(tasks);
@@ -1354,9 +1369,17 @@ function App() {
 
   function handleToggleTask(taskId: string) {
     const isCurrentlyComplete = tasks.find((task) => task.id === taskId)?.completed ?? false;
-    commitTaskChanges((currentTasks) => currentTasks.map((task) =>
-      task.id === taskId ? toggleTaskCompletion(task) : task,
-    ));
+    const requestedCompleted = !isCurrentlyComplete;
+    commitTaskChanges((currentTasks) => {
+      let changed = false;
+      const nextTasks = currentTasks.map((task) => {
+        if (task.id !== taskId) return task;
+        const nextTask = setTaskCompletion(task, requestedCompleted);
+        changed ||= nextTask !== task;
+        return nextTask;
+      });
+      return changed ? nextTasks : currentTasks;
+    });
     if (!isCurrentlyComplete) {
       setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "task", id: taskId }));
     }
@@ -1431,11 +1454,15 @@ function App() {
   }
 
   function handleToggleMilestone(milestoneId: string) {
+    const milestone = milestones.find((item) => item.id === milestoneId);
+    if (!milestone) return;
+    const requestedCompleted = !milestone.completed;
     setTaskMilestoneState((current) => {
       const synchronized = synchronizeMilestoneTaskCompletion(
         current.tasks,
         current.milestones,
         milestoneId,
+        requestedCompleted,
       );
       return synchronized.tasks === current.tasks && synchronized.milestones === current.milestones
         ? current
@@ -1473,6 +1500,10 @@ function App() {
   }, [appSettings]);
 
   useEffect(() => {
+    todaySnoozesRef.current = todaySnoozes;
+  }, [todaySnoozes]);
+
+  useEffect(() => {
     // Prevent multiple interval registrations
     if (notificationIntervalRegisteredRef.current) return;
     notificationIntervalRegisteredRef.current = true;
@@ -1483,18 +1514,22 @@ function App() {
     const checkNotifications = () => {
       const latestHabits = habitsRef.current;
       const latestSettings = appSettingsRef.current;
+      const notificationSettings = {
+        ...latestSettings,
+        snoozes: todaySnoozesRef.current,
+      };
       const currentHour = new Date().getHours();
       const notification = getIntelligentNotification(
         latestHabits,
         latestSettings.dayResetHour,
         currentHour,
         latestSettings.defaultFocusDuration,
-        latestSettings,
+        notificationSettings,
         projectsRef.current,
       );
 
       if (notification) {
-        void sendIntelligentNotification(notification, latestSettings);
+        void sendIntelligentNotification(notification, notificationSettings);
       }
     };
 
@@ -1502,9 +1537,16 @@ function App() {
     checkNotifications();
 
     const intervalId = window.setInterval(checkNotifications, 5 * 60 * 1000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkNotifications();
+    };
+    window.addEventListener("focus", checkNotifications);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
+      window.removeEventListener("focus", checkNotifications);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       notificationIntervalRegisteredRef.current = false;
     };
   }, []);
@@ -1516,6 +1558,7 @@ function App() {
 
     const routeFocusHabitAction = (detail: NotificationAction | undefined) => {
       if (!detail || detail.type !== "focus-habit") return;
+      if (!shouldHandleNotificationAction(detail, recentNotificationActionsRef.current)) return;
 
       const habitId = detail.habitId;
       const title = detail.habitName ?? detail.title;
@@ -1797,8 +1840,9 @@ function App() {
     setPaletteOpen(true);
   }
 
-  function startFocusSession(entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }) {
+  function startFocusSession(entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }, options?: { durationMinutes?: number }) {
     setInitialFocusEntityId(entityId);
+    setTimerPresetDurationMinutes(options?.durationMinutes ?? null);
     navigateToView("Timer");
   }
 
@@ -2004,18 +2048,20 @@ function App() {
     const targetDateKey = dateKey ?? selectedDateKey;
     const habit = habits.find((h) => h.id === id);
     const isCurrentlyComplete = habit?.completedDates.includes(targetDateKey) ?? false;
+    const requestedCompleted = !isCurrentlyComplete;
 
-    // Functional update so rapid successive toggles compose against the
-    // latest state instead of a stale closure snapshot (which dropped a
-    // toggle). The per-item decision re-derives inside the updater;
-    // markHabitComplete/Incomplete are idempotent no-ops on no-change.
-    setHabits((current) => current.map((h): Habit => {
-      if (h.id !== id) return h;
-      return h.completedDates.includes(targetDateKey)
-        ? markHabitIncomplete(h, targetDateKey)
-        : markHabitComplete(h, targetDateKey);
-    }));
-    if (!isCurrentlyComplete && targetDateKey === getTodayKey(appSettings.dayResetHour)) {
+    setHabits((current) => {
+      let changed = false;
+      const next = current.map((item): Habit => {
+        if (item.id !== id || item.completedDates.includes(targetDateKey) === requestedCompleted) {
+          return item;
+        }
+        changed = true;
+        return setHabitCompletion(item, targetDateKey, requestedCompleted);
+      });
+      return changed ? next : current;
+    });
+    if (requestedCompleted && targetDateKey === getTodayKey(appSettings.dayResetHour)) {
       setTodaySnoozes((current) => removeTodaySnooze(current, { kind: "habit", id }));
     }
 
@@ -2130,9 +2176,16 @@ function App() {
   }
 
   function handleCompleteTaskFromFocus(taskId: string) {
-    commitTaskChanges((currentTasks) => currentTasks.map((task) =>
-      task.id === taskId ? completeTask(task) : task,
-    ));
+    commitTaskChanges((currentTasks) => {
+      let changed = false;
+      const nextTasks = currentTasks.map((task) => {
+        if (task.id !== taskId) return task;
+        const nextTask = completeTask(task);
+        changed ||= nextTask !== task;
+        return nextTask;
+      });
+      return changed ? nextTasks : currentTasks;
+    });
   }
 
   function deleteFocusSession(id: number) {
@@ -2180,7 +2233,7 @@ function App() {
     (habit) => !habit.isArchived && !isHabitScheduledOnDate(habit, selectedDateKey),
   );
   const archivedHabits = filteredHabits.filter((habit) => habit.isArchived);
-  const summary = computeSummary(activeHabits, selectedDateKey);
+  const summary = calculateHabitSummary(activeHabits, selectedDateKey);
 
   function renderFrequencyControls(
     frequencyType: FrequencyType,
@@ -2197,10 +2250,10 @@ function App() {
           onChange={(event) => setFrequencyType(event.target.value as FrequencyType)}
           aria-label="Frequency"
         >
-          <option value="daily">Every Day</option>
-          <option value="weekdays">Weekdays</option>
-          <option value="weekends">Weekends</option>
-          <option value="custom">Custom Days</option>
+          <option value="daily">{FREQUENCY_LABELS.daily}</option>
+          <option value="weekdays">{FREQUENCY_LABELS.weekdays}</option>
+          <option value="weekends">{FREQUENCY_LABELS.weekends}</option>
+          <option value="custom">{FREQUENCY_LABELS.custom}</option>
         </select>
         {frequencyType === "custom" && (
           <div style={styles.frequencyDays} aria-label="Custom Frequency Days">
@@ -2346,7 +2399,7 @@ function App() {
                   style={styles.editSelect}
                   value={editingProjectId}
                   onChange={(event) => setEditingProjectId(event.target.value)}
-                  aria-label="Project (optional)"
+                  aria-label="Project (Optional)"
                 >
                   <option value="">No Project</option>
                   {projects.map((project) => (
@@ -2784,6 +2837,8 @@ function App() {
             }}
           >
             <Today
+              todayKey={todayDateKey}
+              snoozeNow={snoozeNow}
               viewMode={appSettings.viewMode}
               habits={habits}
               tasks={tasks}
@@ -2792,12 +2847,13 @@ function App() {
               focusSessions={focusSessions}
               onToggleHabit={(id, dateKey) => toggleHabit(id, dateKey)}
               onToggleTask={handleToggleTask}
+              onToggleMilestone={handleToggleMilestone}
               onAddTask={handleAddTask}
               onQuickTaskFocusReady={(focus) => {
                 quickTaskFocusRef.current = focus;
               }}
-              onStartFocus={(entityId) => {
-                startFocusSession(entityId);
+              onStartFocus={(entityId, options) => {
+                startFocusSession(entityId, options);
               }}
               onQuickFocus={(entity) => {
                 startQuickFocus(entity);
@@ -2808,7 +2864,7 @@ function App() {
               onNavigateToAnalytics={() => navigateToView("Analytics")}
               streakFreeze={streakFreeze}
               dayResetHour={appSettings.dayResetHour}
-              todaySnoozes={todaySnoozes}
+              todaySnoozes={activeTodaySnoozes}
               onSnoozeItem={handleSnoozeTodayItem}
               onUpdateHabit={(updatedHabit) =>
                 setHabits((current) => current.map((habit) =>
@@ -2841,7 +2897,7 @@ function App() {
                 aria-pressed={streakFreeze}
               >
                 <Snowflake size={14} />
-                {streakFreeze ? "Streak Freeze ON" : "Streak Freeze OFF"}
+                {streakFreeze ? "Streak Freeze On" : "Streak Freeze Off"}
               </button>
             </div>
 
@@ -2905,8 +2961,8 @@ function App() {
                 className="form-control"
                 value={habitSearch}
                 onChange={(event) => setHabitSearch(event.target.value)}
-                placeholder="Search habits"
-                aria-label="Search habits"
+                placeholder="Search Habits"
+                aria-label="Search Habits"
                 maxLength={120}
               />
             </label>
@@ -2929,7 +2985,7 @@ function App() {
                 <div
                   className="habit-toolbar-controls"
                   role="group"
-                  aria-label="Filters and category settings"
+                  aria-label="Filters and Category Settings"
                 >
                   <div ref={filterPopoverRef} style={{ position: "relative" }}>
                     <button
@@ -2941,9 +2997,9 @@ function App() {
                         padding: "0 10px",
                       }}
                       onClick={() => setHabitsPopover((current) => current === "filter" ? null : "filter")}
-                      aria-label={activeFilterCount > 0 ? `Filter habits (${activeFilterCount})` : "Filter habits"}
+                      aria-label={activeFilterCount > 0 ? `Filter Habits (${activeFilterCount})` : "Filter Habits"}
                       aria-expanded={habitsPopover === "filter"}
-                      title={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter habits"}
+                      title={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter Habits"}
                     >
                       <Filter size={16} />
                       <span style={{ fontSize: 12 }}>Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
@@ -2992,9 +3048,9 @@ function App() {
                           onChange={(event) => setFilterFrequency(event.target.value as "All" | "daily" | "weekdays" | "weekends")}
                         >
                           <option value="All">All</option>
-                          <option value="daily">Every Day</option>
-                          <option value="weekdays">Weekdays</option>
-                          <option value="weekends">Weekends</option>
+                          <option value="daily">{FREQUENCY_LABELS.daily}</option>
+                          <option value="weekdays">{FREQUENCY_LABELS.weekdays}</option>
+                          <option value="weekends">{FREQUENCY_LABELS.weekends}</option>
                         </select>
                       </div>
                       <div>
@@ -3051,7 +3107,7 @@ function App() {
                         <form
                           style={{ display: "flex", gap: 8 }}
                           onSubmit={addCustomCategory}
-                          aria-label="Add a category"
+                          aria-label="Add a Category"
                         >
                           <input
                             className="form-control"
@@ -3061,8 +3117,8 @@ function App() {
                               setNewCustomCategory(event.target.value);
                               setCategoryManagerMessage(null);
                             }}
-                            placeholder="New category"
-                            aria-label="New category"
+                            placeholder="New Category"
+                            aria-label="New Category"
                             maxLength={40}
                           />
                           <button type="submit" className="ui-button ui-button--primary ui-button--sm">
@@ -3149,29 +3205,32 @@ function App() {
               </div>
             </div>
 
-            {/* Primary creation path: Name + Frequency only. Everything else
-                lives behind More options so a basic habit saves in one step. */}
+            {/* Keep the habit name, requirement, and primary action visible. */}
             <div style={{ ...styles.inputRow, flexWrap: "wrap", alignItems: "center", justifyContent: "center", margin: "12px auto", maxWidth: 640 }}>
               <input
                 ref={newHabitInputRef}
-                style={{ ...styles.input, flex: "2 1 220px", minWidth: 0 }}
+                style={{ ...styles.input, flex: "1 1 120px", minWidth: 110 }}
                 value={newHabit}
                 onChange={(event) => setNewHabit(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") addHabit();
                 }}
                 placeholder="Add a Habit"
-                aria-label="New habit name"
+                aria-label="New Habit Name"
               />
-              {renderFrequencyControls(
-                newFrequencyType,
-                setNewFrequencyType,
-                newCustomDays,
-                setNewCustomDays,
-                styles.habitPropertySelect,
-              )}
+              <select
+                style={{ ...styles.habitPropertySelect, flex: "0 0 140px" }}
+                value={newPriority}
+                onChange={(event) =>
+                  setNewPriority(event.target.value as Priority)
+                }
+                aria-label="Habit Requirement"
+              >
+                <option value="Optional">Optional</option>
+                <option value="Mandatory">Mandatory</option>
+              </select>
               <button
-                style={styles.addButton}
+                style={{ ...styles.addButton, marginRight: "auto" }}
                 onClick={addHabit}
               >
                 Add
@@ -3180,34 +3239,13 @@ function App() {
 
             {showHabitOptions ? (
               <div style={{ ...styles.optionsRow, justifyContent: "center", margin: "12px 0 32px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 4,
-                    flex: "1 1 140px",
-                    minWidth: 140,
-                  }}
-                >
-                  <label
-                    htmlFor="new-habit-priority"
-                    style={{ fontSize: "var(--type-xs)", color: "var(--text-secondary)" }}
-                  >
-                    Habit requirement
-                  </label>
-                  <select
-                    id="new-habit-priority"
-                    style={{ ...styles.habitPropertySelect, width: "100%" }}
-                    value={newPriority}
-                    onChange={(event) =>
-                      setNewPriority(event.target.value as Priority)
-                    }
-                    aria-label="Habit requirement"
-                  >
-                    <option value="Optional">Optional</option>
-                    <option value="Mandatory">Mandatory</option>
-                  </select>
-                </div>
+                {renderFrequencyControls(
+                  newFrequencyType,
+                  setNewFrequencyType,
+                  newCustomDays,
+                  setNewCustomDays,
+                  styles.habitPropertySelect,
+                )}
                 {renderCategorySelect(
                   newCategory,
                   setNewCategory,
@@ -3221,7 +3259,7 @@ function App() {
                     style={styles.habitPropertySelect}
                     value={newProjectId}
                     onChange={(event) => setNewProjectId(event.target.value)}
-                    aria-label="Project (optional)"
+                    aria-label="Project (Optional)"
                   >
                     <option value="">No Project</option>
                     {projects
@@ -3238,7 +3276,7 @@ function App() {
                   style={{ ...styles.addButton, background: "transparent", border: "1px solid transparent", color: "var(--text-secondary)", fontSize: 12 }}
                   onClick={() => setShowHabitOptions(false)}
                 >
-                  Fewer options
+                  Fewer Options
                 </button>
               </div>
             ) : (
@@ -3249,7 +3287,7 @@ function App() {
                   onClick={() => setShowHabitOptions(true)}
                   aria-expanded={false}
                 >
-                  More options
+                  More Options
                 </button>
               </div>
             )}
@@ -3346,10 +3384,10 @@ function App() {
             }}
           >
             <Tasks
+              todayKey={todayDateKey}
               tasks={tasks}
               milestones={milestones}
               projects={projects}
-              dayResetHour={appSettings.dayResetHour}
               onAddTask={handleAddTask}
               onEditTask={handleEditTask}
               onDeleteTask={handleDeleteTask}
@@ -3385,6 +3423,8 @@ function App() {
               initialEntityId={initialFocusEntityId}
               autoStartAction={timerAutoStartAction}
               onAutoStartHandled={() => setTimerAutoStartAction(null)}
+              presetDurationMinutes={timerPresetDurationMinutes}
+              onPresetDurationHandled={() => setTimerPresetDurationMinutes(null)}
               onTimerShortcutReady={registerTimerShortcut}
             />
           </div>
@@ -3444,7 +3484,7 @@ function App() {
               onSelectProject={setSelectedProjectId}
               onAddProject={handleAddProject}
               onEditProject={(projectId, data) => {
-                const existing = projects.find((project) => project.id === projectId);
+                const existing = projectRecords.find((project) => project.id === projectId);
                 if (!existing) return;
                 const updatedProject = alignProject(updateProject(existing, data));
                 setProjects((current) => current.map((project) =>
@@ -3586,7 +3626,7 @@ function App() {
                 <div style={styles.settingsCard}>
                   <div style={styles.settingsRow}>
                     <div>
-                      <span style={styles.settingsLabel}>Bring skipped items back after</span>
+                      <span style={styles.settingsLabel}>Bring Skipped Items Back After</span>
                       <span style={styles.settingsDescription}>
                         Existing snoozes keep their return time. Changes apply to future snoozes.
                       </span>
@@ -3599,13 +3639,13 @@ function App() {
                         ...current,
                         skippedItemReturnMinutes: Number(event.target.value),
                       }))}
-                      aria-label="Bring skipped items back after"
+                      aria-label="Bring Skipped Items Back After"
                     >
-                      <option value={30}>30 minutes</option>
-                      <option value={60}>1 hour</option>
-                      <option value={120}>2 hours</option>
-                      <option value={240}>4 hours</option>
-                      <option value={480}>8 hours</option>
+                      <option value={30}>30 Minutes</option>
+                      <option value={60}>1 Hour</option>
+                      <option value={120}>2 Hours</option>
+                      <option value={240}>4 Hours</option>
+                      <option value={480}>8 Hours</option>
                     </select>
                   </div>
                 </div>

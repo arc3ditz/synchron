@@ -11,6 +11,7 @@ import {
   filterTasksByProject,
   determineProjectStatus,
   recalculateProjectStatuses,
+  selectProjectTasks,
   updateProject,
   updateProjectArchive,
 } from "../src/domain/projects.ts";
@@ -236,6 +237,100 @@ test("Tasks under a Project's Milestone count toward the Project without their o
   assert.equal(progress.completed, 1);
   assert.equal(progress.percent, 50);
   assert.equal(progress.taskTotal, 1);
+});
+
+test("project progress and task lists share one unique direct-or-milestone task selection", () => {
+  const project = createProject({ name: "Single source" });
+  const milestones = [{ id: "m-1", projectId: project.id, title: "Milestone", completed: false }];
+  const directAndLinked = {
+    id: "both",
+    projectId: project.id,
+    milestoneId: "m-1",
+    title: "Direct and linked",
+    completed: true,
+    priority: "medium",
+    createdAt: "2026-01-01",
+  };
+  const viaMilestone = {
+    id: "via",
+    milestoneId: "m-1",
+    title: "Milestone child",
+    completed: false,
+    priority: "medium",
+    createdAt: "2026-01-01",
+  };
+  const unrelated = {
+    id: "other",
+    projectId: "another",
+    title: "Unrelated",
+    completed: false,
+    priority: "medium",
+    createdAt: "2026-01-01",
+  };
+
+  const selected = selectProjectTasks(project, milestones, [directAndLinked, viaMilestone, unrelated]);
+  const progress = calculateProjectProgress(project, milestones, [directAndLinked, viaMilestone, unrelated]);
+  assert.deepEqual(selected.map((task) => task.id), ["both", "via"]);
+  assert.equal(progress.taskTotal, selected.length);
+  assert.equal(progress.taskCompleted, selected.filter((task) => task.completed).length);
+});
+
+test("project status recalculates as actual work is added, completed, reopened, and date moves", () => {
+  const project = createProject({ name: "Lifecycle", targetDate: "2026-10-10" });
+  const milestone = { id: "m-1", projectId: project.id, title: "Milestone", completed: false };
+  const task = {
+    id: "t-1",
+    milestoneId: milestone.id,
+    title: "Task",
+    completed: false,
+    priority: "medium",
+    createdAt: "2026-01-01",
+  };
+  const completedTask = { ...task, completed: true };
+  const completedMilestone = { ...milestone, completed: true };
+
+  assert.equal(determineProjectStatus(project, [milestone], [task], "2026-10-09"), "active");
+  assert.equal(determineProjectStatus(project, [completedMilestone], [completedTask], "2026-10-09"), "completed");
+  assert.equal(
+    determineProjectStatus(updateProject(project, { ...project, targetDate: "2026-10-08" }), [completedMilestone], [completedTask], "2026-10-09"),
+    "archived",
+  );
+  assert.equal(determineProjectStatus(project, [completedMilestone], [task], "2026-10-09"), "active");
+});
+
+test("adding, deleting, or reassigning project work recalculates status from remaining items", () => {
+  const project = createProject({ name: "Changing scope" });
+  const otherProject = createProject({ name: "Other scope" });
+  const milestone = { id: "m-1", projectId: project.id, title: "Milestone", completed: true };
+  const completedTask = {
+    id: "t-1",
+    projectId: project.id,
+    title: "Task",
+    completed: true,
+    priority: "medium",
+    createdAt: "2026-01-01",
+  };
+
+  assert.equal(recalculateProjectStatuses([project], [milestone], [], "2026-10-09")[0].status, "completed");
+  assert.equal(
+    recalculateProjectStatuses([project], [milestone], [completedTask], "2026-10-09")[0].status,
+    "completed",
+  );
+  assert.equal(
+    recalculateProjectStatuses(
+      [project],
+      [milestone],
+      [{ ...completedTask, projectId: otherProject.id }],
+      "2026-10-09",
+    )[0].status,
+    "completed",
+    "remaining completed milestone keeps this project complete after task reassignment",
+  );
+  assert.equal(
+    recalculateProjectStatuses([project], [], [], "2026-10-09")[0].status,
+    "active",
+    "deleting the final milestone never makes an empty project completed",
+  );
 });
 
 test("filter helpers scope Projects, Milestones, and Tasks to a Project", () => {

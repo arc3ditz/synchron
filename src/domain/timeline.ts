@@ -1,6 +1,7 @@
 import { getFocusSessionsForLogicalToday } from "./focusTimer.ts";
-import { resolveTaskContext } from "./tasks.ts";
+import { isTaskOverdue, resolveTaskContext } from "./tasks.ts";
 import type { FocusSessionRecord, Habit, Task } from "../types";
+import { TASK_PRIORITY_LABELS } from "../utils/displayLabels.ts";
 
 export type TimelineBlock =
   | {
@@ -116,10 +117,10 @@ export function buildDailyTimeline(input: TimelineInput): TimelineBlock[] {
       sortMinutes,
       taskId: task.id,
       title: task.title,
-      meta: project?.name || task.priority,
+      meta: project?.name || TASK_PRIORITY_LABELS[task.priority],
       durationMinutes: task.durationMinutes || task.estimatedMinutes,
       completed: task.completed,
-      overdue: !task.completed && task.dueDate !== undefined && task.dueDate < input.todayKey,
+      overdue: !task.completed && isTaskOverdue(task, input.todayKey),
     });
   }
 

@@ -3,17 +3,17 @@ import { Archive, ArchiveRestore, Check, Pencil, Play, Plus, Search, Trash2 } fr
 
 import type { Milestone, Project, Task } from "../types";
 import { FORM_CONTROL } from "../theme";
-import { getTaskPlanningCategory, resolveTaskContext } from "../domain/tasks";
+import { getTaskPlanningCategory, isTaskOverdue, resolveTaskContext } from "../domain/tasks";
 import { isTaskStaleBacklog } from "../domain/nextStep";
-import { getTodayKey } from "../utils/dates";
 import { formatFullDate } from "../utils/dates";
 import DatePicker from "./DatePicker";
+import { TASK_PRIORITY_LABELS } from "../utils/displayLabels";
 
 type TasksProps = {
+  todayKey: string;
   tasks: Task[];
   milestones: Milestone[];
   projects?: Project[];
-  dayResetHour: number;
   onAddTask: (data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onEditTask: (taskId: string, data: Omit<Task, "id" | "createdAt" | "completed">) => void;
   onDeleteTask: (taskId: string) => void;
@@ -21,7 +21,7 @@ type TasksProps = {
   onStartFocus: (entityId?: { taskId?: string; habitId?: number; projectId?: string; milestoneId?: string; title?: string }) => void;
 };
 
-type StatusFilter = "open" | "completed" | "all";
+type StatusFilter = "Open" | "Completed" | "all";
 type PriorityFilter = "all" | Task["priority"];
 
 const PRIORITY_RANK: Record<Task["priority"], number> = { high: 0, medium: 1, low: 2 };
@@ -42,18 +42,16 @@ const PRIORITY_BADGE_CLASS: Record<Task["priority"], string> = {
 };
 
 export default function Tasks({
+  todayKey,
   tasks,
   milestones,
   projects = [],
-  dayResetHour,
   onAddTask,
   onEditTask,
   onDeleteTask,
   onToggleTask,
   onStartFocus,
 }: TasksProps) {
-  const todayKey = getTodayKey(dayResetHour);
-
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<Task["priority"]>("medium");
   const [dueDate, setDueDate] = useState("");
@@ -71,7 +69,7 @@ export default function Tasks({
   const [editProjectId, setEditProjectId] = useState("");
   const [editMilestoneId, setEditMilestoneId] = useState("");
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Open");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [projectFilter, setProjectFilter] = useState("");
   const [query, setQuery] = useState("");
@@ -170,8 +168,8 @@ export default function Tasks({
   const visibleTasks = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const filtered = tasks.filter((task) => {
-      if (statusFilter === "open" && task.completed) return false;
-      if (statusFilter === "completed" && !task.completed) return false;
+      if (statusFilter === "Open" && task.completed) return false;
+      if (statusFilter === "Completed" && !task.completed) return false;
       if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
       if (projectFilter !== "" && task.projectId !== projectFilter) return false;
       if (needle !== "" && !task.title.toLowerCase().includes(needle)) return false;
@@ -179,8 +177,8 @@ export default function Tasks({
     });
     // Overdue first, then due date, then priority, then creation order.
     return [...filtered].sort((a, b) => {
-      const aOverdue = a.dueDate !== undefined && a.dueDate < todayKey && !a.completed ? 0 : 1;
-      const bOverdue = b.dueDate !== undefined && b.dueDate < todayKey && !b.completed ? 0 : 1;
+      const aOverdue = !a.completed && isTaskOverdue(a, todayKey) ? 0 : 1;
+      const bOverdue = !b.completed && isTaskOverdue(b, todayKey) ? 0 : 1;
       if (aOverdue !== bOverdue) return aOverdue - bOverdue;
       const aDue = a.dueDate ?? "\uffff";
       const bDue = b.dueDate ?? "\uffff";
@@ -193,6 +191,7 @@ export default function Tasks({
 
   const groups = useMemo(() => {
     const overdue: Task[] = [];
+    const dueToday: Task[] = [];
     const upcoming: Task[] = [];
     const backlog: Task[] = [];
     const uncategorized: Task[] = [];
@@ -208,7 +207,7 @@ export default function Tasks({
         continue;
       }
       if (category === "scheduled") {
-        upcoming.push(task);
+        (task.dueDate === todayKey ? dueToday : upcoming).push(task);
         continue;
       }
       if (category === "backlog") backlog.push(task);
@@ -216,7 +215,8 @@ export default function Tasks({
     }
     const ordered: { key: string; label: string; hint: string; items: Task[] }[] = [];
     if (overdue.length > 0) ordered.push({ key: "overdue", label: "Overdue", hint: "Needs attention first", items: overdue });
-    if (upcoming.length > 0) ordered.push({ key: "upcoming", label: "Scheduled", hint: "Dated work in order", items: upcoming });
+    if (dueToday.length > 0) ordered.push({ key: "due-today", label: "Due Today", hint: "Today's dated work", items: dueToday });
+    if (upcoming.length > 0) ordered.push({ key: "upcoming", label: "Upcoming", hint: "Future-dated work", items: upcoming });
     if (backlog.length > 0) ordered.push({ key: "backlog", label: "Backlog", hint: "Deferred work", items: backlog });
     if (uncategorized.length > 0) ordered.push({ key: "uncategorized", label: "Uncategorized", hint: "No date or backlog placement", items: uncategorized });
     if (done.length > 0) ordered.push({ key: "done", label: "Completed", hint: "Finished work", items: done });
@@ -246,13 +246,14 @@ export default function Tasks({
 
   function dueLabel(task: Task, overdue: boolean, stale: boolean): string {
     if (!task.dueDate) return "";
-    if (stale) return `Backlog since ${formatFullDate(task.dueDate)}`;
-    if (overdue) return `Overdue · due ${formatFullDate(task.dueDate)}`;
+    if (stale) return `Backlog Since ${formatFullDate(task.dueDate)}`;
+    if (overdue) return `Overdue · Due ${formatFullDate(task.dueDate)}`;
+    if (task.dueDate === todayKey) return "Due Today";
     return `Due ${formatFullDate(task.dueDate)}`;
   }
 
   function renderRow(task: Task) {
-    const overdue = !task.completed && task.dueDate !== undefined && task.dueDate < todayKey;
+    const overdue = !task.completed && isTaskOverdue(task, todayKey);
     // Abandoned work stays visible and actionable, but stops shouting:
     // stale backlog renders quiet instead of alarming red.
     const stale = !task.completed && isTaskStaleBacklog(task, todayKey);
@@ -396,7 +397,7 @@ export default function Tasks({
             </span>
           </span>
           <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>
-            <span className={PRIORITY_BADGE_CLASS[task.priority]}>{task.priority}</span>
+            <span className={PRIORITY_BADGE_CLASS[task.priority]}>{TASK_PRIORITY_LABELS[task.priority]}</span>
             {task.dueDate && (
               <time
                 dateTime={task.dueDate}
@@ -430,7 +431,7 @@ export default function Tasks({
             className="ui-button ui-button--ghost ui-button--sm"
             style={{ minHeight: 30, padding: "4px 8px" }}
             onClick={() => onStartFocus({ taskId: task.id, title: task.title })}
-            aria-label={`Start focus on "${task.title}"`}
+            aria-label={`Start Focus on "${task.title}"`}
             title="Start Focus"
           >
             <Play size={14} />
@@ -466,7 +467,7 @@ export default function Tasks({
     <section className="tasks-page" aria-labelledby="tasks-title">
       <header className="page-head">
         <h1 id="tasks-title">Tasks</h1>
-        <p>{openCount} open · {completedCount} completed · Small steps count.</p>
+        <p>{openCount} Open · {completedCount} Completed · Small steps count.</p>
       </header>
 
       <div className="page-toolbar" role="group" aria-label="Filter Tasks">
@@ -477,8 +478,8 @@ export default function Tasks({
             style={{ width: "100%", paddingLeft: 30 }}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search tasks"
-            aria-label="Search tasks"
+            placeholder="Search Tasks"
+            aria-label="Search Tasks"
           />
         </span>
         <div role="group" aria-label="Completion Status" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -501,7 +502,7 @@ export default function Tasks({
           onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)}
           aria-label="Filter by Priority"
         >
-          <option value="all">All priorities</option>
+          <option value="all">All Priorities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
@@ -529,7 +530,7 @@ export default function Tasks({
             style={{ flex: 1, minWidth: 0 }}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Add a task"
+            placeholder="Add a Task"
             aria-label="Task Title"
           />
           <button type="submit" className="ui-button ui-button--primary ui-button--sm">
@@ -547,9 +548,9 @@ export default function Tasks({
               onChange={(event) => setPriority(event.target.value as Task["priority"])}
               aria-label="Priority"
             >
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
+              <option value="high">{TASK_PRIORITY_LABELS.high}</option>
+              <option value="medium">{TASK_PRIORITY_LABELS.medium}</option>
+              <option value="low">{TASK_PRIORITY_LABELS.low}</option>
             </select>
           </label>
           <label style={{ display: "grid", minWidth: 0, gap: 5, color: "var(--text-secondary)", fontSize: "var(--type-xs)", fontWeight: 600 }}>
@@ -568,6 +569,7 @@ export default function Tasks({
               min={1}
               step={1}
               className="form-control"
+              style={{ width: "100%", minWidth: 0 }}
               value={estimatedMinutes}
               onChange={(event) => setEstimatedMinutes(event.target.value)}
               placeholder="Minutes"
@@ -609,7 +611,7 @@ export default function Tasks({
 
       {visibleTasks.length === 0 ? (
         <div className="atelier-group ui-empty-state">
-          <strong>{tasks.length === 0 ? "No tasks yet" : "No tasks match your filter"}</strong>
+          <strong>{tasks.length === 0 ? "No Tasks Yet" : "No Tasks Match Your Filter"}</strong>
           <span className="atelier-sub">
             {tasks.length === 0
               ? "Add your first task above — just a title is enough to get started"
@@ -621,7 +623,7 @@ export default function Tasks({
               className="ui-button ui-button--sm"
               onClick={() => { setQuery(""); setStatusFilter("open"); setPriorityFilter("all"); setProjectFilter(""); }}
             >
-              Clear filters
+              Clear Filters
             </button>
           )}
         </div>

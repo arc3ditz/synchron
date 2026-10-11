@@ -95,6 +95,11 @@ test("migrates Programs and linked habits once without creating Tasks or Milesto
     ]);
     assert.equal(migratedHabits[0].frequencyType, "weekdays");
     assert.equal(migratedHabits[0].priority, "Mandatory");
+    assert.deepEqual(migratedHabits.map(({ priority }) => priority), [
+      "Mandatory",
+      "Optional",
+      "Optional",
+    ]);
     assert.equal("programId" in migratedHabits[0], false);
     assert.equal("startDate" in migratedHabits[1], false);
     assert.deepEqual(JSON.parse(storage.getItem("tasks")), [{ id: "task-1", title: "Keep me" }]);

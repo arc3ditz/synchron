@@ -4,6 +4,7 @@ import {
   getCompletionTimestamp,
   markHabitComplete,
   markHabitIncomplete,
+  setHabitCompletion,
   sanitizeCompletedAt,
 } from "../src/domain/completions.ts";
 import { calculateStreak } from "../src/utils/dates.ts";
@@ -41,6 +42,19 @@ test("completing an already-completed day preserves its original timestamp", () 
   const completed = markHabitComplete(habit, "2026-10-06", 2000);
   assert.equal(completed, habit);
   assert.equal(getCompletionTimestamp(completed, "2026-10-06"), 1000);
+});
+
+test("repeated completion requests do not duplicate records but distinct dates remain valid", () => {
+  const original = makeHabit();
+  const firstDay = setHabitCompletion(original, "2026-10-06", true, 1000);
+  const repeatedFirstDay = setHabitCompletion(firstDay, "2026-10-06", true, 2000);
+  assert.equal(repeatedFirstDay, firstDay);
+  assert.deepEqual(repeatedFirstDay.completedDates, ["2026-10-06"]);
+  assert.deepEqual(repeatedFirstDay.completedAt, { "2026-10-06": 1000 });
+
+  const secondDay = setHabitCompletion(repeatedFirstDay, "2026-10-07", true, 3000);
+  assert.deepEqual(secondDay.completedDates, ["2026-10-06", "2026-10-07"]);
+  assert.deepEqual(secondDay.completedAt, { "2026-10-06": 1000, "2026-10-07": 3000 });
 });
 
 test("uncompletion removes the date and its timestamp but keeps the rest", () => {

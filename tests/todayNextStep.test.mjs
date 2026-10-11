@@ -128,10 +128,10 @@ test("Today quick-starts the recommended item through the existing focus flow", 
 
 test("Today lets the user choose another candidate without navigating away", () => {
   assert.ok(
-    todaySource.includes('aria-label="Choose another task or habit"'),
+    todaySource.includes('aria-label="Choose Another Task, Habit, or Milestone"'),
     "picker must be labelled for assistive tech",
   );
-  assert.ok(todaySource.includes("listNextStepCandidates"), "picker lists engine-ordered options");
+  assert.ok(todaySource.includes("listTodayNextActions"), "picker lists deterministic Today-eligible options");
   assert.ok(todaySource.includes("chooseNextStep"), "picker pins the chosen candidate in place");
   assert.ok(!todaySource.includes("onNavigateToTasks"), "switching must not require navigation");
 });
@@ -150,7 +150,8 @@ test("Today exposes only mandatory habits to its list, progress, and recommendat
   assert.ok(todaySource.includes("habits: todayHabits"), "the recommendation only receives visible habits");
   assert.ok(todaySource.includes("activeSnoozes.habitIds.has(habit.id)"), "snoozed habits hide from Today");
   assert.ok(todaySource.includes("activeSnoozes.taskIds.has(task.id)"), "snoozed tasks hide from Today");
-  assert.ok(todaySource.includes("todayHabits.length + todayTasks.length"), "progress denominator uses visible habits");
+  assert.ok(todaySource.includes("calculateHabitSummary(todayHabits, todayKey)"), "habit progress uses the shared summary");
+  assert.ok(todaySource.includes("todaySummary.doneCount} / {todaySummary.total} habits done"), "task counts do not inflate habit progress");
   assert.ok(!todaySource.includes("showMandatoryHabitsInImportantItems"), "Today has no visibility preference");
   assert.ok(
     todaySource.includes("options.find((option) => nextStepKey(option) === chosenNextStepKey)"),
@@ -159,9 +160,9 @@ test("Today exposes only mandatory habits to its list, progress, and recommendat
 });
 
 test("Today keeps empty and error states graceful with no redundant summaries", () => {
-  assert.ok(todaySource.includes("All clear for today"), "all-done state stays friendly");
+  assert.ok(todaySource.includes("Nothing Needs Attention Right Now."), "empty state stays calm and friendly");
   assert.ok(
-    todaySource.includes("Next step unavailable"),
+    todaySource.includes("Next Step Unavailable"),
     "engine failure must degrade to a quiet notice, not a blank page",
   );
   assert.ok(!todaySource.includes("Today's momentum"), "redundant momentum strip stays removed");

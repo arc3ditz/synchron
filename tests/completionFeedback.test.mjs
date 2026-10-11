@@ -203,7 +203,7 @@ test("confirmation is set only on completion and cleared on unmark, timeout, and
   assert.ok((todaySource.match(/setLastCompletion\(null\)/g) ?? []).length >= 3);
   assert.ok(todaySource.includes("clearTimeout"), "auto-dismiss timer must clean up");
   assert.ok(
-    todaySource.includes("Dismiss completion message"),
+    todaySource.includes("Dismiss Completion Message"),
     "user can dismiss without waiting",
   );
 });

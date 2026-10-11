@@ -2,9 +2,13 @@
  * Storage utility functions for localStorage operations
  */
 
-import type { Goal, Milestone, Task, Habit, Project } from "../types";
+import type { Goal, Milestone, Task, Habit, Project, View } from "../types";
 import { sanitizeCompletedAt } from "../domain/completions.ts";
 import { isTodaySnooze, type TodaySnooze } from "../domain/todaySnoozes.ts";
+import {
+  restoreFocusTimerSnapshot,
+  type FocusTimerSnapshot,
+} from "../domain/focusTimerRecovery.ts";
 
 export const STORAGE_KEYS = {
   HABITS: "habits",
@@ -14,11 +18,25 @@ export const STORAGE_KEYS = {
   MILESTONES: "milestones",
   PROJECTS: "projects",
   FOCUS_SESSIONS: "focusSessions",
+  FOCUS_TIMER_STATE: "focusTimerState",
   TODAY_SNOOZES: "todaySnoozes",
+  INTELLIGENT_NOTIFICATION_HISTORY: "intelligentNotificationHistory",
   STREAK_FREEZE: "streakFreeze",
   CUSTOM_CATEGORIES: "habitCategories",
   LAST_SEEN: "synchron-last-seen",
+  LAST_VIEW: "synchron-last-view",
 } as const;
+
+const APP_VIEWS: readonly View[] = [
+  "Today",
+  "Habits",
+  "Tasks",
+  "Timer",
+  "Projects",
+  "History",
+  "Analytics",
+  "Settings",
+];
 
 /**
  * Generic function to load data from localStorage with a fallback value
@@ -63,20 +81,43 @@ export function loadStorageData<T>(key: string, fallback: T): T {
 export function saveStorageData<T>(key: string, data: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch {
-    // localStorage unavailable (e.g. private browsing) — fail silently
+  } catch (error) {
+    console.error(`Failed to persist "${key}"`, error);
   }
 }
 
-export function loadTodaySnoozes(): TodaySnooze[] {
+export function loadLastView(): View {
+  const stored = loadStorageData<unknown>(STORAGE_KEYS.LAST_VIEW, "Today");
+  return APP_VIEWS.find((view) => view === stored) ?? "Today";
+}
+
+export function saveLastView(view: View): void {
+  saveStorageData(STORAGE_KEYS.LAST_VIEW, view);
+}
+
+export function loadTodaySnoozes(now = Date.now()): TodaySnooze[] {
   const parsed = loadStorageData<unknown>(STORAGE_KEYS.TODAY_SNOOZES, []);
   if (!Array.isArray(parsed)) return [];
-  const now = Date.now();
   return parsed.filter(isTodaySnooze).filter((snooze) => snooze.returnAt > now);
 }
 
 export function saveTodaySnoozes(snoozes: TodaySnooze[]): void {
   saveStorageData(STORAGE_KEYS.TODAY_SNOOZES, snoozes);
+}
+
+export function loadFocusTimerSnapshot(
+  defaultFocusMinutes: number,
+  now = Date.now(),
+): FocusTimerSnapshot {
+  return restoreFocusTimerSnapshot(
+    loadStorageData<unknown>(STORAGE_KEYS.FOCUS_TIMER_STATE, null),
+    now,
+    defaultFocusMinutes,
+  );
+}
+
+export function saveFocusTimerSnapshot(snapshot: FocusTimerSnapshot): void {
+  saveStorageData(STORAGE_KEYS.FOCUS_TIMER_STATE, snapshot);
 }
 
 export function loadGoals(): Goal[] {

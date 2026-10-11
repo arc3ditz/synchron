@@ -146,8 +146,8 @@ export default function DatePicker({
           updatePosition();
           setIsOpen(true);
         }}
-        aria-label={`Choose ${ariaLabel.toLowerCase()}`}
-        title="Choose date"
+        aria-label={`Choose ${ariaLabel}`}
+        title="Choose Date"
       >
         <CalendarDays size={15} />
       </button>
@@ -156,7 +156,7 @@ export default function DatePicker({
           ref={popoverRef}
           className="date-picker-popover"
           role="dialog"
-          aria-label={`Choose ${ariaLabel.toLowerCase()}`}
+          aria-label={`Choose ${ariaLabel}`}
           style={{ top: position.top, left: position.left }}
         >
           <div className="date-picker-header">
@@ -164,7 +164,7 @@ export default function DatePicker({
               type="button"
               className="date-picker-nav"
               onClick={() => setDisplayMonth(new Date(displayMonth.getFullYear(), displayMonth.getMonth() - 1, 1))}
-              aria-label="Previous month"
+              aria-label="Previous Month"
             >
               <ChevronLeft size={16} />
             </button>
@@ -175,12 +175,12 @@ export default function DatePicker({
               type="button"
               className="date-picker-nav"
               onClick={() => setDisplayMonth(new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 1))}
-              aria-label="Next month"
+              aria-label="Next Month"
             >
               <ChevronRight size={16} />
             </button>
           </div>
-          <div className="date-picker-grid" role="group" aria-label="Calendar dates">
+          <div className="date-picker-grid" role="group" aria-label="Calendar Dates">
             {WEEKDAYS.map((weekday) => (
               <span key={weekday} className="date-picker-weekday">{weekday}</span>
             ))}

@@ -14,6 +14,7 @@ export function synchronizeMilestoneTaskCompletion(
   tasks: Task[],
   milestones: Milestone[],
   manuallyToggledMilestoneId?: string,
+  manuallyRequestedCompleted?: boolean,
 ): MilestoneTaskCompletionState {
   let nextTasks = tasks;
   let nextMilestones = milestones;
@@ -21,7 +22,7 @@ export function synchronizeMilestoneTaskCompletion(
   if (manuallyToggledMilestoneId !== undefined) {
     const milestone = milestones.find((item) => item.id === manuallyToggledMilestoneId);
     if (milestone) {
-      const completed = !milestone.completed;
+      const completed = manuallyRequestedCompleted ?? !milestone.completed;
       let tasksChanged = false;
       nextTasks = tasks.map((task) => {
         if (task.milestoneId !== milestone.id || task.completed === completed) return task;

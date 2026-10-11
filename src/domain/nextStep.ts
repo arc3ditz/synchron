@@ -1,7 +1,8 @@
 import type { Goal, Habit, Milestone, Project, Task } from "../types";
-import { isTaskDueTodayOrOverdue, isTaskOverdue } from "./tasks.ts";
+import { getValidTaskDueDate, isTaskDueTodayOrOverdue, isTaskOverdue } from "./tasks.ts";
 import { timeToMinutes } from "./timeline.ts";
 import { diffInDays, isHabitScheduledOnDate } from "../utils/dates.ts";
+import { TASK_PRIORITY_LABELS } from "../utils/displayLabels.ts";
 
 export const STALE_OVERDUE_DAYS = 7;
 
@@ -29,16 +30,26 @@ export interface NextStepHabitRecommendation {
   priority: Habit["priority"];
 }
 
+export interface NextStepMilestoneRecommendation {
+  kind: "milestone";
+  milestoneId: string;
+  projectId?: string;
+  title: string;
+  reason: string;
+}
+
 export interface NextStepFallback {
   kind: "none";
   title: string;
   reason: string;
 }
 
-export type NextStepRecommendation =
+export type NextStepAction =
   | NextStepTaskRecommendation
   | NextStepHabitRecommendation
-  | NextStepFallback;
+  | NextStepMilestoneRecommendation;
+
+export type NextStepRecommendation = NextStepAction | NextStepFallback;
 
 export interface NextStepInput {
   habits: Habit[];
@@ -70,29 +81,6 @@ function validScheduledMinutes(scheduledTime?: unknown): number | null {
   return timeToMinutes(scheduledTime);
 }
 
-/**
- * Strict "YYYY-MM-DD" calendar-key validation. Lexicographic date compares
- * elsewhere treat "" / "  " / malformed strings as real dates ("" sorts
- * before any todayKey, so it reads as overdue). Only validated keys may
- * support urgency claims ("Overdue", "Due today", backlog) or be echoed.
- */
-function isValidDateKey(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [y, m, d] = value.split("-").map(Number);
-  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
-  const roundTrip = new Date(y, m - 1, d);
-  return roundTrip.getFullYear() === y && roundTrip.getMonth() === m - 1 && roundTrip.getDate() === d;
-}
-
-function validDueDate(task: Pick<Task, "dueDate">): string | undefined {
-  return isValidDateKey(task.dueDate) ? task.dueDate : undefined;
-}
-
-function isOverdueByKey(dueDate: string | undefined, todayKey: string): boolean {
-  return dueDate !== undefined && dueDate < todayKey;
-}
-
 function taskDuration(task: Task): number | undefined {
   const candidate = task.durationMinutes ?? task.estimatedMinutes;
   return typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0
@@ -118,7 +106,7 @@ function overdueAgeDays(dueDate: string, todayKey: string): number {
  * STALE_OVERDUE_DAYS. Display-only — never hides, deletes, or reschedules.
  */
 export function isTaskStaleBacklog(task: Task, todayKey: string): boolean {
-  const dueDate = validDueDate(task);
+  const dueDate = getValidTaskDueDate(task);
   return (
     dueDate !== undefined &&
     isTaskOverdue(task, todayKey) &&
@@ -220,8 +208,8 @@ type RankedCandidate = RankedTask | RankedHabit;
  */
 function categoryRankForTask(task: Task, todayKey: string, lookup: ParentLookup): number {
   if ((task.isBacklog && task.dueDate === undefined) || isTaskStaleBacklog(task, todayKey)) return 6;
-  const dueDate = validDueDate(task);
-  if (isOverdueByKey(dueDate, todayKey)) return 0;
+  const dueDate = getValidTaskDueDate(task);
+  if (isTaskOverdue(task, todayKey)) return 0;
   if (dueDate !== undefined && dueDate === todayKey) return 1;
   if (taskContextKind(task, lookup) !== "none") return 3;
   return 4;
@@ -263,8 +251,8 @@ function compareRanked(a: RankedCandidate, b: RankedCandidate, todayKey: string)
     const bDuration = taskDuration(b.task) ?? Number.POSITIVE_INFINITY;
     if (aDuration !== bDuration) return aDuration - bDuration;
 
-    const aDue = validDueDate(a.task) ?? "\uffff";
-    const bDue = validDueDate(b.task) ?? "\uffff";
+    const aDue = getValidTaskDueDate(a.task) ?? "\uffff";
+    const bDue = getValidTaskDueDate(b.task) ?? "\uffff";
     if (aDue !== bDue) return aDue < bDue ? -1 : 1;
 
     const aSched = validScheduledMinutes(a.task.scheduledTime) ?? Number.POSITIVE_INFINITY;
@@ -301,23 +289,23 @@ function compareRanked(a: RankedCandidate, b: RankedCandidate, todayKey: string)
 }
 
 function taskReason(task: Task, todayKey: string, contextKind: TaskContextKind): string {
-  const dueDate = validDueDate(task);
-  if (dueDate !== undefined && isOverdueByKey(dueDate, todayKey)) {
-    const stale = isTaskStaleBacklog(task, todayKey) ? " · backlog" : "";
-    return `Overdue since ${dueDate} · ${task.priority} priority${stale}`;
+  const dueDate = getValidTaskDueDate(task);
+  if (dueDate !== undefined && isTaskOverdue(task, todayKey)) {
+    const stale = isTaskStaleBacklog(task, todayKey) ? " · Backlog" : "";
+    return `Overdue Since ${dueDate} · ${TASK_PRIORITY_LABELS[task.priority]} Priority${stale}`;
   }
   if (dueDate !== undefined && dueDate === todayKey) {
-    return `Due today · ${task.priority} priority`;
+    return `Due Today · ${TASK_PRIORITY_LABELS[task.priority]} Priority`;
   }
-  if (task.isBacklog && dueDate === undefined) return `Backlog · ${task.priority} priority`;
+  if (task.isBacklog && dueDate === undefined) return `Backlog · ${TASK_PRIORITY_LABELS[task.priority]} Priority`;
   if (task.scheduledTime !== undefined && validScheduledMinutes(task.scheduledTime) !== null) {
-    return `Scheduled ${task.scheduledTime} · ${task.priority} priority`;
+    return `Scheduled ${task.scheduledTime} · ${TASK_PRIORITY_LABELS[task.priority]} Priority`;
   }
   // Context label mirrors the resolved link only: dangling references fall
   // to "Available task" rather than claiming a milestone that isn't there.
-  if (contextKind === "milestone") return `Active milestone · ${task.priority} priority`;
-  if (contextKind === "project") return `Linked project · ${task.priority} priority`;
-  return `Available task · ${task.priority} priority`;
+  if (contextKind === "milestone") return `Active Milestone · ${TASK_PRIORITY_LABELS[task.priority]} Priority`;
+  if (contextKind === "project") return `Linked Project · ${TASK_PRIORITY_LABELS[task.priority]} Priority`;
+  return `Available Task · ${TASK_PRIORITY_LABELS[task.priority]} Priority`;
 }
 
 function habitReason(habit: Habit): string {
@@ -334,14 +322,14 @@ function toRecommendation(
 ): NextStepTaskRecommendation | NextStepHabitRecommendation {
   if (winner.type === "task") {
     const task = winner.task;
-    const dueDate = validDueDate(task);
+    const dueDate = getValidTaskDueDate(task);
     const recommendation: NextStepTaskRecommendation = {
       kind: "task",
       taskId: task.id,
       title: task.title,
       reason: taskReason(task, todayKey, winner.contextKind),
       priority: task.priority,
-      overdue: isOverdueByKey(dueDate, todayKey),
+      overdue: isTaskOverdue(task, todayKey),
     };
     if (dueDate !== undefined) recommendation.dueDate = dueDate;
     if (task.scheduledTime !== undefined && validScheduledMinutes(task.scheduledTime) !== null) {
@@ -370,12 +358,131 @@ function toRecommendation(
 
 /** Stable key for pinning/skipping a recommendation without new storage. */
 export function nextStepKey(
-  candidate: Pick<NextStepTaskRecommendation | NextStepHabitRecommendation, "kind"> & {
+  candidate: Pick<NextStepAction, "kind"> & {
     taskId?: string;
     habitId?: number;
+    milestoneId?: string;
   },
 ): string {
-  return candidate.kind === "task" ? `task:${candidate.taskId}` : `habit:${candidate.habitId}`;
+  if (candidate.kind === "task") return `task:${candidate.taskId}`;
+  if (candidate.kind === "habit") return `habit:${candidate.habitId}`;
+  return `milestone:${candidate.milestoneId}`;
+}
+
+/**
+ * Selects Today's one next action using only explicit, existing eligibility
+ * and ordering signals. Tiers are mandatory habits → overdue tasks → due
+ * today tasks → active project/milestone work → eligible standalone tasks.
+ * Configured task priority breaks ties only between tasks in the same tier;
+ * otherwise original collection order is retained for deterministic ties.
+ */
+export function listTodayNextActions(
+  input: NextStepInput,
+): NextStepAction[] {
+  const skippedTaskIds = toSkippedTaskSet(input.skippedTaskIds);
+  const skippedHabitIds = toSkippedHabitSet(input.skippedHabitIds);
+  const projects = input.projects ?? [];
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const milestonesById = new Map(input.milestones.map((milestone) => [milestone.id, milestone]));
+  const lookup: ParentLookup = { projectsById, milestonesById };
+  const ranked: Array<{ candidate: RankedCandidate | { type: "milestone"; milestone: Milestone; categoryRank: number }; order: number }> = [];
+
+  input.habits.forEach((habit, index) => {
+    const completedDates = Array.isArray(habit.completedDates) ? habit.completedDates : [];
+    if (
+      habit.priority !== "Mandatory" ||
+      habit.isArchived ||
+      !isHabitParentEligible(habit, lookup) ||
+      !isHabitScheduledOnDate(habit, input.todayKey) ||
+      completedDates.includes(input.todayKey) ||
+      skippedHabitIds.has(habit.id)
+    ) return;
+
+    ranked.push({ candidate: { type: "habit", habit, categoryRank: 0 }, order: index });
+  });
+
+  input.tasks.forEach((task, index) => {
+    if (
+      task.completed ||
+      task.isBacklog ||
+      skippedTaskIds.has(task.id) ||
+      !isTaskParentEligible(task, lookup)
+    ) return;
+
+    const dueDate = getValidTaskDueDate(task);
+    let categoryRank: number;
+    if (dueDate !== undefined && isTaskOverdue(task, input.todayKey)) categoryRank = 1;
+    else if (dueDate === input.todayKey) categoryRank = 2;
+    else if (taskContextKind(task, lookup) !== "none") categoryRank = 3;
+    else if (task.dueDate === undefined) categoryRank = 4;
+    else return;
+
+    ranked.push({ candidate: {
+      type: "task",
+      task,
+      categoryRank,
+      contextKind: taskContextKind(task, lookup),
+    }, order: input.habits.length + index });
+  });
+
+  input.milestones.forEach((milestone, index) => {
+    if (milestone.completed) return;
+    if (milestone.projectId === undefined) return;
+    const project = projectsById.get(milestone.projectId);
+    if (!project || project.status !== "active") return;
+    ranked.push({
+      candidate: { type: "milestone", milestone, categoryRank: 3 },
+      order: input.habits.length + input.tasks.length + index,
+    });
+  });
+
+  ranked.sort((a, b) => {
+    const tierDifference = a.candidate.categoryRank - b.candidate.categoryRank;
+    if (tierDifference !== 0) return tierDifference;
+    if (a.candidate.type === "task" && b.candidate.type === "task") {
+      const priorityDifference =
+        TASK_PRIORITY_RANK[a.candidate.task.priority] -
+        TASK_PRIORITY_RANK[b.candidate.task.priority];
+      if (priorityDifference !== 0) return priorityDifference;
+    }
+    return a.order - b.order;
+  });
+
+  return ranked.map(({ candidate }) => {
+    if (candidate.type === "milestone") {
+      return {
+        kind: "milestone",
+        milestoneId: candidate.milestone.id,
+        projectId: candidate.milestone.projectId,
+        title: candidate.milestone.title,
+        reason: "Active Project Milestone",
+      };
+    }
+
+    const recommendation = toRecommendation(candidate, input.todayKey);
+    if (candidate.type === "task" && recommendation.kind === "task") {
+      recommendation.reason = candidate.categoryRank === 3
+        ? candidate.contextKind === "milestone" ? "Active Milestone Task" : "Active Project Task"
+        : candidate.categoryRank === 4 ? "Available Task" : recommendation.reason.split(" · ")[0];
+    }
+    return recommendation;
+  });
+}
+
+export function selectTodayNextAction(input: NextStepInput): NextStepRecommendation {
+  const winner = listTodayNextActions(input)[0];
+  if (winner) return winner;
+
+  const anythingSnoozed =
+    toSkippedTaskSet(input.skippedTaskIds).size > 0 ||
+    toSkippedHabitSet(input.skippedHabitIds).size > 0;
+  return {
+    kind: "none",
+    title: "Nothing Needs Attention Right Now.",
+    reason: anythingSnoozed
+      ? "Snoozed items will reappear after their return time."
+      : "Eligible mandatory habits and tasks will appear here when they are due.",
+  };
 }
 
 function rankCandidates(input: NextStepInput): {
@@ -400,7 +507,7 @@ function rankCandidates(input: NextStepInput): {
     !task.completed &&
     isTaskParentEligible(task, lookup) &&
     !skippedTaskIds.has(task.id) &&
-    ((validDueDate(task) !== undefined && isTaskDueTodayOrOverdue(task, input.todayKey)) ||
+    ((getValidTaskDueDate(task) !== undefined && isTaskDueTodayOrOverdue(task, input.todayKey)) ||
       validScheduledMinutes(task.scheduledTime) !== null ||
       task.milestoneId !== undefined ||
       task.dueDate === undefined)
@@ -488,7 +595,7 @@ export function recommendNextStep(input: NextStepInput): NextStepRecommendation 
     const anythingSkipped = skippedTaskIds.size > 0 || skippedHabitIds.size > 0;
     return {
       kind: "none",
-      title: "No next step — everything for today is done",
+      title: "No Next Step — Everything for Today Is Done",
       reason: anythingSkipped
         ? "No remaining incomplete habits or tasks after hiding skipped items."
         : "No incomplete habits or tasks are available right now.",

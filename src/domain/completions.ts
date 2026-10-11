@@ -73,3 +73,14 @@ export function markHabitIncomplete<T extends Habit>(habit: T, dateKey: string):
   }
   return result;
 }
+
+export function setHabitCompletion<T extends Habit>(
+  habit: T,
+  dateKey: string,
+  completed: boolean,
+  now = Date.now(),
+): T {
+  return completed
+    ? markHabitComplete(habit, dateKey, now)
+    : markHabitIncomplete(habit, dateKey);
+}

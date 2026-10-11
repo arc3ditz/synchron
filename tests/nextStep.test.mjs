@@ -49,7 +49,7 @@ test("fresh overdue task outranks a task due today", () => {
   }));
   assert.equal(rec.kind, "task");
   assert.equal(rec.taskId, "overdue");
-  assert.match(rec.reason, /Overdue since 2026-10-08/);
+  assert.match(rec.reason, /Overdue Since 2026-10-08/);
 });
 
 test("task due today outranks a mandatory habit", () => {
@@ -229,7 +229,7 @@ test("date boundaries: today is due (not overdue); yesterday is overdue; schedul
     tasks: [makeTask({ id: "t", title: "T", dueDate: TODAY, priority: "medium" })],
   }));
   assert.equal(dueToday.overdue, false);
-  assert.match(dueToday.reason, /Due today/);
+  assert.match(dueToday.reason, /Due Today/);
 
   const overdue = recommendNextStep(input({
     tasks: [makeTask({ id: "t", title: "T", dueDate: "2026-10-08", priority: "medium" })],
