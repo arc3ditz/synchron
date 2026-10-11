@@ -438,7 +438,7 @@ export default function Tasks({
   const isFiltering = statusFilter !== "all" || priorityFilter !== "all" || projectFilter !== "" || query.trim() !== "";
 
   return (
-    <section aria-labelledby="tasks-title">
+    <section className="tasks-page" aria-labelledby="tasks-title">
       <header className="page-head">
         <h1 id="tasks-title">Tasks</h1>
         <p>{openCount} open · {completedCount} completed · Small steps count.</p>

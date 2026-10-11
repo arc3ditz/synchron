@@ -528,8 +528,8 @@ function Today({
   briefingParts.push(`${habitsLeft} ${habitsLeft === 1 ? "habit" : "habits"} left`);
   if (todayFocusTime > 0) briefingParts.push(`${todayFocusTime}m focused`);
 
-  // viewMode tunes the habits presentation: grid shows two-up compact rows
-  // inside the main column, list shows single-column rows. Both stay grouped.
+  // Grid mode lets the available habit-section width determine its columns;
+  // list mode keeps the grouped single-column row presentation.
   const habitsGrid = viewMode === "grid" && todayHabits.length > 1;
 
   function renderWelcomeBack() {
@@ -657,7 +657,8 @@ function Today({
                 aria-label="Choose another task or habit"
                 value={currentKey}
                 onChange={(event) => chooseNextStep(event.target.value)}
-                style={{ ...FORM_CONTROL, height: 32, minHeight: 32, padding: "4px 10px", fontSize: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", background: "var(--bg-inset)", color: "var(--text-body)", maxWidth: 240 }}
+                className="form-control"
+                style={{ ...FORM_CONTROL, height: 32, minHeight: 32, padding: "4px 10px", fontSize: 12, borderRadius: "var(--radius-md)", maxWidth: 240 }}
               >
                 {nextStepOptions.slice(0, 8).map((option) => (
                   <option key={nextStepKey(option)} value={nextStepKey(option)}>
@@ -959,8 +960,7 @@ function Today({
 
   if (todayHabits.length === 0 && todayTasks.length === 0) {
     return (
-      <div>
-        <style>{`.today-atelier-grid{display:grid;gap:var(--space-5);grid-template-columns:minmax(0,1fr)}@media(min-width:960px){.today-atelier-grid{grid-template-columns:minmax(0,1fr) 320px}}`}</style>
+      <div className="today-page">
         <header className="page-head">
           <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.14em", margin: "0 0 8px" }}>
             {formatFullDate(today)}
@@ -979,7 +979,7 @@ function Today({
             </p>
             <form
               onSubmit={handleQuickTaskSubmit}
-              style={{ display: "flex", gap: 8, width: "100%", maxWidth: 420, margin: "0 auto 16px" }}
+              style={{ display: "flex", gap: 8, width: "100%", margin: "0 auto 16px" }}
             >
               <input
                 ref={quickTaskInputRef}
@@ -1052,9 +1052,7 @@ function Today({
   const ringCircumference = 2 * Math.PI * ringRadius;
 
   return (
-    <div>
-      <style>{`.today-atelier-grid{display:grid;gap:var(--space-5);grid-template-columns:minmax(0,1fr)}@media(min-width:960px){.today-atelier-grid{grid-template-columns:minmax(0,1fr) 320px}}.today-habits-grid{display:grid;gap:0;grid-template-columns:minmax(0,1fr)}@media(min-width:640px){.today-habits-grid.is-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.today-habits-grid.is-grid .row-item{border-top:1px solid var(--border-color)}}`}</style>
-
+    <div className="today-page">
       <header className="page-head">
         <p style={{ fontSize: "var(--type-xs)", fontWeight: "var(--font-semibold)", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.14em", margin: "0 0 8px" }}>
           {formatFullDate(today)}
@@ -1133,29 +1131,30 @@ function Today({
                         </h3>
                         <HabitMetadata habit={habit} streak={streak} />
                       </div>
-                      {!isCompleted && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            className="today-focus-button"
-                            onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
-                            aria-label={`Start Focus on ${habit.name}`}
-                            title="Start Focus"
-                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
-                          >
-                            <Play size={14} aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openScheduleModal("habit", habit.id)}
-                            aria-label={`${habit.scheduledTime ? "Reschedule" : "Schedule"} habit ${habit.name}`}
-                            title={habit.scheduledTime ? "Reschedule" : "Schedule time"}
-                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
-                          >
-                            <MoreVertical size={14} aria-hidden="true" />
-                          </button>
-                        </div>
-                      )}
+                      <div
+                        className={`today-habit-actions${isCompleted ? " is-hidden" : ""}`}
+                        aria-hidden={isCompleted}
+                      >
+                        <button
+                          type="button"
+                          className="today-focus-button"
+                          onClick={() => onStartFocus({ habitId: habit.id, title: habit.name })}
+                          aria-label={`Start Focus on ${habit.name}`}
+                          title="Start Focus"
+                          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
+                        >
+                          <Play size={14} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openScheduleModal("habit", habit.id)}
+                          aria-label={`${habit.scheduledTime ? "Reschedule" : "Schedule"} habit ${habit.name}`}
+                          title={habit.scheduledTime ? "Reschedule" : "Schedule time"}
+                          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, padding: 0, background: "transparent", border: "1px solid transparent", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", cursor: "pointer" }}
+                        >
+                          <MoreVertical size={14} aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

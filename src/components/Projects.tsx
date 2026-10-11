@@ -721,7 +721,7 @@ export default function Projects({
     const progress = calculateProjectProgress(project, milestones, tasks);
 
     return (
-      <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
+      <div className="project-detail" style={{ display: "grid", gap: 16, minWidth: 0 }}>
         <div className="atelier-group" style={{ padding: 16, display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <h2 id="project-detail-title" className="truncate-1" style={{ margin: 0, fontSize: "var(--type-lg)", fontWeight: 700, color: "var(--text-primary)" }}>{project.name}</h2>
@@ -829,8 +829,10 @@ export default function Projects({
           </div>
         </div>
 
-        {renderMilestonesSection(project)}
-        {renderTasksSection(project)}
+        <div className="project-detail-sections">
+          {renderMilestonesSection(project)}
+          {renderTasksSection(project)}
+        </div>
       </div>
     );
   }
@@ -876,8 +878,7 @@ export default function Projects({
 
   return (
     <>
-      <style>{`.projects-pane{display:grid;gap:16px;align-items:start}@media (min-width:900px){.projects-pane{grid-template-columns:280px minmax(0,1fr)}}`}</style>
-      <section aria-labelledby="projects-title">
+      <section className="projects-page" aria-labelledby="projects-title">
         <header className="page-head" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div>
             <h1 id="projects-title">Projects</h1>

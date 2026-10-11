@@ -10,7 +10,14 @@ import { FORM_CONTROL } from "../theme";
 import type { Mode, Session, FocusTimerHabit, Milestone, Project, Task, Habit } from "../types";
 import { registerFocusTimerRunningState } from "../domain/notificationLogic";
 import { filterTasksForFocusSelection } from "../domain/tasks";
-import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
+import {
+  clampFocusDurationMinutes,
+  fitCountdownFontSize,
+  formatCountdownClock,
+  getFocusSessionsForLogicalToday,
+  isValidFocusDurationMinutes,
+  MAX_FOCUS_DURATION_MINUTES,
+} from "../domain/focusTimer";
 import { playSfx, primeAudioContext as primeSfxContext } from "../utils/sfx";
 
 type FocusTimerProps = {
@@ -37,9 +44,14 @@ type FocusTimerProps = {
 };
 
 const DEFAULT_BREAK_MINUTES = 5;
-const MAX_DURATION_MINUTES = 999;
+const MAX_DURATION_MINUTES = MAX_FOCUS_DURATION_MINUTES;
 const RADIUS = 80;
+const STROKE_WIDTH = 5;
+const VIEW_BOX_SIZE = 200;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// Breathing room (CSS px) kept between the countdown glyphs and the ring's
+// inner stroke edge on top of COUNTDOWN_FIT_RATIO.
+const RING_TEXT_PADDING_PX = 10;
 const DURATION_PRESETS = [15, 25, 45, 60];
 const QUICK_ADJUST_PRESETS = [1, 2, 5, 10];
 const TIMER_NOTIFICATION_TITLE = "Timer Finished";
@@ -69,7 +81,6 @@ async function notifyTimerFinished() {
 const styles: Record<string, CSSProperties> = {
   stage: {
     width: "100%",
-    maxWidth: 720,
     margin: "0 auto",
     display: "flex",
     flexDirection: "column",
@@ -100,7 +111,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     fontSize: "var(--type-sm)",
     lineHeight: 1.55,
-    maxWidth: "52ch",
+    maxWidth: "65ch",
   },
   segment: {
     display: "inline-flex",
@@ -135,7 +146,9 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
   },
   digits: {
-    fontSize: "clamp(4rem, 12vw, 7rem)",
+    // Seed size before the measured fit lands; fitCountdownToRing replaces
+    // it (via countdownFontSize) with the largest size that fits the ring.
+    fontSize: "clamp(3rem, 10vw, 5.5rem)",
   },
   phaseLine: {
     margin: 0,
@@ -167,7 +180,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "var(--type-sm)",
     color: "var(--text-secondary)",
     lineHeight: 1.55,
-    maxWidth: "56ch",
+    maxWidth: "65ch",
   },
   contextStrong: {
     color: "var(--text-primary)",
@@ -335,24 +348,6 @@ function getSessionTotalMs(
   return timerMinutes * 60000;
 }
 
-function formatTime(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function clampMinutes(value: string, fallback: number): number {
-  const parsed = Number(value);
-  if (!value.trim() || !Number.isFinite(parsed)) return fallback;
-  return Math.max(1, Math.min(MAX_DURATION_MINUTES, Math.round(parsed)));
-}
-
-function isValidMinuteInput(value: string): boolean {
-  const parsed = Number(value);
-  return value.trim() !== "" && Number.isInteger(parsed) && parsed >= 1 && parsed <= MAX_DURATION_MINUTES;
-}
-
 function FocusTimer({
   habits,
   focusSessions,
@@ -444,6 +439,11 @@ function FocusTimer({
   const updatePomodoroRef = useRef<(now: number) => void>(() => {});
   const quickAdjustStepInputFocusedRef = useRef(false);
   const primaryControlRef = useRef<HTMLButtonElement>(null);
+  const ringStageRef = useRef<HTMLDivElement>(null);
+  const digitsRef = useRef<HTMLSpanElement>(null);
+  // Measured font size that keeps the countdown inside the ring; null until
+  // the first fit, so the seed clamp in styles.digits shows before that.
+  const [countdownFontSize, setCountdownFontSize] = useState<number | null>(null);
 
   useEffect(() => {
     const getIsRunning = () => timerRunningRef.current || pomodoroRunningRef.current;
@@ -821,7 +821,7 @@ function FocusTimer({
   }
 
   const handleTimerDurationChange = useCallback((value: string) => {
-    const parsed = clampMinutes(value, defaultFocusDuration);
+    const parsed = clampFocusDurationMinutes(value, defaultFocusDuration);
     timerMinutesRef.current = parsed;
     setTimerMinutes(parsed);
     if (!timerRunningRef.current) {
@@ -844,7 +844,7 @@ function FocusTimer({
       };
     }
 
-    const durationMinutes = Math.max(1, Math.min(MAX_DURATION_MINUTES, autoStartAction.durationMinutes ?? defaultFocusDuration));
+    const durationMinutes = clampFocusDurationMinutes(autoStartAction.durationMinutes ?? defaultFocusDuration, defaultFocusDuration);
     const frameId = window.requestAnimationFrame(() => {
       handleTimerDurationChange(String(durationMinutes));
       handleStart();
@@ -857,7 +857,7 @@ function FocusTimer({
   }, [autoStartAction, defaultFocusDuration, handleStart, handleTimerDurationChange, mode, onAutoStartHandled]);
 
   function handleFocusDurationChange(value: string) {
-    const parsed = clampMinutes(value, defaultFocusDuration);
+    const parsed = clampFocusDurationMinutes(value, defaultFocusDuration);
     focusMinutesRef.current = parsed;
     setFocusMinutes(parsed);
     if (!pomodoroRunningRef.current && pomodoroSessionRef.current === "Focus") {
@@ -867,7 +867,7 @@ function FocusTimer({
   }
 
   function handleBreakDurationChange(value: string) {
-    const parsed = clampMinutes(value, DEFAULT_BREAK_MINUTES);
+    const parsed = clampFocusDurationMinutes(value, DEFAULT_BREAK_MINUTES);
     breakMinutesRef.current = parsed;
     setBreakMinutes(parsed);
     if (!pomodoroRunningRef.current && pomodoroSessionRef.current === "Break") {
@@ -935,6 +935,67 @@ function FocusTimer({
   const initialDurationMs = mode === "Timer" ? timerTotalMs : pomodoroTotalMs;
   const fraction = initialDurationMs > 0 ? Math.min(1, Math.max(0, remainingMs / initialDurationMs)) : 0;
   const dashOffset = CIRCUMFERENCE * (1 - fraction);
+  const countdownText = formatCountdownClock(remainingMs);
+
+  // Scale the countdown from the ring's real geometry and the rendered text
+  // instead of a fixed clamp: measure the digits at whatever size they
+  // currently render, then apply the font size whose text box fits the ring's
+  // inner circle (fitCountdownFontSize solves this in one step because glyph
+  // metrics scale linearly with font size). The dead band skips writes when a
+  // per-second re-measure lands on the same size, so ticking stays smooth.
+  const fitCountdownToRing = useCallback(() => {
+    const stage = ringStageRef.current;
+    const digits = digitsRef.current;
+    if (!stage || !digits) return;
+
+    const stageSize = stage.clientWidth;
+    if (stageSize <= 0) return;
+
+    // Ring inner edge at RADIUS - STROKE_WIDTH/2 in viewBox units, converted
+    // to CSS px, then pulled in by RING_TEXT_PADDING_PX of breathing room.
+    const innerRadiusPx =
+      ((RADIUS - STROKE_WIDTH / 2) * stageSize) / VIEW_BOX_SIZE - RING_TEXT_PADDING_PX;
+    if (innerRadiusPx <= 0) return;
+
+    const rect = digits.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const currentFontSize = Number.parseFloat(window.getComputedStyle(digits).fontSize);
+    if (!Number.isFinite(currentFontSize) || currentFontSize <= 0) return;
+
+    const fittedFontSize = fitCountdownFontSize({
+      textWidth: rect.width,
+      textHeight: rect.height,
+      fontSize: currentFontSize,
+      innerDiameter: innerRadiusPx * 2,
+    });
+
+    setCountdownFontSize((previous) =>
+      previous === null || Math.abs(previous - fittedFontSize) > 0.5
+        ? fittedFontSize
+        : previous,
+    );
+  }, []);
+
+  // Re-fit before paint whenever the countdown text (digit count) changes…
+  useLayoutEffect(() => {
+    fitCountdownToRing();
+  }, [countdownText, fitCountdownToRing]);
+
+  // …and whenever the ring itself is resized (window resize, layout shifts).
+  useLayoutEffect(() => {
+    const stage = ringStageRef.current;
+    if (!stage) return;
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", fitCountdownToRing);
+      return () => window.removeEventListener("resize", fitCountdownToRing);
+    }
+
+    const observer = new ResizeObserver(() => fitCountdownToRing());
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [fitCountdownToRing]);
 
   // Determine button text: "Start" for fresh/completed state, "Resume" for paused state
   const isPaused = !isRunning && remainingMs > 0 && remainingMs < initialDurationMs;
@@ -1003,33 +1064,40 @@ function FocusTimer({
         </button>
       </div>
 
-      <div style={styles.ringStage} role="timer" aria-label={`${formatTime(remainingMs)} remaining`} aria-live="off">
-        <svg width="100%" height="100%" viewBox="0 0 200 200" aria-hidden="true">
+      <div ref={ringStageRef} style={styles.ringStage} role="timer" aria-label={`${countdownText} remaining`} aria-live="off">
+        <svg width="100%" height="100%" viewBox={`0 0 ${VIEW_BOX_SIZE} ${VIEW_BOX_SIZE}`} aria-hidden="true">
           <circle
-            cx={100}
-            cy={100}
+            cx={VIEW_BOX_SIZE / 2}
+            cy={VIEW_BOX_SIZE / 2}
             r={RADIUS}
             fill="none"
             stroke="var(--bg-inset)"
-            strokeWidth={5}
+            strokeWidth={STROKE_WIDTH}
           />
           <circle
-            cx={100}
-            cy={100}
+            cx={VIEW_BOX_SIZE / 2}
+            cy={VIEW_BOX_SIZE / 2}
             r={RADIUS}
             fill="none"
             stroke="var(--color-accent)"
-            strokeWidth={5}
+            strokeWidth={STROKE_WIDTH}
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={dashOffset}
-            transform="rotate(-90 100 100)"
+            transform={`rotate(-90 ${VIEW_BOX_SIZE / 2} ${VIEW_BOX_SIZE / 2})`}
             style={{ transition: "stroke-dashoffset 0.25s linear" }}
           />
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span className="focus-timer-digits" style={styles.digits}>
-            {formatTime(remainingMs)}
+          <span
+            ref={digitsRef}
+            className="focus-timer-digits"
+            style={{
+              ...styles.digits,
+              ...(countdownFontSize !== null ? { fontSize: countdownFontSize } : {}),
+            }}
+          >
+            {countdownText}
           </span>
         </div>
       </div>
@@ -1259,10 +1327,10 @@ function FocusTimer({
               onChange={(event) => {
                 const value = event.target.value;
                 setTimerDurationDraft(value);
-                if (isValidMinuteInput(value)) handleTimerDurationChange(value);
+                if (isValidFocusDurationMinutes(value)) handleTimerDurationChange(value);
               }}
               onBlur={() => {
-                const value = clampMinutes(timerDurationDraft ?? String(timerMinutes), timerMinutes);
+                const value = clampFocusDurationMinutes(timerDurationDraft ?? String(timerMinutes), timerMinutes);
                 handleTimerDurationChange(String(value));
                 setTimerDurationDraft(null);
               }}
@@ -1290,10 +1358,10 @@ function FocusTimer({
                 onChange={(event) => {
                   const value = event.target.value;
                   setFocusDurationDraft(value);
-                  if (isValidMinuteInput(value)) handleFocusDurationChange(value);
+                  if (isValidFocusDurationMinutes(value)) handleFocusDurationChange(value);
                 }}
                 onBlur={() => {
-                  const value = clampMinutes(focusDurationDraft ?? String(focusMinutes), focusMinutes);
+                  const value = clampFocusDurationMinutes(focusDurationDraft ?? String(focusMinutes), focusMinutes);
                   handleFocusDurationChange(String(value));
                   setFocusDurationDraft(null);
                 }}
@@ -1319,10 +1387,10 @@ function FocusTimer({
                 onChange={(event) => {
                   const value = event.target.value;
                   setBreakDurationDraft(value);
-                  if (isValidMinuteInput(value)) handleBreakDurationChange(value);
+                  if (isValidFocusDurationMinutes(value)) handleBreakDurationChange(value);
                 }}
                 onBlur={() => {
-                  const value = clampMinutes(breakDurationDraft ?? String(breakMinutes), breakMinutes);
+                  const value = clampFocusDurationMinutes(breakDurationDraft ?? String(breakMinutes), breakMinutes);
                   handleBreakDurationChange(String(value));
                   setBreakDurationDraft(null);
                 }}

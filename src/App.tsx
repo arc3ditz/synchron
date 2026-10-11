@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import {
   ListChecks,
   ListTodo,
@@ -19,9 +19,8 @@ import {
   CalendarDays,
   Keyboard,
   Filter,
+  Search,
   Bell,
-  Grid2X2,
-  List,
   RotateCcw,
   Volume2,
   Info,
@@ -88,7 +87,7 @@ import {
   disassociateProjectFocusSessions,
 } from "./domain/projects";
 import { createTask, completeTask, toggleTaskCompletion, updateTask, deleteTask } from "./domain/tasks";
-import { buildFocusSessionRecord, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
+import { buildFocusSessionRecord, MAX_FOCUS_DURATION_MINUTES, QUICK_FOCUS_MINUTES } from "./domain/focusTimer";
 import {
   alignHabit,
   alignMilestone,
@@ -155,7 +154,6 @@ type ShortcutContext = {
   openShortcuts: () => void;
   openPalette: () => void;
   shortcutsBlocked: boolean;
-  setHabitViewMode: (viewMode: "grid" | "list") => void;
   focusNewHabit: () => void;
   editFocusedHabit: () => boolean;
   saveActiveEdit: () => void;
@@ -185,17 +183,6 @@ const typeBadgeBase: CSSProperties = {
 };
 
 const styles: Record<string, CSSProperties> = {
-  h1: {
-    fontSize: "var(--type-xl)",
-    fontWeight: "var(--font-semibold)",
-    color: "var(--text-primary)",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: "var(--type-sm)",
-    color: "var(--text-secondary)",
-    marginBottom: 20,
-  },
   summary: {
     display: "flex",
     flexDirection: "column",
@@ -259,7 +246,6 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 8,
     marginBottom: 8,
-    maxWidth: 640,
   },
   optionsRow: {
     display: "flex",
@@ -325,18 +311,6 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-body)",
     fontSize: 14,
     cursor: "pointer",
-  },
-  tableHeaderColors: {
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    borderBottom: "1px solid var(--border-color)",
-    marginBottom: 8,
-  },
-  headerActionsCell: {
-    textAlign: "center",
   },
   list: {
     listStyle: "none",
@@ -695,36 +669,7 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--text-secondary)",
     cursor: "pointer",
   },
-  categoryManager: {
-    position: "absolute",
-    top: "calc(100% + 8px)",
-    left: "50%",
-    transform: "translateX(-50%)",
-    zIndex: 50,
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    width: "100%",
-    maxWidth: 420,
-    padding: 14,
-    background: "var(--bg-surface)",
-    border: "1px solid var(--border-color)",
-    borderRadius: 10,
-    boxShadow: "var(--shadow-popover)",
-  },
-  categoryManagerRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  categoryManagerName: {
-    flex: 1,
-    minWidth: 0,
-    color: "var(--text-primary)",
-    fontSize: 13,
-  },
   settingsPage: {
-    maxWidth: 840,
     width: "100%",
   },
   settingsSection: {
@@ -799,9 +744,6 @@ const styles: Record<string, CSSProperties> = {
     background: "var(--bg-inset)",
     border: "1px solid var(--border-color)",
     borderRadius: "var(--radius-md)",
-  },
-  settingsViewSegment: {
-    alignItems: "center",
   },
   settingsAboutRow: {
     display: "flex",
@@ -930,7 +872,13 @@ function loadAppSettings(): AppSettings {
       ? parsed.dayResetHour!
       : DEFAULT_SETTINGS.dayResetHour,
     weekStart: parsed.weekStart === "Monday" ? "Monday" : "Sunday",
-    defaultFocusDuration: FOCUS_DURATION_PRESETS.includes(parsed.defaultFocusDuration ?? -1)
+    // Accept any persisted duration the timer itself allows (1..999) so a
+    // valid stored value survives a reload untouched; anything out of range
+    // (hand-edited or stale storage) is rejected back to the default instead
+    // of silently becoming a different duration.
+    defaultFocusDuration: Number.isInteger(parsed.defaultFocusDuration)
+      && parsed.defaultFocusDuration! >= 1
+      && parsed.defaultFocusDuration! <= MAX_FOCUS_DURATION_MINUTES
       ? parsed.defaultFocusDuration!
       : DEFAULT_SETTINGS.defaultFocusDuration,
     quickAdjustStepMinutes: Number.isInteger(parsed.quickAdjustStepMinutes)
@@ -973,7 +921,7 @@ function loadAppSettings(): AppSettings {
     theme: parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
       ? parsed.theme
       : "system",
-    viewMode: parsed.viewMode === "list" ? "list" : "grid",
+    viewMode: "grid",
     onboardingCompleted: typeof parsed.onboardingCompleted === "boolean"
       ? parsed.onboardingCompleted
       : DEFAULT_SETTINGS.onboardingCompleted,
@@ -1145,6 +1093,8 @@ function App() {
   }, []);
   const [editingCustomCategory, setEditingCustomCategory] = useState<string | null>(null);
   const [customCategoryDraft, setCustomCategoryDraft] = useState("");
+  const [newCustomCategory, setNewCustomCategory] = useState("");
+  const [categoryManagerMessage, setCategoryManagerMessage] = useState<string | null>(null);
   const [categoryPendingDeletion, setCategoryPendingDeletion] = useState<string | null>(null);
   const [habitPendingDeletion, setHabitPendingDeletion] = useState<Habit | null>(null);
   const [focusSessionPendingDeletion, setFocusSessionPendingDeletion] = useState<FocusSessionRecord | null>(null);
@@ -1548,7 +1498,6 @@ function App() {
       shortcutsBlocked: showKeyboardShortcuts || paletteOpen ||
         focusSessionPendingDeletion !== null || habitPendingDeletion !== null ||
         categoryPendingDeletion !== null,
-      setHabitViewMode: changeHabitViewMode,
       focusNewHabit: () => {
         setHabitsPopover(null);
         newHabitInputRef.current?.focus();
@@ -1666,10 +1615,7 @@ function App() {
       if (isTyping) return;
 
       const key = event.key.toLowerCase();
-      if ((context.view === "Habits" || context.view === "Today") && (key === "g" || key === "l")) {
-        event.preventDefault();
-        context.setHabitViewMode(key === "g" ? "grid" : "list");
-      } else if (context.view === "Habits" && key === "n") {
+      if (context.view === "Habits" && key === "n") {
         event.preventDefault();
         context.focusNewHabit();
       } else if (key === "e") {
@@ -1735,11 +1681,6 @@ function App() {
     focusTimerAfterNavigationRef.current = false;
     focusTimerControl();
   }, [view]);
-
-  function changeHabitViewMode(viewMode: "grid" | "list") {
-    setAppSettings((current) => ({ ...current, viewMode }));
-    setHabitsPopover(null);
-  }
 
   function openKeyboardShortcuts() {
     setShowKeyboardShortcuts(true);
@@ -1849,14 +1790,32 @@ function App() {
     );
   }
 
+  function addCustomCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const category = normalizeCategory(newCustomCategory);
+    if (!category) return;
+    if (categoryOptions.includes(category)) {
+      setCategoryManagerMessage(`"${category}" already exists.`);
+      return;
+    }
+
+    setCustomCategories((previous) =>
+      previous.includes(category) ? previous : [...previous, category].sort(),
+    );
+    setNewCustomCategory("");
+    setCategoryManagerMessage(null);
+  }
+
   function startCategoryRename(category: string) {
     setEditingCustomCategory(category);
     setCustomCategoryDraft(category);
+    setCategoryManagerMessage(null);
   }
 
   function cancelCategoryRename() {
     setEditingCustomCategory(null);
     setCustomCategoryDraft("");
+    setCategoryManagerMessage(null);
   }
 
   function renameCategory(category: string) {
@@ -1866,17 +1825,17 @@ function App() {
       return;
     }
 
-    if (customCategories.some((existing) => existing !== category && existing === nextCategory)) {
+    if (categoryOptions.some((existing) => existing !== category && existing === nextCategory)) {
+      setCategoryManagerMessage(`"${nextCategory}" already exists.`);
       return;
     }
 
     setCustomCategories((previous) =>
       previous.map((existing) => (existing === category ? nextCategory : existing)).sort(),
     );
-    const updatedHabits = habits.map((habit) =>
+    setHabits((current) => current.map((habit) =>
       habit.category === category ? { ...habit, category: nextCategory } : habit,
-    );
-    setHabits(updatedHabits);
+    ));
     setActiveCategory((current) => (current === category ? nextCategory : current));
     cancelCategoryRename();
   }
@@ -1890,13 +1849,13 @@ function App() {
     if (!category) return;
 
     setCustomCategories((previous) => previous.filter((existing) => existing !== category));
-    const updatedHabits = habits.map((habit) =>
+    setHabits((current) => current.map((habit) =>
       habit.category === category ? { ...habit, category: undefined } : habit,
-    );
-    setHabits(updatedHabits);
+    ));
     setActiveCategory((current) => (current === category ? ALL_CATEGORIES : current));
     if (editingCustomCategory === category) cancelCategoryRename();
     setCategoryPendingDeletion(null);
+    setHabitsPopover(null);
   }
 
   function addHabit() {
@@ -2223,10 +2182,10 @@ function App() {
         <li
           key={habit.id}
           data-habit-id={habit.id}
-          className={`habit-row${appSettings.viewMode === "grid" ? " habit-grid-edit-row" : ""}`}
+          className="habit-row habit-grid-edit-row"
           style={{
             ...rowColorStyle,
-            ...(appSettings.viewMode === "grid" ? styles.gridEditRow : {}),
+            ...styles.gridEditRow,
           }}
         >
           <div style={styles.editRow}>
@@ -2832,29 +2791,35 @@ function App() {
 
             <div className="category-section">
               <div className="category-tabs habits-toolbar" role="group" aria-label="Filter Habits by Category">
-                {categoryTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={`category-tab ${currentCategory === tab ? "active" : ""}`}
-                    onClick={() => setActiveCategory(tab)}
-                    aria-pressed={currentCategory === tab}
-                  >
-                    {tab}
-                  </button>
-                ))}
+                <div className="habit-category-tabs" role="group" aria-label="Category">
+                  {categoryTabs.map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      className={`category-tab ${currentCategory === tab ? "active" : ""}`}
+                      onClick={() => setActiveCategory(tab)}
+                      aria-pressed={currentCategory === tab}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
                 <div
-                  className="category-settings"
-                  style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}
+                  className="habit-toolbar-controls"
+                  role="group"
+                  aria-label="Search, filters, and category settings"
                 >
-                  <input
-                    style={{ ...styles.input, width: 150, flex: "0 1 150px" }}
-                    value={habitSearch}
-                    onChange={(event) => setHabitSearch(event.target.value)}
-                    placeholder="Search habits"
-                    aria-label="Search habits"
-                    maxLength={120}
-                  />
+                  <label className="habit-search-control">
+                    <Search size={15} aria-hidden="true" />
+                    <input
+                      className="form-control"
+                      value={habitSearch}
+                      onChange={(event) => setHabitSearch(event.target.value)}
+                      placeholder="Search habits"
+                      aria-label="Search habits"
+                      maxLength={120}
+                    />
+                  </label>
                   <div ref={filterPopoverRef} style={{ position: "relative" }}>
                     <button
                       type="button"
@@ -2876,8 +2841,7 @@ function App() {
                       <div style={{
                       position: "absolute",
                       top: "calc(100% + 8px)",
-                      left: "50%",
-                      transform: "translateX(-50%)",
+                      right: 0,
                       zIndex: 50,
                       display: "flex",
                       flexDirection: "column",
@@ -2956,77 +2920,122 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    style={styles.categoryManageButton}
-                    ref={categoryPopoverTriggerRef}
-                    onClick={() => setHabitsPopover((current) => current === "category" ? null : "category")}
-                    aria-label="Manage Custom Categories"
-                    aria-expanded={habitsPopover === "category"}
-                    title="Manage Custom Categories"
-                  >
-                    <Settings size={16} />
-                  </button>
+                  <div className="category-settings" ref={categoryPopoverRef}>
+                    <button
+                      type="button"
+                      style={styles.categoryManageButton}
+                      ref={categoryPopoverTriggerRef}
+                      onClick={() => setHabitsPopover((current) => current === "category" ? null : "category")}
+                      aria-label="Manage Custom Categories"
+                      aria-expanded={habitsPopover === "category"}
+                      title="Manage Custom Categories"
+                    >
+                      <Settings size={16} />
+                    </button>
+                    {habitsPopover === "category" && (
+                      <div className="category-manager">
+                        <strong style={{ color: "var(--text-primary)", fontSize: 13 }}>
+                          Custom Categories
+                        </strong>
+                        <form
+                          style={{ display: "flex", gap: 8 }}
+                          onSubmit={addCustomCategory}
+                          aria-label="Add a category"
+                        >
+                          <input
+                            className="form-control"
+                            style={{ flex: 1, minWidth: 0 }}
+                            value={newCustomCategory}
+                            onChange={(event) => {
+                              setNewCustomCategory(event.target.value);
+                              setCategoryManagerMessage(null);
+                            }}
+                            placeholder="New category"
+                            aria-label="New category"
+                            maxLength={40}
+                          />
+                          <button type="submit" className="ui-button ui-button--primary ui-button--sm">
+                            Add
+                          </button>
+                        </form>
+                        {categoryManagerMessage && (
+                          <span role="status" style={{ color: "var(--color-danger)", fontSize: 12 }}>
+                            {categoryManagerMessage}
+                          </span>
+                        )}
+                        {customCategories.length === 0 ? (
+                          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                            Categories are saved for reuse with future habits.
+                          </span>
+                        ) : (
+                          customCategories.map((category) => (
+                            <div key={category} className="category-manager-row">
+                              {editingCustomCategory === category ? (
+                                <input
+                                  className="form-control"
+                                  style={{ minWidth: 0 }}
+                                  value={customCategoryDraft}
+                                  onChange={(event) => {
+                                    setCustomCategoryDraft(event.target.value);
+                                    setCategoryManagerMessage(null);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      renameCategory(category);
+                                    }
+                                  }}
+                                  aria-label={`Rename ${category}`}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="category-manager-name">{category}</span>
+                              )}
+                              {editingCustomCategory === category ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="ui-button ui-button--sm"
+                                    onClick={() => renameCategory(category)}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="ui-button ui-button--sm"
+                                    onClick={cancelCategoryRename}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="ui-button ui-button--ghost ui-button--sm"
+                                  onClick={() => startCategoryRename(category)}
+                                  aria-label={`Rename ${category}`}
+                                  title={`Rename ${category}`}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="ui-button ui-button--ghost ui-button--sm"
+                                onClick={() => deleteCategory(category)}
+                                aria-label={`Delete "${category}"`}
+                                title={`Delete "${category}"`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              {habitsPopover === "category" && (
-                <div ref={categoryPopoverRef} style={styles.categoryManager}>
-                  <strong style={{ color: "var(--text-primary)", fontSize: 13 }}>
-                    Custom Categories
-                  </strong>
-                  {customCategories.length === 0 ? (
-                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                      Add a category from the habit form to manage it here.
-                    </span>
-                  ) : (
-                    customCategories.map((category) => (
-                      <div key={category} style={styles.categoryManagerRow}>
-                        {editingCustomCategory === category ? (
-                          <input
-                            style={{ ...styles.input, minWidth: 0 }}
-                            value={customCategoryDraft}
-                            onChange={(event) => setCustomCategoryDraft(event.target.value)}
-                            aria-label={`Rename ${category}`}
-                            autoFocus
-                          />
-                        ) : (
-                          <span style={styles.categoryManagerName}>{category}</span>
-                        )}
-                        {editingCustomCategory === category ? (
-                          <>
-                            <button
-                              style={styles.saveButton}
-                              onClick={() => renameCategory(category)}
-                            >
-                              Save
-                            </button>
-                            <button style={styles.cancelButton} onClick={cancelCategoryRename}>
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            style={styles.iconButton}
-                            onClick={() => startCategoryRename(category)}
-                            aria-label={`Rename ${category}`}
-                            title={`Rename ${category}`}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                        )}
-                        <button
-                          style={styles.iconButton}
-                          onClick={() => deleteCategory(category)}
-                          aria-label={`Delete "${category}"`}
-                          title={`Delete "${category}"`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Primary creation path: Name + Frequency only. Everything else
@@ -3148,39 +3157,18 @@ function App() {
             ) : (
               <div>
                 {activeHabits.length > 0 && (
-                  <>
-                    {appSettings.viewMode === "list" && (
-                      <div className="habit-table-header" style={styles.tableHeaderColors}>
-                        <span>Habit Name</span>
-                        <span>Priority</span>
-                        <span className="habit-type-cell">Type / Progress</span>
-                        <span className="habit-streak-header">Streak</span>
-                        <span style={styles.headerActionsCell}>Actions</span>
-                      </div>
-                    )}
-
-                    <ul style={{ ...styles.list, ...(appSettings.viewMode === "grid" ? styles.habitGridList : {}) }}>
-                      {activeHabits.map((habit) => appSettings.viewMode === "grid" && editingId !== habit.id
-                        ? renderHabitGridCard(habit)
-                        : renderHabitRow(habit, false, false))}
-                    </ul>
-                  </>
+                  <ul style={{ ...styles.list, ...styles.habitGridList }}>
+                    {activeHabits.map((habit) => editingId !== habit.id
+                      ? renderHabitGridCard(habit)
+                      : renderHabitRow(habit, false, false))}
+                  </ul>
                 )}
 
                 {offDayHabits.length > 0 && (
                   <div style={{ marginTop: activeHabits.length > 0 ? 32 : 0 }}>
                     <h2 style={styles.sectionHeader}>Not Scheduled Today</h2>
-                    {appSettings.viewMode === "list" && (
-                      <div className="habit-table-header" style={styles.tableHeaderColors}>
-                        <span>Habit Name</span>
-                        <span>Priority</span>
-                        <span className="habit-type-cell">Type / Progress</span>
-                        <span className="habit-streak-header">Streak</span>
-                        <span style={styles.headerActionsCell}>Actions</span>
-                      </div>
-                    )}
-                    <ul style={{ ...styles.list, ...(appSettings.viewMode === "grid" ? styles.habitGridList : {}) }}>
-                      {offDayHabits.map((habit) => appSettings.viewMode === "grid" && editingId !== habit.id
+                    <ul style={{ ...styles.list, ...styles.habitGridList }}>
+                      {offDayHabits.map((habit) => editingId !== habit.id
                         ? renderHabitGridCard(habit, false, false)
                         : renderHabitRow(habit, false, false, false))}
                     </ul>
@@ -3209,18 +3197,8 @@ function App() {
 
                 {showArchived && (
                   <div>
-                    {appSettings.viewMode === "list" && (
-                      <div className="habit-table-header" style={styles.tableHeaderColors}>
-                        <span>Habit Name</span>
-                        <span>Priority</span>
-                        <span className="habit-type-cell">Type / Progress</span>
-                        <span className="habit-streak-header">Streak</span>
-                        <span style={styles.headerActionsCell}>Actions</span>
-                      </div>
-                    )}
-
-                    <ul style={{ ...styles.list, ...(appSettings.viewMode === "grid" ? styles.habitGridList : {}) }}>
-                      {archivedHabits.map((habit) => appSettings.viewMode === "grid" && editingId !== habit.id
+                    <ul style={{ ...styles.list, ...styles.habitGridList }}>
+                      {archivedHabits.map((habit) => editingId !== habit.id
                         ? renderHabitGridCard(habit, true)
                         : renderHabitRow(habit, false, true))}
                     </ul>
@@ -3391,8 +3369,11 @@ function App() {
             }}
           >
             <div style={styles.settingsPage}>
-              <h1 style={styles.h1}>Settings</h1>
-              <p style={styles.subtitle}>Customize your Synchron experience.</p>
+              <div className="page-head">
+                <p className="atelier-eyebrow">Preferences</p>
+                <h1>Settings</h1>
+                <p>Customize your Synchron experience.</p>
+              </div>
 
               {/* General Section */}
               <section style={styles.settingsSection} aria-labelledby="general-section-title">
@@ -3416,32 +3397,6 @@ function App() {
                           aria-pressed={appSettings.theme === theme}
                         >
                           {theme === "system" ? "System" : theme === "dark" ? "Dark" : "Light"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={styles.settingsRow}>
-                    <div>
-                      <span style={styles.settingsLabel}>Default View Mode</span>
-                      <span style={styles.settingsDescription}>Choose how habits are displayed by default.</span>
-                    </div>
-                    <div
-                      className="settings-segment"
-                      style={{ ...styles.settingsSegment, ...styles.settingsViewSegment }}
-                      role="group"
-                      aria-label="Default View Mode"
-                    >
-                      {(["grid", "list"] as const).map((viewMode) => (
-                        <button
-                          key={viewMode}
-                          type="button"
-                          className="settings-segment-button settings-view-button"
-                          onClick={() => changeHabitViewMode(viewMode)}
-                          aria-pressed={appSettings.viewMode === viewMode}
-                          aria-label={`${viewMode === "grid" ? "Grid" : "List"} view`}
-                          title={`${viewMode === "grid" ? "Grid" : "List"} view`}
-                        >
-                          {viewMode === "grid" ? <Grid2X2 size={17} aria-hidden="true" /> : <List size={17} aria-hidden="true" />}
                         </button>
                       ))}
                     </div>
@@ -3759,8 +3714,6 @@ function App() {
                     {
                       title: "My Habits",
                       shortcuts: [
-                        { keys: "G", description: "Switch to Grid View" },
-                        { keys: "L", description: "Switch to List View" },
                         { keys: "N", description: "Focus New Habit" },
                         { keys: "E", description: "Edit the focused Habit" },
                       ],

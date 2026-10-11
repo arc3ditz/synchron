@@ -20,8 +20,6 @@ const shortcutGroups: ShortcutGroup[] = [
   {
     title: "My Habits",
     shortcuts: [
-      { keys: "G", description: "Switch to Grid View" },
-      { keys: "L", description: "Switch to List View" },
       { keys: "N", description: "Focus New Habit" },
       { keys: "E", description: "Edit the focused Habit" },
     ],
