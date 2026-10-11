@@ -1430,7 +1430,7 @@ function FocusTimer({
         <div style={styles.fieldGrid}>
           <div style={styles.field}>
             <label style={styles.fieldLabel} htmlFor="project-select">
-              Project (optional)
+              Project (Optional)
             </label>
             <select
               id="project-select"
@@ -1450,7 +1450,7 @@ function FocusTimer({
           </div>
           <div style={styles.field}>
             <label style={styles.fieldLabel} htmlFor="milestone-select">
-              Milestone (optional)
+              Milestone (Optional)
             </label>
             <select
               id="milestone-select"
@@ -1472,7 +1472,7 @@ function FocusTimer({
         <div style={styles.fieldGrid}>
           <div style={styles.field}>
             <label style={styles.fieldLabel} htmlFor="task-select">
-              Task (optional)
+              Task (Optional)
             </label>
             <select
               id="task-select"
@@ -1492,7 +1492,7 @@ function FocusTimer({
           </div>
           <div style={styles.field}>
             <label style={styles.fieldLabel} htmlFor="habit-select">
-              Habit (optional)
+              Habit (Optional)
             </label>
             <select
               id="habit-select"

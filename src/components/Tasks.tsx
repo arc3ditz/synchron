@@ -491,7 +491,7 @@ export default function Tasks({
               onClick={() => setStatusFilter(status)}
               aria-pressed={statusFilter === status}
             >
-              {status === "open" ? `Open (${openCount})` : status === "completed" ? `Completed (${completedCount})` : `All (${tasks.length})`}
+              {status === "Open" ? `Open (${openCount})` : status === "Completed" ? `Completed (${completedCount})` : `All (${tasks.length})`}
             </button>
           ))}
         </div>
@@ -621,7 +621,7 @@ export default function Tasks({
             <button
               type="button"
               className="ui-button ui-button--sm"
-              onClick={() => { setQuery(""); setStatusFilter("open"); setPriorityFilter("all"); setProjectFilter(""); }}
+              onClick={() => { setQuery(""); setStatusFilter("Open"); setPriorityFilter("all"); setProjectFilter(""); }}
             >
               Clear Filters
             </button>
