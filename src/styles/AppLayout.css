@@ -113,6 +113,22 @@
 
 /* Today follows the space left by the sidebar, not the window breakpoint. */
 .today-page { width: 100%; min-width: 0; container: today / inline-size; }
+
+/* Schedule section: allow native tooltips to render without clipping */
+.today-page section[aria-label="Schedule"].atelier-group {
+  overflow: visible !important;
+  border-radius: 0;
+}
+.today-page section[aria-label="Schedule"] .row-card {
+  overflow: visible !important;
+  border: none;
+  border-radius: 0;
+}
+.today-page section[aria-label="Schedule"] .row-item {
+  border-radius: var(--radius-lg);
+  margin: -4px -16px;
+  padding: 16px 32px !important;
+}
 .today-atelier-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

@@ -61,8 +61,8 @@ test("timeToMinutes parses HH:MM and rejects anything else", () => {
   assert.equal(timeToMinutes("12:60"), null);
 });
 
-test("formatClockTime renders local HH:MM", () => {
-  assert.equal(formatClockTime(at(14, 9, 5)), "09:05");
+test("formatClockTime renders local HH:MM AM/PM", () => {
+  assert.equal(formatClockTime(at(14, 9, 5)), "9:05 AM");
 });
 
 test("scheduled Tasks and Habits render chronologically with context", () => {
@@ -101,7 +101,7 @@ test("Focus sessions for the logical day interleave chronologically", () => {
   });
 
   assert.deepEqual(blocks.map((block) => block.kind), ["task", "session"]);
-  assert.equal(blocks[1].time, "10:00");
+  assert.equal(blocks[1].time, "10:00 AM");
   assert.equal(blocks[1].durationMinutes, 25);
 });
 

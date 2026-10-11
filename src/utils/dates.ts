@@ -224,4 +224,25 @@ export function getDaysAgo(days: number): Date {
   return date;
 }
 
+/**
+ * Format a time string in HH:MM format to 12-hour format with AM/PM
+ * @param timeString - Time string in HH:MM format (24-hour)
+ * @returns Formatted time string in 12-hour format (e.g., "9:00 AM", "1:30 PM")
+ */
+export function formatTime12Hour(timeString: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(timeString.trim());
+  if (!match) return timeString;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return timeString;
+
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+  const displayMinutes = String(minutes).padStart(2, "0");
+
+  return `${displayHours}:${displayMinutes} ${period}`;
+}
+
 export { WEEKDAYS };

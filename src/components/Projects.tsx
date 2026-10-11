@@ -619,7 +619,7 @@ export default function Projects({
       <section aria-label={`Tasks for "${project.name}"`} style={{ display: "grid", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
           <h3 className="section-eyebrow">Tasks · {projectTasksFor(project).length}</h3>
-          <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>Ungrouped below · milestone tasks nest above</span>
+          <span style={{ color: "var(--text-muted)", fontSize: "var(--type-xs)" }}>Ungrouped Tasks</span>
         </div>
         {unassigned.length === 0 ? (
           <div className="atelier-group ui-empty-state" style={{ padding: "var(--space-6) var(--space-4)" }}>

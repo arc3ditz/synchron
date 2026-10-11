@@ -55,11 +55,15 @@ export function timeToMinutes(time: string): number | null {
   return hours * 60 + minutes;
 }
 
-/** Local "HH:MM" clock label for a logged Focus session timestamp. */
+/** Local "HH:MM AM/PM" clock label for a logged Focus session timestamp. */
 export function formatClockTime(timestamp: number): string {
   const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  const displayMinutes = String(minutes).padStart(2, "0");
+  return `${displayHours}:${displayMinutes} ${period}`;
 }
 
 export interface TimelineInput {

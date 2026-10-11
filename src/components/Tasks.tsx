@@ -5,7 +5,7 @@ import type { Milestone, Project, Task } from "../types";
 import { FORM_CONTROL } from "../theme";
 import { getTaskPlanningCategory, isTaskOverdue, resolveTaskContext } from "../domain/tasks";
 import { isTaskStaleBacklog } from "../domain/nextStep";
-import { formatFullDate } from "../utils/dates";
+import { formatFullDate, formatTime12Hour } from "../utils/dates";
 import DatePicker from "./DatePicker";
 import { TASK_PRIORITY_LABELS } from "../utils/displayLabels";
 
@@ -406,7 +406,7 @@ export default function Tasks({
                 {dueLabel(task, overdue, stale)}
               </time>
             )}
-            {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
+            {task.scheduledTime && <span>Scheduled {formatTime12Hour(task.scheduledTime)}</span>}
             {(task.durationMinutes ?? task.estimatedMinutes) !== undefined && (
               <span>{task.durationMinutes ?? task.estimatedMinutes} min</span>
             )}

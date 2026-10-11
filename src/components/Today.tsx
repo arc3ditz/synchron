@@ -5,6 +5,7 @@ import type { FocusSessionRecord, Habit, Milestone, Project, Task } from "../typ
 import {
   calculateStreak,
   formatFullDate,
+  formatTime12Hour,
 } from "../utils/dates";
 import { getFocusSessionsForLogicalToday } from "../domain/focusTimer";
 import { FORM_CONTROL } from "../theme";
@@ -161,7 +162,7 @@ function HabitMetadata({ habit, streak }: { habit: Habit; streak: number }) {
       {habit.scheduledTime && (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--type-xs)", color: "var(--text-muted)" }}>
           <Clock size={12} aria-hidden="true" />
-          {habit.scheduledTime}
+          {formatTime12Hour(habit.scheduledTime)}
         </span>
       )}
       <StreakBadge streak={streak} />
@@ -687,7 +688,7 @@ function Today({
                 aria-label={`Skip for now: ${nextStep.title}`}
                 style={{ display: "inline-flex", alignItems: "center", padding: "12px 18px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-secondary)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
               >
-                Not now
+                Not Now
               </button>
             )}
           </div>
@@ -780,7 +781,7 @@ function Today({
                       : `Upcoming · Due ${formatFullDate(task.dueDate)}`}
               </time>
             )}
-            {task.scheduledTime && <span>Scheduled {task.scheduledTime}</span>}
+            {task.scheduledTime && <span>Scheduled {formatTime12Hour(task.scheduledTime)}</span>}
           </div>
           {chain && (
             <p style={{ margin: "2px 0 0", fontSize: "var(--type-xs)", color: "var(--text-muted)", overflowWrap: "anywhere" }}>
@@ -818,9 +819,9 @@ function Today({
   function renderTimelineBlock(block: TimelineBlock) {
     if (block.kind === "session") {
       return (
-        <div key={block.key} className="row-item" style={{ padding: "10px 0" }}>
+        <div key={block.key} className="row-item">
           <span style={{ flexShrink: 0, width: 64, fontSize: "var(--type-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "var(--color-accent)", textAlign: "right" }}>
-            {block.time}
+            {formatTime12Hour(block.time)}
           </span>
           <button
             type="button"
@@ -844,9 +845,9 @@ function Today({
     const completed = block.completed;
     const kindLabel = block.kind === "task" ? "Task" : "Habit";
     return (
-      <div key={block.key} className="today-item row-item" style={{ padding: "10px 0" }}>
+      <div key={block.key} className="today-item row-item">
         <span style={{ flexShrink: 0, width: 64, fontSize: "var(--type-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "var(--color-accent)", textAlign: "right" }}>
-          {block.time}
+          {formatTime12Hour(block.time)}
         </span>
         <button
           type="button"
@@ -1028,7 +1029,7 @@ function Today({
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-pill)", background: "transparent", color: "var(--text-body)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
               >
                 <Play size={14} aria-hidden="true" />
-                Start • Focus Timer
+                Start Focus Timer
               </button>
               <button
                 type="button"
@@ -1272,7 +1273,7 @@ function Today({
                   Scheduled Today
                 </h2>
                 <span style={{ fontSize: "var(--type-xs)", color: "var(--text-secondary)", fontWeight: 500 }}>
-                  {formatDuration(totalPlannedMinutes)} planned
+                  {formatDuration(totalPlannedMinutes)} Planned
                 </span>
               </div>
               <div className="row-card" style={{ padding: "4px var(--space-4)" }}>

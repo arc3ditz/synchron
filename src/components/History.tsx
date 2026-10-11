@@ -104,7 +104,8 @@ function History({
     const date = new Date(timestamp);
     const time = date.toLocaleTimeString(undefined, {
       minute: "2-digit",
-      hour: "2-digit",
+      hour: "numeric",
+      hour12: true,
     });
     return `${formatFullDate(date)} · ${time}`;
   }

@@ -122,7 +122,7 @@ test("Tasks edit form exposes the full scheduling model on the same task data", 
     "durationMinutes: scheduledTime ? parseMinutes(editDurationMinutes) : undefined",
     'aria-label="Scheduled Time"',
     'aria-label="Duration in Minutes"',
-    "Scheduled {task.scheduledTime}",
+    "formatTime12Hour(task.scheduledTime)",
     "task.durationMinutes ?? task.estimatedMinutes",
   ]) {
     assert.ok(tasksSource.includes(needle), `Tasks edit form must include ${needle}`);
