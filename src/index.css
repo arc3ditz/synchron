@@ -1,0 +1,307 @@
+/* ==========================================================================
+   Synchron — design tokens, reset, base typography
+   The brand palette (paper / ink / amber) is the source of truth; everything
+   below it is a clean extension of those three values.
+   ========================================================================== */
+
+:root {
+  /* --- Brand palette (original Synchron tokens) --------------------------- */
+  --paper: #f5f1e8;
+  --ink: #24231f;
+  --amber: #d96c42;
+
+  /* --- Typography -------------------------------------------------------- */
+  /* The single typeface source for the entire app: the native system stack.
+     On macOS `-apple-system` resolves to San Francisco, the Apple system
+     font. No font files are bundled, downloaded, or imported. */
+  --font-system: -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Applied at the root so every element — including the document head and
+     the title — inherits the same system typography. */
+  font-family: var(--font-system);
+
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.8125rem; /* 13px */
+  --text-base: 0.875rem; /* 14px */
+  --text-md: 0.9375rem; /* 15px */
+  --text-lg: 1.0625rem; /* 17px */
+
+  --leading-tight: 1.15;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --tracking-tight: -0.022em;
+  --tracking-wide: 0.04em;
+
+  /* --- Spacing ----------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* --- Radii (restrained) ------------------------------------------------ */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* --- Motion ------------------------------------------------------------ */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+
+  /* --- Layout ------------------------------------------------------------ */
+  --sidebar-width: 15rem;
+
+  /* Sidebar metrics. These fixed values reproduce the original balanced
+     reference layout at 1280 × 800; resizing changes only the rail width. */
+  --sidebar-pad-x: 0.75rem;
+  --sidebar-pad-y: 1.25rem;
+  --sidebar-brand-pad-x: 0.625rem;
+  --sidebar-item-pad-x: 0.625rem;
+  --sidebar-item-pad-y: 0.4375rem;
+  --sidebar-item-gap: 2px;
+  --sidebar-icon-gap: 0.5rem;
+  --sidebar-icon-size: 16px;
+  --sidebar-label-size: 0.8125rem;
+  --sidebar-wordmark-size: 0.9375rem;
+
+  /* Content canvas: broad enough for action metadata, still readable on wide windows. */
+  --canvas-measure: 78rem;
+  --canvas-pad-x: clamp(var(--space-5), 3.5vw, var(--space-10));
+
+  color-scheme: light;
+
+  /* --- Surfaces ---------------------------------------------------------- */
+  --surface-app: var(--paper);
+  --surface-sidebar: #efeae0;
+  --surface-raised: #fbf9f4;
+  --surface-active: rgba(217, 108, 66, 0.1);
+  --surface-hover: rgba(36, 35, 31, 0.04);
+
+  /* --- Text -------------------------------------------------------------- */
+  --text-primary: var(--ink);
+  --text-secondary: #6e685c;
+  --text-tertiary: #7c7568;
+
+  /* --- Separators -------------------------------------------------------- */
+  --separator: rgba(36, 35, 31, 0.1);
+  --separator-strong: rgba(36, 35, 31, 0.16);
+
+  /* --- Accent ------------------------------------------------------------ */
+  --accent: var(--amber);
+  --accent-strong: #b4522c; /* readable amber for text and icons on paper */
+  --accent-text: #a34622; /* small accent text: 5.4:1 on paper */
+  --accent-soft: rgba(217, 108, 66, 0.12);
+
+  /* --- Interaction ------------------------------------------------------- */
+  --focus-ring: #b4522c;
+  --selection: rgba(217, 108, 66, 0.2);
+}
+
+/* --- Dark appearance ------------------------------------------------------
+   Follows the system by default. An explicit `data-theme` on <html> always
+   wins, and the light override below re-asserts `color-scheme: light`.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --surface-app: #1a1917;
+    --surface-sidebar: #151412;
+    --surface-raised: #211f1c;
+    --surface-active: rgba(232, 147, 107, 0.14);
+    --surface-hover: rgba(245, 241, 232, 0.05);
+
+    --text-primary: #ece7db;
+    --text-secondary: #a49d90;
+    --text-tertiary: #8c8577;
+
+    --separator: rgba(236, 231, 219, 0.1);
+    --separator-strong: rgba(236, 231, 219, 0.18);
+
+    --accent: #e8936b;
+    --accent-strong: #eda179;
+    --accent-text: #eda179;
+    --accent-soft: rgba(232, 147, 107, 0.16);
+
+    --focus-ring: #e8936b;
+    --selection: rgba(232, 147, 107, 0.26);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-app: #1a1917;
+  --surface-sidebar: #151412;
+  --surface-raised: #211f1c;
+  --surface-active: rgba(232, 147, 107, 0.14);
+  --surface-hover: rgba(245, 241, 232, 0.05);
+
+  --text-primary: #ece7db;
+  --text-secondary: #a49d90;
+  --text-tertiary: #8c8577;
+
+  --separator: rgba(236, 231, 219, 0.1);
+  --separator-strong: rgba(236, 231, 219, 0.18);
+
+  --accent: #e8936b;
+  --accent-strong: #eda179;
+  --accent-text: #eda179;
+  --accent-soft: rgba(232, 147, 107, 0.16);
+
+  --focus-ring: #e8936b;
+  --selection: rgba(232, 147, 107, 0.26);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   Reset
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-width: 320px;
+  margin: 0;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+body {
+  overflow: hidden; /* the shell owns its own scrolling */
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-size: var(--text-base); /* font-family is inherited from :root */
+  line-height: var(--leading-normal);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+p,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Form controls do not inherit typography by default — force the system
+   stack through so buttons, inputs and selects match the surrounding text. */
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  display: block;
+}
+
+/* ==========================================================================
+   Interaction
+   ========================================================================== */
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+/* ==========================================================================
+   Scrollbars — thin and unobtrusive, macOS-like
+   ========================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--separator-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--separator-strong);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   Reduced motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

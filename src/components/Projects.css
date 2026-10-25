@@ -1,0 +1,898 @@
+/* ==========================================================================
+   Projects — list, creation, and project detail
+   Extends the existing paper / ink / amber language with one quiet list row
+   style and an editorial detail page. No cards inside cards.
+   ========================================================================== */
+
+.projects-empty__body {
+  max-width: 38rem;
+}
+
+.projects-empty__action {
+  margin-top: var(--space-5);
+}
+
+/* --- Create form --------------------------------------------------------- */
+
+.project-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-8);
+}
+
+.project-form__input {
+  grid-column: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.project-form__actions {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.project-form__error {
+  grid-column: 1 / -1;
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+}
+
+/* --- List ---------------------------------------------------------------- */
+
+.project-list {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+.project-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "open meta operations";
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.project-row:hover {
+  border-color: var(--separator-strong);
+}
+
+.project-row__open {
+  grid-area: open;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.project-row__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.project-row__open:hover .project-row__name,
+.project-row__open:focus-visible .project-row__name {
+  color: var(--accent-text);
+}
+
+.project-row__description {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-row__meta {
+  grid-area: meta;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.project-row__operations {
+  grid-area: operations;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.project-row--archived .project-row__name {
+  color: var(--text-secondary);
+}
+
+/* --- Project detail ------------------------------------------------------ */
+
+.project-detail {
+  padding-top: var(--space-2);
+}
+
+.project-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 1.75rem;
+  margin: 0 0 var(--space-5) calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.project-detail__back:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.project-detail__back svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.project-detail__identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+}
+
+.project-detail__title-group {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.project-detail__title {
+  overflow-wrap: anywhere;
+}
+
+.project-detail__title:focus {
+  outline: none;
+}
+
+.project-detail__name-input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  font-size: clamp(1.75rem, 4.5vw, 2.75rem);
+  font-weight: 500;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.project-detail__meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.project-detail__status {
+  color: var(--accent-text);
+}
+
+.project-detail__operations {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+}
+
+.project-detail__archive {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-secondary);
+}
+
+.project-detail__error {
+  margin-top: var(--space-2);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+}
+
+/* --- Description --------------------------------------------------------- */
+
+.project-detail__description-block {
+  max-width: 48rem;
+  margin-top: var(--space-6);
+}
+
+.project-detail__description {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.project-detail__description--empty {
+  color: var(--text-secondary);
+}
+
+.project-detail__text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 1.75rem;
+  margin: var(--space-2) 0 0 calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.project-detail__text-action:hover {
+  background: var(--surface-active);
+}
+
+.project-detail__text-action svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.project-detail__textarea {
+  display: block;
+  width: 100%;
+  min-height: 7rem;
+  padding: var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+
+.project-detail__edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.project-detail__edit-actions .action-button {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/* --- Current focus ------------------------------------------------------- */
+
+.project-focus {
+  max-width: 48rem;
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
+}
+
+.project-focus__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.project-focus__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-focus__value {
+  max-width: 44rem;
+  margin-top: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.project-focus__value--empty {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.project-focus__textarea {
+  margin-top: var(--space-3);
+}
+
+/* --- Continuity ---------------------------------------------------------- */
+
+.project-continuity {
+  max-width: 48rem;
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--separator);
+}
+
+.project-continuity__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-continuity__intro {
+  max-width: 40rem;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.project-continuity__note {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.context-section {
+  margin-top: var(--space-8);
+}
+
+.context-section__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.context-section__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.context-section__count {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.context-section__empty {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.context-action,
+.context-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.context-action {
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.context-action:hover,
+.context-more:hover {
+  background: var(--surface-active);
+}
+
+.context-action svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.context-more {
+  margin-top: var(--space-1);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.context-list {
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--separator);
+}
+
+.context-item {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.context-item__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.context-item__title {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+
+.context-item__operations {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: calc(-1 * var(--space-1));
+}
+
+.context-item__body {
+  margin-top: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.context-item__body--empty {
+  color: var(--text-secondary);
+}
+
+.context-item__why {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--space-2);
+}
+
+.context-item__label {
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.context-item__meta {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+/* --- Note and decision forms --------------------------------------------- */
+
+.context-form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.context-form__field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.context-form__label {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.context-form__input,
+.context-form__textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.context-form__textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.context-form__textarea--statement {
+  min-height: 3.5rem;
+}
+
+.context-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.context-form__actions .action-button {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.context-form__error {
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+}
+
+/* --- Narrow canvas -------------------------------------------------------
+   Keyed to the width the canvas actually has, matching the rest of the app.
+   -------------------------------------------------------------------------- */
+
+@container canvas (max-width: 30rem) {
+  .project-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "open operations"
+      "meta operations";
+    row-gap: var(--space-1);
+  }
+
+  .project-row__meta {
+    padding-left: 0;
+  }
+
+  .project-detail__operations {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+}
+
+@container canvas (max-width: 26rem) {
+  .project-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-form__actions {
+    grid-column: 1;
+  }
+}
+
+/* --- Resume --------------------------------------------------------------
+   One editorial section: the user's own note, the derived next action, and a
+   short way back to the context that matters. Blocks are separated by space,
+   not nested cards.
+   -------------------------------------------------------------------------- */
+
+.project-resume {
+  max-width: 48rem;
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--separator);
+}
+
+.project-resume__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-resume__intro {
+  max-width: 40rem;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.project-resume__archived {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.project-resume__block {
+  margin-top: var(--space-6);
+}
+
+.project-resume__block-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.project-resume__block-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.project-resume__provenance {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.project-resume__note {
+  max-width: 44rem;
+  margin-top: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.project-resume__meta {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.project-resume__empty {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.project-resume__textarea {
+  min-height: 5rem;
+  margin-top: var(--space-3);
+}
+
+.project-resume__reason {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.project-resume__action-list {
+  margin-top: var(--space-2);
+}
+
+.project-resume__add-action {
+  margin-top: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+/* --- Worth remembering and recent activity ------------------------------- */
+
+.context-links {
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--separator);
+}
+
+.context-links__item {
+  border-bottom: 1px solid var(--separator);
+}
+
+.context-links__link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "kind text meta arrow";
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  width: 100%;
+  margin: 0 calc(-1 * var(--space-2));
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.context-links__link:hover {
+  background: var(--surface-hover);
+}
+
+.context-links__kind {
+  grid-area: kind;
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.context-links__text {
+  grid-area: text;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.context-links__link:hover .context-links__text {
+  color: var(--accent-text);
+}
+
+.context-links__meta {
+  grid-area: meta;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.context-links__arrow {
+  grid-area: arrow;
+  align-self: center;
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+/* Programmatic jumps land on the source action, note, decision, or resume note,
+   so the focus ring is the visible confirmation of where the link went. */
+.context-item:focus,
+.project-resume__note:focus,
+.project-actions .action-row:focus,
+.project-resume .action-row:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@container canvas (max-width: 30rem) {
+  .context-links__link {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "kind text arrow"
+      "kind meta arrow";
+    align-items: start;
+    row-gap: 2px;
+  }
+
+  .context-links__arrow {
+    align-self: center;
+  }
+}
+
+/* --- Recent activity ----------------------------------------------------- */
+
+.project-activity {
+  max-width: 48rem;
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--separator);
+}
+
+.project-activity__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-activity__intro {
+  max-width: 40rem;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.project-activity__empty {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+/* --- Project actions ----------------------------------------------------- */
+
+.project-actions {
+  max-width: 48rem;
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--separator);
+}
+
+.project-actions__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.project-actions__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-actions__count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.project-actions__intro {
+  max-width: 40rem;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.project-actions__note {
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.project-actions .action-form {
+  margin-top: var(--space-5);
+}
+
+.project-actions__empty {
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.project-actions__subtitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+

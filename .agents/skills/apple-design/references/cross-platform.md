@@ -25,6 +25,7 @@ The references use Apple's names. Speak the user's framework.
 | Safe area | SafeArea, insets | Title bar and window chrome | Content never hides under system UI |
 | Size classes (compact, regular) | Width and height breakpoints: LayoutBuilder, MediaQuery.sizeOf, useWindowDimensions | CSS media and container queries | Layout keyed to the space available, not to the device |
 | Menu bar, Dock menu | | Native app menu, tray menu | Every command reachable from a menu |
+| Widget, Live Activity | A native WidgetKit or ActivityKit extension that the app feeds data to | | Glanceable system surface outside the app; its views are SwiftUI, so the framework supplies data, not drawing |
 
 ## Conventions to check
 

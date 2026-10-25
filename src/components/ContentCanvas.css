@@ -1,0 +1,638 @@
+/* ==========================================================================
+   Content canvas — spacious, editorial, single column
+   ========================================================================== */
+
+.canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.canvas:focus {
+  outline: none;
+}
+
+.canvas__inner {
+  /* Layout adapts to the width the canvas actually has (sidebar width and
+     window width both change it), not only to the viewport breakpoint. */
+  container-type: inline-size;
+  container-name: canvas;
+  max-width: var(--canvas-measure);
+  margin: 0 auto;
+  padding: clamp(var(--space-8), 7vh, var(--space-16)) var(--canvas-pad-x)
+    var(--space-16);
+}
+
+.canvas__title {
+  font-family: var(--font-system);
+  font-size: clamp(2rem, 4.5vw, 2.75rem);
+  font-weight: 500;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+/* --- Empty state ---------------------------------------------------------- */
+
+.empty {
+  margin-top: var(--space-8);
+  padding: var(--space-10) var(--space-8);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+}
+
+.empty__title {
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.empty__body {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+/* --- Capture and action interactions ------------------------------------- */
+
+.action-form,
+.capture-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-8);
+}
+
+.action-form__input,
+.capture-form__input {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.action-form > button[type="submit"],
+.capture-form > button[type="submit"] {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+/* The metadata controls sit under the input until the canvas has room for a
+   single-line form, so the title field never collapses to fit them. */
+.action-form > .creation-metadata {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.action-form__input,
+.action-form__date,
+.capture-form__input,
+.action-row__edit,
+.action-form select,
+.action-row__fields select,
+.action-row__fields input {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.capture-form__input {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-md);
+}
+
+.action-form__date {
+  width: 9rem;
+}
+
+.action-button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.action-button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.action-button--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.action-button--primary:hover {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.action-button--quiet {
+  color: var(--text-tertiary);
+}
+
+.action-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "check title aside operations";
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+/* One 18px shape inside a 28px hit area; the checkbox itself is a button
+   with checkbox semantics, so Space and Enter both toggle it. */
+.action-row__check {
+  grid-area: check;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.action-row__check-box {
+  display: grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1px solid var(--separator-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  transition: border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.action-row__check-box svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.action-row__check:hover .action-row__check-box {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.action-row__check[aria-checked="true"] .action-row__check-box {
+  border-color: var(--accent);
+  background: var(--accent);
+  /* Near-white on paper, near-black on the lighter dark-theme amber. */
+  color: var(--surface-raised);
+}
+
+.action-row__check[aria-checked="true"]:hover .action-row__check-box {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.action-row__title {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-row__title--static {
+  cursor: default;
+}
+
+.action-row__edit {
+  grid-area: title;
+  width: 100%;
+  min-width: 0;
+}
+
+.action-row__status,
+.action-row__date {
+  grid-area: aside;
+  justify-self: end;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.action-row__reason {
+  grid-area: aside;
+  justify-self: end;
+  color: var(--accent-strong);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.action-row__editor {
+  display: grid;
+  flex: 1;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.action-row__fields,
+.action-row__edit-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.action-row__fields input,
+.action-row__fields select {
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+}
+
+.action-row__importance {
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.action-row__importance:hover,
+.action-row__importance--active {
+  color: var(--accent-strong);
+}
+
+.action-row--completed .action-row__title {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+.empty--compact {
+  margin-top: var(--space-4);
+  padding: var(--space-5);
+}
+
+.storage-warning {
+  margin-top: var(--space-4);
+  color: var(--accent-strong);
+  font-size: var(--text-xs);
+}
+
+/* --- Today --------------------------------------------------------------- */
+
+.today-date {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.today-section {
+  margin-top: var(--space-10);
+}
+
+.today-section--later {
+  margin-top: var(--space-8);
+}
+
+.today-section__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.today-section__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.today-section__note {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.today-empty {
+  margin-top: var(--space-10);
+}
+
+.focus-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--separator);
+}
+
+.focus-picker__label {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.focus-picker__select {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+/* --- Small, quiet filters ------------------------------------------------- */
+
+.filter-bar,
+.today-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-5);
+}
+
+.filter-bar {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--separator);
+}
+
+.filter-bar__button {
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.filter-bar__button:hover,
+.filter-bar__button--active {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}
+
+.filter-bar__count {
+  color: var(--text-tertiary);
+}
+
+.today-tools {
+  justify-content: space-between;
+}
+
+.today-tools__label {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .canvas__inner {
+    padding: var(--space-6) var(--space-5) var(--space-10);
+  }
+
+  .empty {
+    padding: var(--space-6) var(--space-5);
+  }
+
+  .focus-picker {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .focus-picker__select {
+    flex-basis: 100%;
+  }
+
+}
+
+/* --- Contextual scheduling controls --------------------------------------- */
+.creation-metadata { display: flex; align-items: center; min-width: 0; max-width: 100%; }
+.metadata-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; max-width: 100%; }
+.action-row .metadata-controls { grid-column: 1 / -1; }
+.popover-wrap { position: relative; }
+.meta-trigger { display: inline-flex; align-items: center; min-height: 1.8rem; padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-tertiary); cursor: pointer; font-size: var(--text-xs); white-space: nowrap; }
+.meta-trigger:hover, .meta-trigger[aria-expanded="true"] { border-color: var(--separator); background: var(--surface-active); color: var(--text-primary); }
+.meta-trigger--overdue, .meta-trigger--critical { color: var(--accent-strong); }
+.meta-trigger--today, .meta-trigger--high { color: var(--accent); }
+.meta-trigger--focus { line-height: 1; }
+.meta-trigger--focus svg { width: 1rem; height: 1rem; }
+.meta-trigger--focus-active { color: var(--accent-strong); }
+.metadata-popover { position: absolute; z-index: 10; top: calc(100% + var(--space-2)); left: 50%; width: 15rem; padding: var(--space-3); border: 1px solid var(--separator-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 12px 28px rgb(0 0 0 / 14%); color: var(--text-primary); transform: translateX(-50%); }
+.date-shortcuts, .calendar-heading, .calendar-weekdays, .calendar-grid { display: grid; align-items: center; gap: var(--space-1); }
+.date-shortcuts { grid-template-columns: repeat(3, 1fr); }
+.date-shortcuts button, .popover-clear { padding: var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--accent-strong); cursor: pointer; font-size: var(--text-xs); white-space: nowrap; }
+.date-shortcuts button:hover, .popover-clear:hover { background: var(--surface-active); }
+.calendar-heading { grid-template-columns: 1.5rem 1fr 1.5rem; margin-top: var(--space-3); text-align: center; font-size: var(--text-xs); }
+.calendar-heading button { padding: 0; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 1.1rem; }
+.calendar-weekdays, .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+.calendar-weekdays { margin-top: var(--space-2); color: var(--text-tertiary); font-size: 0.65rem; }
+.calendar-grid { margin-top: var(--space-1); }
+.calendar-day { width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); }
+.calendar-day:hover, .calendar-day--today { background: var(--surface-active); color: var(--text-primary); }
+.calendar-day--selected { background: var(--accent); color: var(--surface-raised); }
+.popover-clear { width: 100%; margin-top: var(--space-2); text-align: left; }
+.menu-list { display: grid; gap: var(--space-1); }
+.menu-option { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); text-align: left; }
+.menu-option:hover, .menu-option--selected { background: var(--surface-active); color: var(--text-primary); }
+.menu-option > span:last-child { margin-left: auto; color: var(--accent-strong); }
+.menu-option__dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--text-tertiary); }
+.menu-option--low .menu-option__dot { background: var(--text-tertiary); }
+.menu-option--normal .menu-option__dot { background: var(--text-secondary); }
+.menu-option--high .menu-option__dot { background: var(--accent); }
+.menu-option--critical .menu-option__dot { background: var(--accent-strong); }
+@media (max-width: 760px) {
+  .metadata-popover { left: 0; transform: none; }
+}
+
+/* --- Broad page layouts and action operations ----------------------------- */
+.canvas__inner { width: 100%; }
+.canvas__inner--today .today-section,
+.canvas__inner--actions .action-list,
+.canvas__inner--inbox .action-list,
+.canvas__inner--settings .empty { width: 100%; }
+
+.action-form,
+.capture-form { width: 100%; }
+.action-row__operations { display: flex; align-items: center; gap: var(--space-1); grid-area: operations; }
+.action-button--with-icon { display: inline-flex; align-items: center; gap: var(--space-2); }
+.action-button--with-icon svg { width: 1rem; height: 1rem; }
+.action-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-tertiary); cursor: pointer; transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out); }
+.action-icon-button svg { width: 1rem; height: 1rem; }
+.action-icon-button:hover, .action-icon-button:focus-visible { border-color: var(--separator); background: var(--surface-hover); color: var(--text-primary); }
+.action-icon-button--quiet:hover, .action-icon-button--quiet:focus-visible { color: var(--accent-strong); }
+
+@media (max-width: 760px) {
+  .canvas__inner { padding-right: var(--space-5); padding-left: var(--space-5); }
+}
+
+/* --- Portaled popover and Lucide alignment fixes -------------------------- */
+.meta-trigger__icon { display: inline-flex; align-items: center; margin-right: var(--space-1); }
+.meta-trigger__icon svg { width: 0.9rem; height: 0.9rem; }
+.metadata-popover { position: fixed; top: 0; left: 0; width: min(15rem, calc(100vw - 1rem)); max-width: calc(100vw - 1rem); max-height: min(28rem, calc(100vh - 1rem)); overflow-y: auto; transform: none; }
+.calendar-heading button, .calendar-heading button svg { display: inline-flex; align-items: center; justify-content: center; }
+.calendar-heading button svg { width: 1rem; height: 1rem; }
+.popover-clear { display: inline-flex; align-items: center; gap: var(--space-1); }
+.popover-clear svg { width: 0.85rem; height: 0.85rem; }
+@media (max-width: 760px) {
+  .metadata-popover { width: min(15rem, calc(100vw - 1rem)); }
+}
+
+/* --- Canvas-width layout ----------------------------------------------------
+   These thresholds describe the space the content actually has. They replace
+   viewport breakpoints for the creation form and action rows, so the default
+   800 × 600 window (a 240px sidebar leaves ~372px of content) is laid out
+   deliberately instead of relying on a 760px media query that never matches.
+   -------------------------------------------------------------------------- */
+
+/* The form goes single-line only when the input keeps a usable width beside
+   the metadata controls and the submit button. */
+@container canvas (min-width: 48rem) {
+  .action-form {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .action-form > .creation-metadata {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .action-form > button[type="submit"] {
+    grid-column: 3;
+  }
+}
+
+/* Rows go single-line only when the title still has room beside the metadata
+   group; otherwise the metadata takes its own full-width line and wraps. */
+@container canvas (min-width: 52rem) {
+  .action-row {
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas: "check title aside meta operations";
+  }
+
+  .action-row .metadata-controls {
+    grid-area: meta;
+  }
+}
+
+/* When the canvas cannot hold the metadata labels on one line, the triggers
+   condense to their icons so a row's height no longer depends on how long
+   its date or importance label happens to be. The buttons keep their
+   `aria-label`, so the accessible name is unchanged. */
+@container canvas (max-width: 30.5rem) {
+  .meta-trigger__label {
+    display: none;
+  }
+
+  .meta-trigger__icon {
+    margin-right: 0;
+  }
+}
+
+/* --- Project association ------------------------------------------------- */
+
+.meta-trigger--project {
+  max-width: 13rem;
+}
+
+.meta-trigger--project .meta-trigger__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The folder icon carries the state when the label is condensed to an icon. */
+.meta-trigger--project-linked {
+  color: var(--text-secondary);
+}
+
+.meta-trigger--project-unavailable {
+  color: var(--accent-strong);
+}
+
+.menu-option > span.menu-option__label {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-option > svg {
+  flex: none;
+  margin-left: var(--space-2);
+  color: var(--accent-strong);
+}
+
+.menu-note {
+  margin-top: var(--space-1);
+  padding: var(--space-2);
+  border-top: 1px solid var(--separator);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+
+/* Inbox rows put the optional project choice beside the conversion action,
+   rather than introducing a second step in the capture flow. */
+.action-row.action-row--inbox {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "title convert operations";
+}
+
+.inbox-row__actions {
+  grid-area: convert;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+@container canvas (max-width: 34rem) {
+  .action-row.action-row--inbox {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title operations"
+      "convert convert";
+    row-gap: var(--space-2);
+  }
+
+  .inbox-row__actions {
+    justify-content: flex-start;
+  }
+}
+

@@ -1,37 +1,33 @@
 {
-  "name": "habit-tracker",
+  "name": "synchron",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "build": "tsc && vite build",
+    "check:scheduling": "node --experimental-strip-types scripts/verify-scheduling.ts",
+    "check:projects": "node --experimental-strip-types scripts/verify-projects.ts",
+    "check:project-context": "node --experimental-strip-types scripts/verify-project-context.ts",
+    "check:project-resume": "node --experimental-strip-types scripts/verify-project-resume.ts",
+    "check:project-activity": "node --experimental-strip-types scripts/verify-project-activity.ts",
+    "check:action-projects": "node --experimental-strip-types scripts/verify-action-projects.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-dialog": "^2.7.3",
-    "@tauri-apps/plugin-notification": "^2.4.0",
-    "lucide-react": "^1.47.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "lucide-react": "^1.61.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@tauri-apps/cli": "^2.11.5",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "eslint": "^10.10.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.6",
-    "globals": "^17.12.0",
-    "typescript": "~6.0.2",
-    "typescript-eslint": "^8.69.0",
-    "vite": "^8.3.0"
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
   }
 }

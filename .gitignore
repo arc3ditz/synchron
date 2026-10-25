@@ -27,3 +27,6 @@ dist-ssr
 .env
 # Local caches and temporary verification files
 .work/
+
+# Local caches and temporary verification files
+.work/

@@ -15,7 +15,7 @@ template.
 npx skills add dickwu/apple-design-skill
 ```
 
-This works for Claude Code, Codex, Cursor, OpenCode, Windsurf, and every other agent the
+This works for Claude Code, Codex, Cursor, Antigravity, OpenCode, Windsurf, and every other agent the
 [skills CLI](https://skills.sh) supports. Useful variations:
 
 ```bash
@@ -57,6 +57,18 @@ Follow `.design-rules/SKILL.md`. Route topics with `.design-rules/references/hig
 load the relevant `.design-rules/references/hig/*.md` files before giving design feedback.
 ```
 
+### Antigravity
+
+Install with `npx skills add dickwu/apple-design-skill -a antigravity`, or clone the repository into
+`.agents/skills/apple-design` in your project or global `~/.gemini/antigravity/` configuration:
+
+```bash
+git clone https://github.com/dickwu/apple-design-skill.git .agents/skills/apple-design
+```
+
+You can also keep its `GEMINI.md` next to your own project rules to activate Apple HIG design
+reviews automatically in your Antigravity workspace.
+
 ### Other agents
 
 Add the same three lines to your rules file (`.windsurfrules`, `.ai-rules`, or similar):
@@ -74,6 +86,7 @@ Ask your agent things like:
 - *"This looks generic. Give it a point of view without breaking iOS patterns"*
 - *"How do I do Liquid Glass in React Native?"*
 - *"Check this app icon"*
+- *"Audit this repo for anything App Review would reject in our Apple Pay checkout"*
 - *"Is this onboarding flow asking for permissions the right way?"*
 
 ## What a review covers
@@ -94,8 +107,8 @@ The reviewer reads the relevant guideline files before it writes a word, then wo
 
 Every finding has a What, a Why that cites the guideline file and heading, and a Fix written in
 your framework. Specialized modes cover app icons, accessibility audits, dark mode, Liquid Glass,
-navigation structure, iPhone Duo, onboarding and permissions, forms, generative AI, and single
-components.
+navigation structure, iPhone Duo, Apple Pay, code audits, onboarding and permissions, forms,
+generative AI, widgets and Live Activities, and single components.
 
 **iPhone Duo mode** walks the outer display, the inner display, a partial fold, and Split View
 against Apple's iPhone Duo guidance: layouts built from size classes instead of fixed widths, the
@@ -103,6 +116,12 @@ same functions on both displays, toolbars and tab bars left in the system's defa
 and content kept clear of the cameras and the fold. It also flags bars and dialogs drawn by
 Flutter or in JavaScript, which miss the system's automatic adaptations unless the framework or
 your code provides them.
+
+**Code audit mode** reads source instead of screenshots. It searches for Apple Pay buttons and
+marks that Apple didn't draw (the cause of App Store Review Guideline 4.9 rejections), including
+on web checkouts the app opens; Liquid Glass applied to content, stacked, or over-tinted; and code
+that keeps an app from adapting to iPhone Duo, such as fixed widths, custom bars, and overlays
+that ignore the fold. Each match is cited with `path:line` and the guideline it breaks.
 
 **Improvement mode** goes further: it grounds the design in the product, plans a token system
 (palette, type roles, layout wireframe, one signature element, motion), critiques that plan
@@ -116,11 +135,13 @@ apple-design-skill/
 ├── SKILL.md                     # The skill: stance, principles, lenses, report format, improvement mode
 ├── AGENTS.md                    # Operating manual for agents and contributors
 ├── .cursorrules                 # Cursor entry point
+├── GEMINI.md                    # Antigravity entry point
 ├── scripts/
 │   └── pull-hig.mjs             # Re-pulls the guidelines from developer.apple.com
 └── references/
     ├── hig-lookup.md            # Generated routing table with Apple's summaries and change dates
     ├── cross-platform.md        # Apple's names in Flutter, React Native, Tauri, Electron terms
+    ├── code-audit.md            # Code patterns for Apple Pay, Liquid Glass, and iPhone Duo
     └── hig/                     # 123 generated pages + 1 curated guide
         ├── design-principles.md
         ├── designing-for-iphone-duo.md

@@ -31,11 +31,13 @@ a generated lookup table, and the script that regenerates all of it.
 | `AGENTS.md` | This file | Yes |
 | `README.md` | Installation and overview for people | Yes |
 | `.cursorrules` | Entry point for Cursor | Yes |
+| `GEMINI.md` | Entry point for Antigravity | Yes |
 | `.github/FUNDING.yml` | GitHub Sponsors button configuration | Yes |
 | `references/hig-lookup.md` | Generated routing table with an omitted-pages list | No, re-run the script |
 | `references/hig/*.md` | 123 generated pages in Apple's wording | No, re-run the script |
 | `references/hig/liquid-glass.md` | Curated Liquid Glass guide; the script never touches it | Yes |
 | `references/cross-platform.md` | Apple's vocabulary and conventions for Flutter, React Native, Tauri, and Electron | Yes |
+| `references/code-audit.md` | Code patterns to search for (Apple Pay, Liquid Glass, iPhone Duo), with citations and replacements | Yes |
 | `scripts/pull-hig.mjs` | Pull script, Node 18 or newer, no dependencies | Yes |
 
 ## Refreshing the references
@@ -50,7 +52,7 @@ Options: `--out <dir>`, `--lookup <file>`, `--cache <dir>`, `--concurrency <n>`,
 
 What the script does:
 
-- Crawls Apple's six HIG sections and their sub-collections (158 pages as of September 2026).
+- Crawls Apple's six HIG sections and their sub-collections (158 pages as of October 2026).
 - Keeps every page that applies to iOS, iPadOS, or macOS, omits Apple-only hardware and services
   listed in `OMITTED_PAGES`, and records every omission with a reason in `hig-lookup.md`.
 - Renders Apple's JSON to Markdown faithfully: headings, paragraphs, lists, tables, notes, and
@@ -88,7 +90,8 @@ the `file.md` placeholder in the report template and `hig-lookup.md`, which live
 
 - Keep `SKILL.md` under about 400 lines. It loads in full every time the skill triggers.
 - Apple's text in `references/hig/` is quoted, not paraphrased. Cross-platform translation lives
-  in `references/cross-platform.md`, `SKILL.md`, and `liquid-glass.md`, not in the pulled files.
+  in `references/cross-platform.md`, `SKILL.md`, and `liquid-glass.md`, and code patterns in
+  `references/code-audit.md`, not in the pulled files.
 - Don't add pages to `references/hig/` by hand. Change `OMITTED_PAGES` or the platform rule in
   the script instead.
 - A hand-written file in `references/hig/` must be registered in `CURATED_FILES` and must not

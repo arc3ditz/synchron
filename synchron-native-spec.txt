@@ -1,0 +1,117 @@
+# Synchron — Native-Quality UI Repair Pass
+
+The previous UI refinement pass introduced or failed to resolve three issues. Fix the underlying causes rather than adding more CSS patches. Inspect the actual components and current implementation before editing.
+
+Do not redesign the app or change working business logic.
+
+## 1. Rebuild the Completion Control Properly
+
+The completion checkbox technically works, but it still looks low-quality. The current rendering resembles nested circles with a tiny checkmark.
+
+Do not keep tweaking the existing checkbox CSS blindly. Inspect the component hierarchy, DOM, SVG/icon sizing, inherited styles, pseudo-elements, and browser appearance to identify the cause.
+
+Replace it with a deliberately designed, custom completion control:
+- One shape only: a clean, subtly rounded square.
+- Approximately 17–19px visually, with a sufficiently large clickable target.
+- A crisp, centered Lucide `Check` icon when completed, sized proportionally to the control.
+- A restrained 1–1.5px border when incomplete.
+- A clean filled state when complete, using Synchron's existing restrained accent or theme colors.
+- No nested circles, double borders, default browser checkbox rendering, or extra decorative outlines.
+- Subtle hover and focus states; no oversized animation.
+- Correct appearance in both light and dark themes.
+
+Use a custom button with `type="button"` and appropriate accessible checkbox semantics, or a properly implemented custom checkbox. Do not layer a custom shape on top of a native checkbox.
+
+Preserve completion, reopening, keyboard operation, and state synchronization across Today, Actions, and Inbox.
+
+## 2. Actually Fix the Calendar Popover
+
+The last attempt made the calendar horizontally scrollable instead of keeping it inside the window. That is not an acceptable fix.
+
+Remove the workaround that introduced horizontal scrolling. Do not solve positioning problems by expanding the app window, clipping content, or allowing horizontal scrolling.
+
+Inspect the calendar's real DOM hierarchy, positioning strategy, parent overflow rules, stacking contexts, and available viewport dimensions.
+
+Implement a proper anchored popover:
+- Keep the calendar at its natural, usable width.
+- Position it near the triggering control.
+- Detect when it would exceed the visible app viewport.
+- Flip or shift its placement as needed to keep it entirely visible.
+- Constrain height only when necessary; vertical scrolling is acceptable as a last resort.
+- Never introduce horizontal scrolling for the calendar.
+- Prevent ancestor containers from clipping the popover. If necessary, render it in an appropriate top-level overlay/portal within the webview.
+- Keep the calendar above surrounding UI and within the visible app window.
+- Support opening from rows near every edge, at multiple window sizes.
+- Preserve custom date selection, Today, Tomorrow, Next week, Clear date, and persistence.
+
+Use an existing positioning or popover utility if the project already has one. Otherwise implement a small reusable positioning solution. Do not add a large dependency just to position one calendar.
+
+**Important:** The app window must remain its existing size. The calendar must adapt to the available viewport, not the other way around.
+
+## 3. Replace Browser-Native UI Throughout Synchron
+
+Search the entire codebase for browser-native UI and replace inappropriate instances with consistent Synchron-owned components.
+
+Audit at minimum:
+- `window.confirm()`
+- `window.alert()`
+- `window.prompt()`
+- Native HTML `<dialog>` usage, if present
+- Browser-native tooltips and context menus
+- Default file-input interactions, if used in the current product
+- Native-looking menus, selects, and date controls that conflict with the existing custom design
+
+Do not indiscriminately replace legitimate platform interactions or file pickers that should remain native. Focus on UI that needs to be consistent, app-owned, and reliable inside the Tauri webview.
+
+### Confirmation dialog system
+
+Create or reuse a shared, reusable confirmation dialog for destructive or consequential actions.
+
+For Delete:
+- Show an in-app overlay/dialog styled with Synchron's existing design system.
+- Include a clear title, concise explanation, Cancel, and Delete.
+- Make Delete visually distinguishable without turning the dialog into a warning banner.
+- Cancel should be the safe default.
+- Support Escape to cancel and correct keyboard focus behavior.
+- Prevent accidental closure or event propagation from the dialog body.
+- Restore focus to the triggering control when closed.
+- Do not delete until the user explicitly confirms.
+
+The dialog must remain within the current app window, including at compact sizes. It must not depend on browser confirmation UI.
+
+Use the same shared system for other confirmations when appropriate. Do not create a separate custom implementation for every feature.
+
+### Shared overlay primitives
+
+Where useful, establish reusable components for:
+- Confirmation dialogs
+- Anchored popovers
+- Tooltips
+- Contextual menus
+
+Keep their appearance and dismissal behavior consistent. Support Escape, outside-click dismissal where appropriate, keyboard focus, and accessible labels.
+
+For Tauri compatibility, verify behavior inside the actual Tauri webview rather than assuming browser preview behavior is sufficient.
+
+## 4. Keep the Existing Design Language
+
+Preserve the current shell, layout, Lucide React icon system, warm paper-and-ink palette, system typography, and existing functionality.
+
+Avoid:
+- More CSS patches layered over broken components
+- Horizontal scrollbars as a positioning workaround
+- Browser-native confirmation messages
+- Excessive animation or nested decorative surfaces
+- Unnecessary dependencies or unrelated refactoring
+
+## 5. Verification
+
+Before finishing:
+1. Verify the completion control has exactly one visible shape in both states.
+2. Open the calendar from rows near all four viewport edges and confirm the entire calendar remains visible without horizontal scrolling or resizing the app.
+3. Trigger Delete and verify the custom dialog; test Cancel, Escape, and explicit confirmation.
+4. Search the codebase again for remaining native dialogs and explain any intentionally retained platform interactions.
+5. Test the relevant flows in the Tauri app, not only a browser.
+6. Run the existing build and checks.
+
+Report the root cause of each issue, the files changed, and what was actually verified. Do not claim a test passed unless it was run.
