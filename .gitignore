@@ -25,3 +25,5 @@ dist-ssr
 *.sw?
 
 .env
+# Local caches and temporary verification files
+.work/
