@@ -30,6 +30,12 @@ const {
   findProjectByName,
   renameProjectRecord,
   updateProjectDescriptionRecord,
+  updateProjectFocusRecord,
+  updateProjectResumeRecord,
+  updateProjectRecord,
+  deleteProjectRecord,
+  addProjectNote,
+  addProjectDecision,
   archiveProjectRecord,
   restoreProjectRecord,
 } = await import("../src/projectStore.ts");
@@ -145,6 +151,67 @@ check("restore clears archivedAt", restored.archivedAt === undefined);
 check("restore keeps the description", restored.description === "Some context");
 check("restore keeps id and createdAt", restored.id === beta.id && restored.createdAt === year);
 check("double restore returns the same object", restoreProjectRecord(restored, later) === restored);
+
+console.log("Combined edit");
+
+const withHistory =
+  addProjectDecision(
+    addProjectNote(restored, "Opening", "  Drafted the introduction.  ", later) as NonNullable<
+      ReturnType<typeof addProjectNote>
+    >,
+    "Keep the tone quiet",
+    "Calm reading matters more than density.",
+    later,
+  ) as NonNullable<ReturnType<typeof addProjectDecision>>;
+const edited = updateProjectRecord(
+  withHistory,
+  {
+    name: "  Beta  Revised ",
+    description: "  A clearer purpose.  ",
+    currentFocus: "  Finish the opening.  ",
+    resume: "  Stopped after the first paragraph.  ",
+  },
+  "2026-03-03T00:00:00.000Z",
+);
+check("combined edit normalizes the name", edited.name === "Beta Revised");
+check("combined edit trims the description", edited.description === "A clearer purpose.");
+check("combined edit trims the focus", edited.currentFocus === "Finish the opening.");
+check("combined edit stores the resume note", edited.resume?.note === "Stopped after the first paragraph.");
+check("combined edit applies one updatedAt", edited.updatedAt === "2026-03-03T00:00:00.000Z");
+check("combined edit keeps notes", edited.notes.length === 1 && edited.notes[0].title === "Opening");
+check("combined edit keeps decisions", edited.decisions.length === 1);
+check("combined edit keeps id and createdAt", edited.id === beta.id && edited.createdAt === year);
+check(
+  "unchanged combined edit returns the same object",
+  updateProjectRecord(edited, {
+    name: edited.name,
+    description: edited.description ?? "",
+    currentFocus: edited.currentFocus ?? "",
+    resume: edited.resume?.note ?? "",
+  }) === edited,
+);
+
+const withoutFocus = updateProjectRecord(
+  edited,
+  {
+    name: edited.name,
+    description: edited.description ?? "",
+    currentFocus: "   ",
+    resume: edited.resume?.note ?? "",
+  },
+  "2026-03-04T00:00:00.000Z",
+);
+check("combined edit can clear the focus", withoutFocus.currentFocus === undefined);
+check("clearing focus keeps the resume", withoutFocus.resume?.note === edited.resume?.note);
+
+console.log("Permanent deletion");
+
+const kept = createProject("Kept", "", year) as NonNullable<ReturnType<typeof createProject>>;
+const collection = [kept, edited];
+const afterDelete = deleteProjectRecord(collection, edited.id);
+check("delete removes only the requested project", afterDelete.length === 1 && afterDelete[0].id === kept.id);
+check("delete leaves the surviving project intact", afterDelete[0] === kept);
+check("deleting a missing project returns the same array", deleteProjectRecord(collection, "missing") === collection);
 
 console.log("Persistence round trip");
 

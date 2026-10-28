@@ -182,6 +182,18 @@ export function buildProjectActivity(
   return entries.slice(0, limit);
 }
 
+/**
+ * The kind of thing an activity entry points at, as a short noun. Every
+ * surface that shows activity uses this so the same entry is never described
+ * two different ways.
+ */
+export function projectActivityKindLabel(kind: ProjectActivityKind): string {
+  if (kind.startsWith("action-")) return "Action";
+  if (kind.startsWith("note-")) return "Note";
+  if (kind.startsWith("decision-")) return "Decision";
+  return "Resume";
+}
+
 /** The DOM id of the item an activity entry points at. */
 export function projectActivityTargetId(target: ProjectActivityTarget): string {
   switch (target.kind) {

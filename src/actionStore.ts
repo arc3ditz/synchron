@@ -205,6 +205,27 @@ export function updateActionRecord(
   return { ...next, updatedAt: now };
 }
 
+/**
+ * Removes a deleted project's reference from every action that pointed at it.
+ * The actions themselves remain in the store so their titles, dates, and
+ * completion history survive; only the now-meaningless association is dropped.
+ */
+export function detachProjectActions(
+  actions: Action[],
+  projectId: string,
+  now = new Date().toISOString(),
+): Action[] {
+  let changed = false;
+  const next = actions.map((action) => {
+    if (action.projectId !== projectId) return action;
+    changed = true;
+    const { projectId: _projectId, ...detached } = action;
+    return { ...detached, updatedAt: now };
+  });
+
+  return changed ? next : actions;
+}
+
 export function completeActionRecord(action: Action, completedAt = new Date().toISOString()): Action {
   if (action.status === "completed") return action;
   const { focusedDate: _focusedDate, ...withoutFocus } = action;

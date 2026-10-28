@@ -30,7 +30,8 @@ interface AnchoredPopoverProps {
    * its own initial focus (the date picker) opts out.
    */
   focusOnOpen?: boolean;
-  children: (close: () => void) => ReactNode;
+  /** Closing restores focus to the trigger by default; callers can decline. */
+  children: (close: (restoreFocus?: boolean) => void) => ReactNode;
 }
 
 export function AnchoredPopover({
@@ -173,7 +174,7 @@ export function AnchoredPopover({
             visibility: position ? "visible" : "hidden",
           }}
         >
-          {children(() => close())}
+          {children(close)}
         </div>,
         document.body,
       )}

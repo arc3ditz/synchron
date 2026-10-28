@@ -4,6 +4,7 @@ import {
   Circle,
   CircleDot,
   Folder,
+  House,
   Inbox,
   ListChecks,
   Moon,
@@ -17,6 +18,7 @@ import type { LucideProps } from "lucide-react";
 
 const sharedProps = { size: 18, strokeWidth: 1.7 } as const;
 
+export function HomeIcon(props: LucideProps) { return <House {...sharedProps} {...props} />; }
 export function TodayIcon(props: LucideProps) { return <CalendarDays {...sharedProps} {...props} />; }
 export function ProjectsIcon(props: LucideProps) { return <Folder {...sharedProps} {...props} />; }
 export function ActionsIcon(props: LucideProps) { return <ListChecks {...sharedProps} {...props} />; }

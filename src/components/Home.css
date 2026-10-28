@@ -1,0 +1,445 @@
+/* ==========================================================================
+   Home — the workspace overview
+   One editorial column: the project to continue, the projects that need a
+   revisit, and the context that changed. Sections are separated by space and
+   a hairline rule, never by nested cards. Nothing here glows, gradients, or
+   floats.
+   ========================================================================== */
+
+/* --- Header and capture --------------------------------------------------- */
+
+.home-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+}
+
+.home-title {
+  margin: 0;
+}
+
+.home-capture {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 16rem;
+  max-width: 24rem;
+  min-width: 0;
+}
+
+.home-capture__form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.home-capture__input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.home-capture__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.home-capture__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.home-capture__submit svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.home-capture__submit:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.home-capture__submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.home-capture__link {
+  flex: none;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.home-capture__link:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* --- Sections ------------------------------------------------------------- */
+
+.home-section {
+  margin-top: var(--space-10);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
+}
+
+.home-section__eyebrow {
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* --- Continue where you left off ------------------------------------------- */
+
+.home-continue__name {
+  display: block;
+  max-width: 40rem;
+  margin-top: var(--space-3);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 500;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  overflow-wrap: anywhere;
+  text-align: left;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.home-continue__name:hover {
+  color: var(--accent-text);
+}
+
+.home-continue__focus {
+  max-width: 42rem;
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+}
+
+.home-continue__focus--empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* The user's own words, set apart by a single rule rather than a panel. */
+.home-continue__resume {
+  max-width: 44rem;
+  margin: var(--space-5) 0 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--accent);
+}
+
+.home-continue__resume-text {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.home-continue__resume-meta {
+  margin-top: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.home-continue__next {
+  margin-top: var(--space-6);
+}
+
+.home-continue__next-label {
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.home-continue__next-empty {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+/* The next action belongs to the composition, so it reads as a line of the
+   page rather than a card dropped inside one. */
+.home-continue__next .action-list {
+  margin-top: var(--space-2);
+}
+
+.home-continue__next .action-row {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* --- Needs attention ------------------------------------------------------ */
+
+.home-attention__list {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--separator);
+}
+
+.home-attention__item {
+  position: relative;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.home-attention__open {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-attention__name {
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.home-attention__open:hover .home-attention__name,
+.home-attention__open:focus-visible .home-attention__name {
+  color: var(--accent-text);
+}
+
+.home-attention__reason {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.home-attention__reason--overdue {
+  color: var(--accent-text);
+}
+
+/* The named action is part of the card, so the whole card is its target: one
+   control per row, with no second button nested inside it. */
+.home-attention__open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.home-attention__next {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* --- Recent context -------------------------------------------------------- */
+
+.home-context__list {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--separator);
+}
+
+.home-context__item {
+  border-bottom: 1px solid var(--separator);
+}
+
+.home-context__link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "kind body meta arrow";
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  width: 100%;
+  margin: 0 calc(-1 * var(--space-2));
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-context__link:hover {
+  background: var(--surface-hover);
+}
+
+.home-context__kind {
+  grid-area: kind;
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.home-context__body {
+  grid-area: body;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-context__text {
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.home-context__link:hover .home-context__text {
+  color: var(--accent-text);
+}
+
+.home-context__project {
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.home-context__meta {
+  grid-area: meta;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.home-context__arrow {
+  grid-area: arrow;
+  align-self: center;
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+/* --- Empty state ----------------------------------------------------------- */
+
+.home-empty {
+  max-width: 40rem;
+  margin-top: var(--space-10);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
+}
+
+.home-empty__title {
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.home-empty__body {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.home-empty__aside {
+  margin-top: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.home-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.home-empty__actions .action-button {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/* --- Narrow canvas --------------------------------------------------------
+   Keyed to the width the content actually has, matching the rest of the app.
+   -------------------------------------------------------------------------- */
+
+@container canvas (max-width: 46rem) {
+  .home-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  /* The capture row is a flex item on the main axis once the header stacks,
+     so its flex basis has to stop sizing it by height. */
+  .home-capture {
+    flex: 0 0 auto;
+    max-width: none;
+  }
+}
+
+@container canvas (max-width: 32rem) {
+  .home-context__link {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "kind body arrow"
+      "kind meta arrow";
+    align-items: start;
+    row-gap: 2px;
+  }
+
+  .home-context__arrow {
+    align-self: center;
+  }
+
+  .home-attention__open {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .home-attention__reason {
+    white-space: normal;
+  }
+}

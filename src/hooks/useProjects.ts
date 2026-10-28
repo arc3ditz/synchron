@@ -6,6 +6,7 @@ import {
   createProject,
   deleteProjectDecision,
   deleteProjectNote,
+  deleteProjectRecord,
   findProjectByName,
   loadProjectStore,
   normalizeProjectName,
@@ -17,8 +18,10 @@ import {
   updateProjectDescriptionRecord,
   updateProjectFocusRecord,
   updateProjectNote,
+  updateProjectRecord,
   updateProjectResumeRecord,
   type Project,
+  type ProjectEditableFields,
   type ProjectStoreData,
 } from "../projectStore";
 
@@ -33,8 +36,10 @@ export interface ProjectsController extends ProjectStoreData {
   updateProjectDescription: (id: string, description: string) => ProjectMutationResult;
   updateProjectFocus: (id: string, focus: string) => ProjectMutationResult;
   updateProjectResume: (id: string, note: string) => ProjectMutationResult;
+  updateProject: (id: string, fields: ProjectEditableFields) => ProjectMutationResult;
   archiveProject: (id: string) => ProjectMutationResult;
   restoreProject: (id: string) => ProjectMutationResult;
+  deleteProject: (id: string) => ProjectMutationResult;
   /**
    * Moves linked projects' updatedAt forward after action work changes their
    * context. Kept separate from the action store so actions stay canonical.
@@ -189,6 +194,20 @@ export function useProjects(): ProjectsController {
     [commit, data],
   );
 
+  const deleteProject = useCallback(
+    (id: string): ProjectMutationResult => {
+      const project = data.projects.find((candidate) => candidate.id === id);
+      if (!project) return { ok: false, error: MISSING_PROJECT_ERROR };
+
+      const nextProjects = deleteProjectRecord(data.projects, id);
+      if (nextProjects === data.projects) return { ok: false, error: MISSING_PROJECT_ERROR };
+
+      commit({ projects: nextProjects });
+      return { ok: true, project };
+    },
+    [commit, data],
+  );
+
   const updateProjectFocus = useCallback(
     (id: string, focus: string): ProjectMutationResult =>
       mutateProject(id, (project) => updateProjectFocusRecord(project, focus), MISSING_PROJECT_ERROR),
@@ -203,6 +222,28 @@ export function useProjects(): ProjectsController {
         MISSING_PROJECT_ERROR,
       ),
     [mutateProject],
+  );
+
+  const updateProject = useCallback(
+    (id: string, fields: ProjectEditableFields): ProjectMutationResult => {
+      const project = data.projects.find((candidate) => candidate.id === id);
+      if (!project) return { ok: false, error: MISSING_PROJECT_ERROR };
+
+      const normalizedName = normalizeProjectName(fields.name);
+      if (!normalizedName) return { ok: false, error: EMPTY_NAME_ERROR };
+      if (findProjectByName(data.projects, normalizedName, id)) {
+        return { ok: false, error: DUPLICATE_NAME_ERROR };
+      }
+
+      const nextProject = updateProjectRecord(project, { ...fields, name: normalizedName });
+      if (nextProject === project) return { ok: true, project };
+
+      commit({
+        projects: data.projects.map((candidate) => (candidate.id === id ? nextProject : candidate)),
+      });
+      return { ok: true, project: nextProject };
+    },
+    [commit, data],
   );
 
   const recordProjectActivity = useCallback(
@@ -302,8 +343,10 @@ export function useProjects(): ProjectsController {
     updateProjectDescription,
     updateProjectFocus,
     updateProjectResume,
+    updateProject,
     archiveProject,
     restoreProject,
+    deleteProject,
     recordProjectActivity,
     addNote,
     updateNote,

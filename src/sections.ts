@@ -1,13 +1,14 @@
 import type { ComponentType, SVGProps } from "react";
 import {
   ActionsIcon,
+  HomeIcon,
   InboxIcon,
   ProjectsIcon,
   SettingsIcon,
   TodayIcon,
 } from "./components/icons";
 
-export type SectionId = "today" | "projects" | "actions" | "inbox" | "settings";
+export type SectionId = "home" | "today" | "projects" | "actions" | "inbox" | "settings";
 
 export interface Section {
   id: SectionId;
@@ -19,6 +20,13 @@ export interface Section {
 }
 
 export const SECTIONS: Section[] = [
+  {
+    id: "home",
+    label: "Home",
+    icon: HomeIcon,
+    emptyTitle: "Nothing to continue yet.",
+    emptyBody: "Create a project and it will gather here.",
+  },
   {
     id: "today",
     label: "Today",

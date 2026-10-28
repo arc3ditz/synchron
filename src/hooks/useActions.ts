@@ -3,6 +3,7 @@ import {
   completeActionRecord,
   createAction,
   createInboxItem,
+  detachProjectActions,
   loadActionStore,
   localDateKey,
   persistActionStore,
@@ -39,6 +40,8 @@ export interface ActionsController extends ActionStoreData {
   focusActionToday: (id: string, date?: string) => void;
   removeActionFocus: (id: string) => void;
   deleteAction: (id: string) => void;
+  /** Keeps an action but clears its reference to a permanently deleted project. */
+  detachProject: (projectId: string) => void;
   addInboxItem: (title: string) => void;
   updateInboxItem: (id: string, title: string) => void;
   convertInboxItem: (id: string, projectId?: string) => void;
@@ -180,6 +183,15 @@ export function useActions({ onProjectActivity }: ActionsOptions = {}): ActionsC
     [commit, data, onProjectActivity],
   );
 
+  const detachProject = useCallback(
+    (projectId: string) => {
+      const nextActions = detachProjectActions(data.actions, projectId);
+      if (nextActions === data.actions) return;
+      commit({ ...data, actions: nextActions });
+    },
+    [commit, data],
+  );
+
   const addInboxItem = useCallback(
     (title: string) => {
       if (!title.trim()) return;
@@ -237,6 +249,7 @@ export function useActions({ onProjectActivity }: ActionsOptions = {}): ActionsC
     focusActionToday,
     removeActionFocus,
     deleteAction,
+    detachProject,
     addInboxItem,
     updateInboxItem,
     convertInboxItem,

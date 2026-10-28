@@ -12,6 +12,24 @@
   margin-top: var(--space-5);
 }
 
+/* --- Index header ---------------------------------------------------------
+   Compact and aligned with the project workspace: editorial title, one
+   supporting line, one primary action at the right.
+   -------------------------------------------------------------------------- */
+
+.projects-index__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.projects-index__tagline {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
 /* --- Create form --------------------------------------------------------- */
 
 .project-form {
@@ -46,31 +64,33 @@
   font-size: var(--text-xs);
 }
 
-/* --- List ---------------------------------------------------------------- */
+/* --- List ----------------------------------------------------------------
+   A calm editorial list: names lead, one line of context each, hairline
+   dividers instead of boxes. Not a dashboard.
+   -------------------------------------------------------------------------- */
 
 .project-list {
   display: grid;
-  gap: var(--space-2);
   width: 100%;
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--separator);
 }
 
 .project-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas: "open meta operations";
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "open operations";
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  transition: border-color var(--duration-fast) var(--ease-out);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--separator);
 }
 
-.project-row:hover {
-  border-color: var(--separator-strong);
+.project-row:hover .project-row__name,
+.project-row__open:hover .project-row__name,
+.project-row__open:focus-visible .project-row__name {
+  color: var(--accent-text);
 }
 
 .project-row__open {
@@ -91,8 +111,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text-primary);
-  font-size: var(--text-md);
-  font-weight: 500;
+  font-size: var(--text-lg);
+  font-weight: 600;
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -104,21 +124,20 @@
   color: var(--accent-text);
 }
 
-.project-row__description {
+.project-row__focus {
   min-width: 0;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   line-height: var(--leading-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.project-row__meta {
-  grid-area: meta;
-  color: var(--text-secondary);
+.project-row__detail {
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
-  white-space: nowrap;
+  line-height: var(--leading-normal);
 }
 
 .project-row__operations {
@@ -128,7 +147,31 @@
   gap: var(--space-1);
 }
 
-.project-row--archived .project-row__name {
+/* --- Row options menu ------------------------------------------------------
+   The same quiet overflow trigger the workspace header uses: an icon-only
+   button whose accessible name lives in its label attribute. It is a grid
+   sibling of the open button rather than a nested control, so activating it
+   can never open the project. The shared dialog positioning keeps the menu
+   inside the window on rows that sit near the right edge.
+   -------------------------------------------------------------------------- */
+
+.project-row__menu-trigger {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+}
+
+.project-row__menu-trigger svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* The icon-only trigger renders an empty label span; hide it entirely. */
+.project-row__menu-trigger .meta-trigger__label {
+  display: none;
+}
+
+.project-row--archived .project-row__name,
+.project-row--archived .project-row__focus {
   color: var(--text-secondary);
 }
 
@@ -137,6 +180,31 @@
 .project-detail {
   padding-top: var(--space-2);
 }
+
+/* Header options menu: the single icon-only trigger. */
+.project-detail__menu-trigger {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+}
+
+.project-detail__menu-trigger svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* The icon-only trigger renders an empty label span; hide it entirely. */
+.project-detail__menu-trigger .meta-trigger__label {
+  display: none;
+}
+
+.menu-option--delete {
+  color: var(--accent-text);
+}
+
+.menu-option--delete .menu-option__label {
+  display: inline-flex;
+}
+
 
 .project-detail__back {
   display: inline-flex;
@@ -184,19 +252,6 @@
   outline: none;
 }
 
-.project-detail__name-input {
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--separator-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  font-size: clamp(1.75rem, 4.5vw, 2.75rem);
-  font-weight: 500;
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-tight);
-}
-
 .project-detail__meta {
   display: flex;
   align-items: baseline;
@@ -214,13 +269,60 @@
 .project-detail__operations {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-1);
   padding-top: var(--space-2);
 }
 
-.project-detail__archive {
+.project-detail__archive,
+.project-detail__delete {
   padding: var(--space-2) var(--space-3);
   color: var(--text-secondary);
+}
+
+.project-detail__delete:hover {
+  color: var(--accent-text);
+}
+
+/* --- Edit form ----------------------------------------------------------- */
+
+.project-edit {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 44rem;
+  margin-top: var(--space-6);
+}
+
+.project-edit__title {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.project-edit__field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.project-edit__name {
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.project-edit__textarea--short {
+  min-height: 3.5rem;
+}
+
+.project-edit__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.project-edit__actions .action-button {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
 }
 
 .project-detail__error {
@@ -229,47 +331,20 @@
   font-size: var(--text-xs);
 }
 
-/* --- Description --------------------------------------------------------- */
-
-.project-detail__description-block {
-  max-width: 48rem;
-  margin-top: var(--space-6);
-}
+/* --- Description ---------------------------------------------------------
+   The description lives in the header beside the title, as understated
+   secondary text. An absent description says nothing: the Edit form is the
+   way to add one.
+   -------------------------------------------------------------------------- */
 
 .project-detail__description {
-  color: var(--text-primary);
-  font-size: var(--text-md);
+  max-width: 44rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-}
-
-.project-detail__description--empty {
-  color: var(--text-secondary);
-}
-
-.project-detail__text-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 1.75rem;
-  margin: var(--space-2) 0 0 calc(-1 * var(--space-2));
-  padding: var(--space-1) var(--space-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--accent-text);
-  cursor: pointer;
-  font-size: var(--text-xs);
-}
-
-.project-detail__text-action:hover {
-  background: var(--surface-active);
-}
-
-.project-detail__text-action svg {
-  width: 0.85rem;
-  height: 0.85rem;
 }
 
 .project-detail__textarea {
@@ -300,7 +375,6 @@
 /* --- Current focus ------------------------------------------------------- */
 
 .project-focus {
-  max-width: 48rem;
   margin-top: var(--space-8);
   padding-top: var(--space-5);
   border-top: 1px solid var(--separator);
@@ -341,36 +415,6 @@
 }
 
 /* --- Continuity ---------------------------------------------------------- */
-
-.project-continuity {
-  max-width: 48rem;
-  margin-top: var(--space-10);
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--separator);
-}
-
-.project-continuity__title {
-  color: var(--text-primary);
-  font-size: var(--text-md);
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-
-.project-continuity__intro {
-  max-width: 40rem;
-  margin-top: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-}
-
-.project-continuity__note {
-  max-width: 40rem;
-  margin-top: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-}
 
 .context-section {
   margin-top: var(--space-8);
@@ -477,6 +521,9 @@
 }
 
 .context-item__body {
+  /* The user's own prose: capped at the same readable measure as the resume
+     note and description rather than stretched across the full canvas. */
+  max-width: 44rem;
   margin-top: var(--space-2);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -570,15 +617,7 @@
 
 @container canvas (max-width: 30rem) {
   .project-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "open operations"
-      "meta operations";
-    row-gap: var(--space-1);
-  }
-
-  .project-row__meta {
-    padding-left: 0;
+    align-items: flex-start;
   }
 
   .project-detail__operations {
@@ -605,7 +644,6 @@
    -------------------------------------------------------------------------- */
 
 .project-resume {
-  max-width: 48rem;
   margin-top: var(--space-10);
   padding-top: var(--space-6);
   border-top: 1px solid var(--separator);
@@ -804,7 +842,6 @@
 /* --- Recent activity ----------------------------------------------------- */
 
 .project-activity {
-  max-width: 48rem;
   margin-top: var(--space-10);
   padding-top: var(--space-6);
   border-top: 1px solid var(--separator);
@@ -836,7 +873,6 @@
 /* --- Project actions ----------------------------------------------------- */
 
 .project-actions {
-  max-width: 48rem;
   margin-top: var(--space-10);
   padding-top: var(--space-6);
   border-top: 1px solid var(--separator);
@@ -896,3 +932,142 @@
   font-weight: 500;
 }
 
+
+/* ==========================================================================
+   Project workspace shell — persistent header + compact section navigation
+   ========================================================================== */
+
+.workspace-nav {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin-top: var(--space-6);
+  border-bottom: 1px solid var(--separator);
+}
+
+.workspace-nav__link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: var(--space-2) 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.workspace-nav__link:hover {
+  color: var(--text-primary);
+}
+
+.workspace-nav__link--active {
+  border-bottom-color: var(--accent);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.workspace-nav__count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.workspace-nav__link--active .workspace-nav__count {
+  color: var(--accent-text);
+}
+
+/* --- Overview -------------------------------------------------------------
+   One quiet page of where the project stands. Sections are separated by
+   hairline rules and space, never by nested cards.
+   -------------------------------------------------------------------------- */
+
+/* Overview sections inherit the shared canvas measure like every other
+   surface; their prose keeps its own readable max-widths below. */
+
+.project-overview .project-focus {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 0;
+}
+
+.project-overview .project-focus__heading {
+  align-items: center;
+}
+
+.project-overview__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.project-overview__next {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
+}
+
+.project-overview__list {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--separator);
+}
+
+.project-overview__add-task {
+  margin-top: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.project-overview__context {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
+}
+
+.project-overview__empty {
+  max-width: 40rem;
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+/* The Overview context list leads with the item's own wording; the kind sits
+   quietly under it with the timestamp. */
+.context-links--leading-title .context-links__link {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "text text arrow"
+    "kind meta arrow";
+  align-items: start;
+  row-gap: 2px;
+}
+
+.context-links--leading-title .context-links__text {
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+
+.context-links--leading-title .context-links__kind {
+  align-self: center;
+}
+
+/* --- Context: background ---------------------------------------------------
+   The project's own description, readable where the reader has chosen to
+   work: below the header, before the resume note and activity.
+   -------------------------------------------------------------------------- */
+
+.project-background {
+  margin-top: var(--space-6);
+}
+
+.project-background__text {
+  margin-top: var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}

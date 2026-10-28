@@ -56,6 +56,14 @@ export interface Project {
   decisions: ProjectDecision[];
 }
 
+/** The fields a project's own edit form can change in one commit. */
+export interface ProjectEditableFields {
+  name: string;
+  description: string;
+  currentFocus: string;
+  resume: string;
+}
+
 export interface ProjectStoreData {
   projects: Project[];
 }
@@ -348,6 +356,17 @@ export function restoreProjectRecord(
   };
 }
 
+/**
+ * Permanently removes one project from the collection. Notes, decisions, and
+ * the resume note live inside the project record, so they are removed with it.
+ * Linked actions are kept separately in the action store and must be detached
+ * by the caller before the project disappears.
+ */
+export function deleteProjectRecord(projects: Project[], projectId: string): Project[] {
+  const next = projects.filter((project) => project.id !== projectId);
+  return next.length === projects.length ? projects : next;
+}
+
 export function updateProjectFocusRecord(
   project: Project,
   focus: string,
@@ -385,6 +404,22 @@ export function updateProjectResumeRecord(
     : { note: normalizedNote, createdAt: now, updatedAt: now };
 
   return { ...project, resume, updatedAt: now };
+}
+
+/**
+ * Applies one project edit as a single record change, so a save cannot leave
+ * the name updated but the description behind. Each field keeps the same
+ * normalization and no-op rules as its dedicated editor.
+ */
+export function updateProjectRecord(
+  project: Project,
+  fields: ProjectEditableFields,
+  now = new Date().toISOString(),
+): Project {
+  const renamed = renameProjectRecord(project, fields.name, now);
+  const described = updateProjectDescriptionRecord(renamed, fields.description, now);
+  const focused = updateProjectFocusRecord(described, fields.currentFocus, now);
+  return updateProjectResumeRecord(focused, fields.resume, now);
 }
 
 function createNoteRecord(

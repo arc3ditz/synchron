@@ -3,7 +3,7 @@ import { getActionReasons, prioritizeActions } from "../actionStore";
 import type { ActionsController } from "../hooks/useActions";
 import type { ProjectsController } from "../hooks/useProjects";
 import type { Project } from "../projectStore";
-import type { Section } from "../sections";
+import type { Section, SectionId } from "../sections";
 import {
   ActionForm,
   ActionList,
@@ -13,10 +13,22 @@ import {
   todayKey,
 } from "./ActionViews";
 import { EditIcon, TrashIcon } from "./icons";
-import { ProjectsCanvas } from "./ProjectsCanvas";
+import { HomeCanvas } from "./HomeCanvas";
+import { ProjectsCanvas, type ProjectOpenIntent, type ProjectOpenTarget } from "./ProjectsCanvas";
 import { useConfirm } from "./Overlays";
 
-interface ContentCanvasProps { section: Section; actions: ActionsController; projects: ProjectsController }
+interface ContentCanvasProps {
+  section: Section;
+  actions: ActionsController;
+  projects: ProjectsController;
+  /** A project opened from another surface, with the item to reveal in it. */
+  projectTarget?: ProjectOpenTarget;
+  /** Changes whenever the primary navigation asks for the Projects list. */
+  projectsListResetToken: number;
+  onOpenProject: (projectId: string, targetId?: string, intent?: ProjectOpenIntent) => void;
+  onCloseProjectTarget: () => void;
+  onNavigate: (id: SectionId) => void;
+}
 type ActionFilter = "active" | "completed" | "all";
 
 function InboxRow({ item, actions, projects }: { item: { id: string; title: string }; actions: ActionsController; projects: Project[] }) {
@@ -64,6 +76,70 @@ function TodayCanvas({ actions, projects }: { actions: ActionsController; projec
   return <><p className="today-date">{formatToday()}</p><ActionForm onSubmit={actions.addAction} projects={projects.projects} />{upNext ? <section className="today-section"><div className="today-section__heading"><h2 className="today-section__title">Up Next</h2><span className="today-section__note">{getActionReasons(upNext, todayDate)[0]}</span></div><ActionList items={[upNext]} actions={actions} projects={projects.projects} todayDate={todayDate} empty="" showReason /></section> : <div className="empty today-empty"><h2 className="empty__title">Nothing is asking for your attention today.</h2><p className="empty__body">Choose an existing action to focus on today, or create a new one above. Focusing an action does not change its due date.</p></div>}{laterToday.length > 0 && <section className="today-section today-section--later"><h2 className="today-section__title">Also today</h2><ActionList items={laterToday} actions={actions} projects={projects.projects} todayDate={todayDate} empty="" showReason /></section>}</>;
 }
 
-export function ContentCanvas({ section, actions, projects }: ContentCanvasProps) {
-  return <main className="canvas" id="main-content" tabIndex={-1}><div className={`canvas__inner canvas__inner--${section.id}`}>{section.id === "projects" ? <ProjectsCanvas projects={projects} actions={actions} /> : <><h1 className="canvas__title">{section.label}</h1>{actions.storageError && <p className="storage-warning" role="status">{actions.storageError}</p>}{section.id === "today" ? <TodayCanvas actions={actions} projects={projects} /> : section.id === "inbox" ? <InboxCanvas actions={actions} projects={projects} /> : section.id === "actions" ? <ActionsCanvas actions={actions} projects={projects} /> : <div className="empty"><h2 className="empty__title">{section.emptyTitle}</h2><p className="empty__body">{section.emptyBody}</p></div>}</>}</div></main>;
+export function ContentCanvas({
+  section,
+  actions,
+  projects,
+  projectTarget,
+  projectsListResetToken,
+  onOpenProject,
+  onCloseProjectTarget,
+  onNavigate,
+}: ContentCanvasProps) {
+  if (section.id === "projects") {
+    return (
+      <main className="canvas" id="main-content" tabIndex={-1}>
+        <div className="canvas__inner canvas__inner--projects">
+          <ProjectsCanvas
+            projects={projects}
+            actions={actions}
+            openTarget={projectTarget}
+            listResetToken={projectsListResetToken}
+            onOpenTargetClosed={onCloseProjectTarget}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  if (section.id === "home") {
+    return (
+      <main className="canvas" id="main-content" tabIndex={-1}>
+        <div className="canvas__inner canvas__inner--home">
+          <HomeCanvas
+            actions={actions}
+            projects={projects}
+            onOpenProject={onOpenProject}
+            onOpenInbox={() => onNavigate("inbox")}
+            onOpenProjects={() => onNavigate("projects")}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="canvas" id="main-content" tabIndex={-1}>
+      <div className={`canvas__inner canvas__inner--${section.id}`}>
+        <h1 className="canvas__title">{section.label}</h1>
+        {actions.storageError && (
+          <p className="storage-warning" role="status">
+            {actions.storageError}
+          </p>
+        )}
+        {section.id === "today" ? (
+          <TodayCanvas actions={actions} projects={projects} />
+        ) : section.id === "inbox" ? (
+          <InboxCanvas actions={actions} projects={projects} />
+        ) : section.id === "actions" ? (
+          <ActionsCanvas actions={actions} projects={projects} />
+        ) : (
+          <div className="empty">
+            <h2 className="empty__title">{section.emptyTitle}</h2>
+            <p className="empty__body">{section.emptyBody}</p>
+          </div>
+        )}
+      </div>
+    </main>
+  );
 }

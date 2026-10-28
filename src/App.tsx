@@ -7,6 +7,7 @@ import "./components/Toolbar.css";
 import "./components/ContentCanvas.css";
 import "./components/Overlays.css";
 import "./components/Projects.css";
+import "./components/Home.css";
 import { ContentCanvas } from "./components/ContentCanvas";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
@@ -14,6 +15,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useActions } from "./hooks/useActions";
 import { useProjects } from "./hooks/useProjects";
 import { SECTIONS, type SectionId } from "./sections";
+import type { ProjectOpenTarget, ProjectOpenIntent } from "./components/ProjectsCanvas";
 
 const SIDEBAR_DEFAULT_WIDTH = 240;
 const SIDEBAR_MIN_WIDTH = 208;
@@ -41,8 +43,16 @@ function formatToday(): string {
 }
 
 function App() {
-  const [activeId, setActiveId] = useState<SectionId>("today");
+  const [activeId, setActiveId] = useState<SectionId>("home");
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
+  // A project opened from another surface, such as Home, carries the item it
+  // was opened for so the destination can reveal and focus it.
+  const [projectTarget, setProjectTarget] = useState<ProjectOpenTarget>();
+  // Selecting Projects in the primary navigation asks the section to show its
+  // list, even when a project detail is already open. The request carries a
+  // token that changes on every selection, so re-selecting the item you are
+  // already on has an effect too.
+  const [projectsListResetToken, setProjectsListResetToken] = useState(0);
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const { preference, resolved, cyclePreference } = useTheme();
   // Projects own their timestamps, so they are created before actions and hand
@@ -129,6 +139,30 @@ function App() {
   const activeSection =
     SECTIONS.find((section) => section.id === activeId) ?? SECTIONS[0];
 
+  // Leaving Projects drops a pending project target, so returning to the
+  // section later shows the list rather than reopening the last project.
+  // Selecting Projects also asks its section for the list, which is what makes
+  // the item work while a project detail is open.
+  const selectSection = useCallback((id: SectionId) => {
+    setProjectTarget(undefined);
+    if (id === "projects") setProjectsListResetToken((token) => token + 1);
+    setActiveId(id);
+  }, []);
+
+  const openProject = useCallback(
+    (projectId: string, targetId?: string, intent?: ProjectOpenIntent) => {
+      setProjectTarget({ projectId, targetId, intent });
+      setActiveId("projects");
+    },
+    [],
+  );
+
+  // Leaving a project that was opened from Home returns to Home.
+  const closeProjectTarget = useCallback(() => {
+    setProjectTarget(undefined);
+    setActiveId("home");
+  }, []);
+
   return (
     <div className="app" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
       <a className="skip-link" href="#main-content">
@@ -138,7 +172,7 @@ function App() {
       <Sidebar
         sections={SECTIONS}
         activeId={activeId}
-        onSelect={setActiveId}
+        onSelect={selectSection}
       />
 
       <div
@@ -161,7 +195,16 @@ function App() {
           resolved={resolved}
           onCyclePreference={cyclePreference}
         />
-        <ContentCanvas section={activeSection} actions={actions} projects={projects} />
+        <ContentCanvas
+          section={activeSection}
+          actions={actions}
+          projects={projects}
+          projectTarget={projectTarget}
+          projectsListResetToken={projectsListResetToken}
+          onOpenProject={openProject}
+          onCloseProjectTarget={closeProjectTarget}
+          onNavigate={selectSection}
+        />
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ const localStorageMock = {
 const {
   completeActionRecord,
   createAction,
+  detachProjectActions,
   loadActionStore,
   persistActionStore,
   reopenActionRecord,
@@ -144,7 +145,33 @@ check(
   archivedActionRoundTrip?.projectId === project.id,
 );
 
-reset(JSON.stringify({ actions: [projectAction], inbox: [] }));
+console.log("Permanent project deletion");
+
+const deletedAt = "2026-03-05T00:00:00.000Z";
+const otherProjectAction = createAction("Read the notes", { projectId: "project-2" });
+const detached = detachProjectActions(
+  [projectAction, otherProjectAction, unlinked],
+  project.id,
+  deletedAt,
+);
+check("detaching keeps every action", detached.length === 3);
+check("detaching removes the deleted project's reference", detached[0]?.projectId === undefined);
+check("detaching stamps the changed action", detached[0]?.updatedAt === deletedAt);
+check(
+  "detaching keeps the action's own history",
+  detached[0]?.title === projectAction.title && detached[0]?.createdAt === projectAction.createdAt,
+);
+check("detaching leaves other project links alone", detached[1]?.projectId === "project-2");
+check("detaching leaves unlinked actions identical", detached[2] === unlinked);
+const untouched = [unlinked];
+check(
+  "detaching with no matches returns the same array",
+  detachProjectActions(untouched, project.id, deletedAt) === untouched,
+);
+
+console.log("Blocked storage");
+
+reset(JSON.stringify({ actions: [projectAction, otherProjectAction], inbox: [] }));
 (globalThis as unknown as { window: unknown }).window = {
   localStorage: {
     getItem: () => {

@@ -338,7 +338,11 @@ export function ActionForm({
   </form>;
 }
 
-export function focusAfterRowRemoval(row: Element | null, siblingSelector: string | null, fallbackSelector: string) {
+export function focusAfterRowRemoval(
+  row: Element | null,
+  siblingSelector: string | null,
+  fallbackSelector: string,
+) {
   let sibling: HTMLElement | null = null;
   if (siblingSelector) {
     for (const element of [row?.nextElementSibling, row?.previousElementSibling]) {
@@ -346,7 +350,13 @@ export function focusAfterRowRemoval(row: Element | null, siblingSelector: strin
       if (sibling) break;
     }
   }
-  const fallback = document.querySelector<HTMLElement>(fallbackSelector) ?? document.querySelector<HTMLElement>(".project-detail__back");
+  // The fallback depends on which surface removed the row: the form input in
+  // Actions contexts, the Overview's own add-task affordance, or finally the
+  // project header when neither exists.
+  const fallback = [fallbackSelector, ".project-overview__add-task", ".project-detail__back"]
+    .filter((selector) => Boolean(selector))
+    .map((selector) => document.querySelector<HTMLElement>(selector!))
+    .find((candidate) => candidate !== null) ?? null;
   // The row is removed in the same commit as the dialog or the status change;
   // wait for React to render, and only move focus if the row is really gone.
   window.setTimeout(() => {

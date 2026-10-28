@@ -12,6 +12,7 @@
     "check:project-resume": "node --experimental-strip-types scripts/verify-project-resume.ts",
     "check:project-activity": "node --experimental-strip-types scripts/verify-project-activity.ts",
     "check:action-projects": "node --experimental-strip-types scripts/verify-action-projects.ts",
+    "check:home-overview": "node --experimental-strip-types scripts/verify-home-overview.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
