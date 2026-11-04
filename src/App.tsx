@@ -58,7 +58,12 @@ function App() {
   // Projects own their timestamps, so they are created before actions and hand
   // their activity recorder to the action store.
   const projects = useProjects();
-  const actions = useActions({ onProjectActivity: projects.recordProjectActivity });
+  const actions = useActions({
+    onProjectActivity: projects.recordProjectActivity,
+    // A deleted action must leave no dangling relationship behind: notes and
+    // decisions drop the reference through this one wiring point.
+    onActionDeleted: projects.removeActionLinks,
+  });
   const dateLabel = useMemo(formatToday, []);
 
   useEffect(() => {

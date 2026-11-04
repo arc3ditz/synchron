@@ -6,11 +6,14 @@ import { projectLastActivityAt } from "../projectActivity";
 import {
   buildHomeAttention,
   selectContinueProject,
+  selectTopNextAction,
   type HomeAttentionItem,
+  type WorkspaceNextAction,
 } from "../homeOverview";
 import type { ActionsController } from "../hooks/useActions";
 import type { ProjectsController } from "../hooks/useProjects";
 import type { Project } from "../projectStore";
+import { projectStatusLabel } from "../projectStore";
 import { ActionRow, todayKey } from "./ActionViews";
 import { PlusIcon } from "./icons";
 
@@ -68,6 +71,54 @@ function HomeCapture({
         Open inbox
       </button>
     </div>
+  );
+}
+
+/**
+ * The single most useful open action across every active project, chosen by
+ * the same deterministic ranking each project's own next action uses. It
+ * answers one question — "if I do one thing now, what is it?" — and states
+ * the recorded reason, never an invented urgency. Completion and scheduling
+ * work right here, and the project name in the row opens the project at the
+ * action, using the anchor convention Home already uses.
+ */
+function HomeNextAction({
+  item,
+  actions,
+  onOpenProject,
+}: {
+  item: WorkspaceNextAction;
+  actions: ActionsController;
+  onOpenProject: (projectId: string, targetId?: string) => void;
+}) {
+  return (
+    <section className="home-section home-next" aria-labelledby="home-next-heading">
+      <h2 id="home-next-heading" className="home-section__eyebrow">
+        Do this next
+      </h2>
+
+      <ul className="action-list">
+        <ActionRow
+          key={item.action.id}
+          action={item.action}
+          actions={actions}
+          todayDate={todayKey()}
+          showReason
+          onOpenProject={(projectId) => onOpenProject(projectId, item.targetId)}
+        />
+      </ul>
+
+      <p className="home-next__project">
+        In{" "}
+        <button
+          type="button"
+          className="home-next__project-link"
+          onClick={() => onOpenProject(item.project.id, item.targetId)}
+        >
+          {item.project.name}
+        </button>
+      </p>
+    </section>
   );
 }
 
@@ -240,20 +291,22 @@ function HomeAttention({
  */
 function HomeEmpty({
   inboxCount,
-  archivedCount,
+  parkedCount,
   onOpenProjects,
   onOpenInbox,
 }: {
   inboxCount: number;
-  archivedCount: number;
+  parkedCount: number;
   onOpenProjects: () => void;
   onOpenInbox: () => void;
 }) {
   const title =
-    archivedCount > 0 ? "Your projects are archived." : "Start with the project you keep coming back to.";
+    parkedCount > 0
+      ? "Every project is on hold, completed, or archived."
+      : "Start with the project you keep coming back to.";
   const body =
-    archivedCount > 0
-      ? "Restore one to pick up its focus, notes, decisions, and open actions. Home will follow it again from there."
+    parkedCount > 0
+      ? "Bring one back to active — or start a new one — and Home will pick up its focus, notes, decisions, and open actions from there."
       : "A project holds the thread: the outcome you are pursuing, where you stopped, the notes and decisions along the way, and the actions waiting inside it. Home picks the story up from there.";
 
   return (
@@ -314,7 +367,7 @@ function HomeAcrossProjects({
 
       <ul className="home-across__list">
         {rows.map((project) => {
-          const isArchived = project.status === "archived";
+          const isNotActive = project.status !== "active";
           const openCount = actions.actions.filter(
             (action) => action.projectId === project.id && action.status === "open",
           ).length;
@@ -328,15 +381,17 @@ function HomeAcrossProjects({
               >
                 <span
                   className={
-                    isArchived
+                    isNotActive
                       ? "home-across__name home-across__name--archived"
                       : "home-across__name"
                   }
                 >
                   {project.name}
                 </span>
-                {isArchived && (
-                  <span className="home-across__status">Archived</span>
+                {isNotActive && (
+                  <span className="home-across__status">
+                    {projectStatusLabel(project.status)}
+                  </span>
                 )}
               </button>
               <p className="home-across__meta">
@@ -373,10 +428,14 @@ export function HomeCanvas({
     () => projects.projects.filter((project) => project.status === "active"),
     [projects.projects],
   );
-  const archivedCount = projects.projects.length - activeProjects.length;
+  const parkedCount = projects.projects.length - activeProjects.length;
   const continueProject = useMemo(
     () => selectContinueProject(projects.projects, actions.actions),
     [projects.projects, actions.actions],
+  );
+  const nextAction = useMemo(
+    () => selectTopNextAction(projects.projects, actions.actions, todayDate),
+    [projects.projects, actions.actions, todayDate],
   );
   const attention = useMemo(
     () =>
@@ -405,13 +464,20 @@ export function HomeCanvas({
       {activeProjects.length === 0 ? (
         <HomeEmpty
           inboxCount={actions.inbox.length}
-          archivedCount={archivedCount}
+          parkedCount={parkedCount}
           onOpenProjects={onOpenProjects}
           onOpenInbox={onOpenInbox}
         />
       ) : (
         <div className={hasProjectContext ? "home-dashboard" : "home-dashboard home-dashboard--single"}>
           <div className="home-dashboard__main">
+            {nextAction && (
+              <HomeNextAction
+                item={nextAction}
+                actions={actions}
+                onOpenProject={onOpenProject}
+              />
+            )}
             {continueProject ? (
               <HomeContinue
                 project={continueProject}

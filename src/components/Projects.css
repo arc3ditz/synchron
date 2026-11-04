@@ -225,6 +225,33 @@
   white-space: nowrap;
 }
 
+/* The project's own next action sits above the counts, one truncated line
+   with the full title available as hover text. Quiet text, matching the
+   focus line on the left — no filled badge. */
+.project-row__next {
+  max-width: 16rem;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-row__next-label {
+  margin-right: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.project-row:hover .project-row__next,
+.project-row__open:focus-visible ~ .project-row__meta .project-row__next {
+  color: var(--text-primary);
+}
+
 /* --- Row-level status -----------------------------------------------------
    Only what the row's own lines do not already say. Quiet text, never a
    filled badge competing with the project name.
@@ -260,6 +287,23 @@
 
 /* The icon-only trigger renders an empty label span; hide it entirely. */
 .project-detail__menu-trigger .meta-trigger__label {
+  display: none;
+}
+
+/* Row options menu: the same icon-only trigger, inside the row's operations
+   group. Same padding and weight so the two overflow menus read as one
+   pattern across the list and the detail header. */
+.project-row__menu-trigger {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+}
+
+.project-row__menu-trigger svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.project-row__menu-trigger .meta-trigger__label {
   display: none;
 }
 
@@ -359,6 +403,22 @@
   height: 0.4rem;
   border-radius: 50%;
   background: var(--accent);
+}
+
+/* The accent dot is the active state; the other states stay in the ink
+   palette, quiet by design. */
+.project-header__status-dot--on-hold {
+  background: var(--text-tertiary);
+}
+
+.project-header__status-dot--completed {
+  background: var(--text-secondary);
+  opacity: 0.55;
+}
+
+.project-header__status-dot--archived {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
 }
 
 .project-header__operations {
@@ -707,6 +767,100 @@
   margin-top: var(--space-2);
   color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+
+/* --- Related actions ------------------------------------------------------
+   A note or decision can point at actions in its own project. On the item
+   they render as inline text links that jump to the action; in the form they
+   render as a compact checkbox list. Both stay inside the project. */
+
+.context-item__related {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.context-item__related-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.context-item__related-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  text-align: left;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.context-item__related-link:hover,
+.context-item__related-link:focus-visible {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.context-item__related-link:focus {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* The picker inside the note and decision forms. One checkbox per action,
+   each line naming the action and its current state. */
+.related-actions {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.related-actions__option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.related-actions__option:hover {
+  background: var(--surface-hover);
+}
+
+.related-actions__option--selected {
+  background: var(--accent-soft);
+}
+
+.related-actions__option input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.related-actions__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.related-actions__state {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
 }
 
 /* --- Note and decision forms --------------------------------------------- */

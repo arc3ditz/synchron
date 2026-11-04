@@ -149,17 +149,35 @@ console.log("Permanent project deletion");
 
 const deletedAt = "2026-03-05T00:00:00.000Z";
 const otherProjectAction = createAction("Read the notes", { projectId: "project-2" });
+const deletedAtAction = createAction("Prepare notes", { projectId: project.id }, deletedAt);
 const detached = detachProjectActions(
-  [projectAction, otherProjectAction, unlinked],
+  [deletedAtAction, otherProjectAction, unlinked],
   project.id,
   deletedAt,
 );
 check("detaching keeps every action", detached.length === 3);
 check("detaching removes the deleted project's reference", detached[0]?.projectId === undefined);
-check("detaching stamps the changed action", detached[0]?.updatedAt === deletedAt);
+check(
+  "detaching stamps the changed action with the deletion time",
+  detached[0]?.updatedAt === deletedAt,
+);
+// A reload between an action update and the delete confirm can hand detach an
+// earlier timestamp; the guard keeps the stamped value at the action's own
+// update rather than letting it rewind.
+const rewound = updateActionRecord(
+  projectAction,
+  { title: "Renamed after the confirm" },
+  "2026-03-06T00:00:00.000Z",
+);
+check(
+  "detaching never rewinds an action's updatedAt",
+  detachProjectActions([rewound], project.id, deletedAt)[0]?.updatedAt === "2026-03-06T00:00:00.000Z",
+);
+check("detaching keeps other action fields intact", rewound.title === "Renamed after the confirm");
 check(
   "detaching keeps the action's own history",
-  detached[0]?.title === projectAction.title && detached[0]?.createdAt === projectAction.createdAt,
+  detached[0]?.title === deletedAtAction.title &&
+    detached[0]?.createdAt === deletedAtAction.createdAt,
 );
 check("detaching leaves other project links alone", detached[1]?.projectId === "project-2");
 check("detaching leaves unlinked actions identical", detached[2] === unlinked);

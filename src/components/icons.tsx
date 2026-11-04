@@ -10,6 +10,7 @@ import {
   Moon,
   Pencil,
   Plus,
+  Search,
   Settings2,
   Sun,
   Trash2,
@@ -24,6 +25,7 @@ export function ProjectsIcon(props: LucideProps) { return <Folder {...sharedProp
 export function ActionsIcon(props: LucideProps) { return <ListChecks {...sharedProps} {...props} />; }
 export function InboxIcon(props: LucideProps) { return <Inbox {...sharedProps} {...props} />; }
 export function SettingsIcon(props: LucideProps) { return <Settings2 {...sharedProps} {...props} />; }
+export function SearchIcon(props: LucideProps) { return <Search {...sharedProps} {...props} />; }
 export function SunIcon(props: LucideProps) { return <Sun {...sharedProps} {...props} />; }
 export function MoonIcon(props: LucideProps) { return <Moon {...sharedProps} {...props} />; }
 export function SystemIcon(props: LucideProps) { return <CircleDot {...sharedProps} {...props} />; }

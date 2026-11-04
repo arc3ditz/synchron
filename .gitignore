@@ -30,3 +30,6 @@ dist-ssr
 
 # Local caches and temporary verification files
 .work/
+
+# Temporary bundle the DOM verification harness builds and removes itself
+scripts/.verify-dom-bundle.mjs

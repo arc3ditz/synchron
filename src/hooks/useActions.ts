@@ -29,6 +29,11 @@ export interface ActionsOptions {
    * project store owns the timestamp so actions never carry a second copy of it.
    */
   onProjectActivity?: (projectIds: string[], at: string) => void;
+  /**
+   * Reports that an action was permanently deleted, so project-owned records
+   * (note and decision relationships) can drop their references to it.
+   */
+  onActionDeleted?: (actionId: string) => void;
 }
 
 export interface ActionsController extends ActionStoreData {
@@ -52,7 +57,7 @@ function affectedProjectIds(...ids: (string | undefined)[]): string[] {
   return [...new Set(ids.filter((id): id is string => Boolean(id)))];
 }
 
-export function useActions({ onProjectActivity }: ActionsOptions = {}): ActionsController {
+export function useActions({ onProjectActivity, onActionDeleted }: ActionsOptions = {}): ActionsController {
   const [data, setData] = useState<ActionStoreData>(loadActionStore);
   const [storageError, setStorageError] = useState<string>();
 
@@ -179,8 +184,12 @@ export function useActions({ onProjectActivity }: ActionsOptions = {}): ActionsC
       commit({ ...data, actions: data.actions.filter((candidate) => candidate.id !== id) });
       // The action itself is gone, so the project keeps the time of the removal.
       if (action.projectId) onProjectActivity?.([action.projectId], new Date().toISOString());
+      // Nothing may keep referencing the deleted action: relationship lists
+      // inside notes and decisions drop the id here, at the single place the
+      // deletion happens.
+      onActionDeleted?.(id);
     },
-    [commit, data, onProjectActivity],
+    [commit, data, onProjectActivity, onActionDeleted],
   );
 
   const detachProject = useCallback(

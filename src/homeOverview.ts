@@ -1,6 +1,10 @@
 // These imports carry the file extension so the module can be loaded directly
 // by the verification scripts, the same way the other store modules are.
-import { isOverdue, selectNextOpenAction } from "./actionStore.ts";
+import {
+  compareNextActionRank,
+  isOverdue,
+  selectNextOpenAction,
+} from "./actionStore.ts";
 import type { Action, NextActionChoice } from "./actionStore.ts";
 import {
   buildProjectActivity,
@@ -111,12 +115,25 @@ function hasContinuationSignal(project: Project, actions: Action[]): boolean {
 }
 
 /**
+ * When a project was last touched, in the order the user actually left it:
+ * the later of the last recorded visit (opening the project counts, reading
+ * counts, editing counts) and the last recorded activity. A visit stamp is
+ * never invented for records that predate it, and a stale visit can never
+ * outweigh newer recorded work.
+ */
+function projectContinuationKey(project: Project, actions: Action[]): string {
+  const key = projectLastActivityAt(project, actions);
+  const openedAt = project.lastOpenedAt;
+  return openedAt && openedAt > key ? openedAt : key;
+}
+
+/**
  * The project to continue: the active project that holds a continuation signal
- * and has the most recent recorded activity. The project's own timestamp
- * already includes its resume note, so writing "where I left off" is what
- * makes a project the one to return to. Eligibility only narrows the field;
- * the ordering among eligible projects is unchanged, and ties resolve by name
- * and then id, so the choice does not change between renders.
+ * and was most recently actually visited or worked in. Opening a project to
+ * read it is enough to make it the place the user left off, because the visit
+ * is what they did last. Eligibility only narrows the field; the ordering
+ * among eligible projects is unchanged, and ties resolve by name and then id,
+ * so the choice does not change between renders.
  */
 export function selectContinueProject(
   projects: Project[],
@@ -126,10 +143,10 @@ export function selectContinueProject(
     .filter((project) => project.status === "active")
     .filter((project) => hasContinuationSignal(project, actions))
     .sort((left, right) => {
-      const byActivity = projectLastActivityAt(right, actions).localeCompare(
-        projectLastActivityAt(left, actions),
+      const byVisit = projectContinuationKey(right, actions).localeCompare(
+        projectContinuationKey(left, actions),
       );
-      if (byActivity !== 0) return byActivity;
+      if (byVisit !== 0) return byVisit;
 
       const byName = left.name.localeCompare(right.name);
       if (byName !== 0) return byName;
@@ -273,4 +290,80 @@ export function buildHomeContext(
   );
 
   return entries.slice(0, limit);
+}
+
+/**
+ * The one open action worth doing first across the whole workspace, and the
+ * project it belongs to. Every candidate is a project's own next action —
+ * picked by the same deterministic ranking the Tasks section uses — and the
+ * winner is chosen by that same ranking between them, with one correction:
+ * the rank's final action-id tie-break is set aside here, because between
+ * different projects the project's name is the meaningful next difference,
+ * not which id was drawn. There is exactly one candidate per project, no
+ * urgency is invented, and the explanation is the action's own recorded
+ * reason. Projects that are not active are never recommended.
+ */
+export interface WorkspaceNextAction {
+  action: Action;
+  /** The action's own reason, in the established reason vocabulary. */
+  reason: string;
+  project: Project;
+  /** The established project-action anchor, so Home can land on the work. */
+  targetId: string;
+}
+
+/**
+ * The shared action ranking with its action-id tie-break removed. When two
+ * candidates tie on due date, focus, importance, and creation time, this
+ * reports a tie so the workspace comparator can decide by project instead.
+ */
+function compareWorkspaceRank(left: Action, right: Action, todayDate: string): number {
+  const samePriority =
+    left.dueDate === right.dueDate &&
+    left.focusedDate === right.focusedDate &&
+    left.importance === right.importance &&
+    left.createdAt === right.createdAt;
+  if (samePriority) return 0;
+  return compareNextActionRank(left, right, todayDate);
+}
+
+export function selectTopNextAction(
+  projects: Project[],
+  actions: Action[],
+  todayDate: string,
+): WorkspaceNextAction | undefined {
+  const candidates: WorkspaceNextAction[] = [];
+
+  for (const project of projects) {
+    if (project.status !== "active") continue;
+
+    const choice = selectNextOpenAction(
+      actions.filter((action) => action.projectId === project.id),
+      todayDate,
+    );
+    if (choice) {
+      candidates.push({
+        action: choice.action,
+        reason: choice.reason,
+        project,
+        targetId: projectActivityTargetId({ kind: "action", id: choice.action.id }),
+      });
+    }
+  }
+
+  if (candidates.length === 0) return undefined;
+
+  const [best] = [...candidates].sort((left, right) => {
+    const byRank = compareWorkspaceRank(left.action, right.action, todayDate);
+    if (byRank !== 0) return byRank;
+
+    const byName = left.project.name.localeCompare(right.project.name);
+    if (byName !== 0) return byName;
+
+    const byProject = left.project.id.localeCompare(right.project.id);
+    if (byProject !== 0) return byProject;
+    return left.action.id.localeCompare(right.action.id);
+  });
+
+  return best;
 }

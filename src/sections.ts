@@ -4,62 +4,32 @@ import {
   HomeIcon,
   InboxIcon,
   ProjectsIcon,
+  SearchIcon,
   SettingsIcon,
   TodayIcon,
 } from "./components/icons";
 
-export type SectionId = "home" | "today" | "projects" | "actions" | "inbox" | "settings";
+export type SectionId =
+  | "home"
+  | "today"
+  | "projects"
+  | "actions"
+  | "search"
+  | "inbox"
+  | "settings";
 
 export interface Section {
   id: SectionId;
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  /** Heading for the empty state — placeholder copy only, no product logic. */
-  emptyTitle: string;
-  emptyBody: string;
 }
 
 export const SECTIONS: Section[] = [
-  {
-    id: "home",
-    label: "Home",
-    icon: HomeIcon,
-    emptyTitle: "Nothing to continue yet.",
-    emptyBody: "Create a project and it will gather here.",
-  },
-  {
-    id: "today",
-    label: "Today",
-    icon: TodayIcon,
-    emptyTitle: "Nothing planned for today.",
-    emptyBody: "Anything you capture for today will appear here.",
-  },
-  {
-    id: "projects",
-    label: "Projects",
-    icon: ProjectsIcon,
-    emptyTitle: "No projects yet.",
-    emptyBody: "Create a project to keep related work in one place.",
-  },
-  {
-    id: "actions",
-    label: "Actions",
-    icon: ActionsIcon,
-    emptyTitle: "No open actions.",
-    emptyBody: "Everything you are tracking will appear here.",
-  },
-  {
-    id: "inbox",
-    label: "Inbox",
-    icon: InboxIcon,
-    emptyTitle: "The inbox is empty.",
-    emptyBody: "Captured items land here first, ready to be triaged.",
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: SettingsIcon,
-    emptyTitle: "No preferences yet.",
-    emptyBody: "Appearance and workspace settings will appear here.",
-  },
+  { id: "home", label: "Home", icon: HomeIcon },
+  { id: "today", label: "Today", icon: TodayIcon },
+  { id: "projects", label: "Projects", icon: ProjectsIcon },
+  { id: "actions", label: "Actions", icon: ActionsIcon },
+  { id: "search", label: "Search", icon: SearchIcon },
+  { id: "inbox", label: "Inbox", icon: InboxIcon },
+  { id: "settings", label: "Settings", icon: SettingsIcon },
 ];

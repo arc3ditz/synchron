@@ -176,6 +176,13 @@
   transition: background-color var(--duration-fast) var(--ease-out);
 }
 
+/* Rows that show a navigable project name get a dedicated track for it, so
+   it never shares a cell with the reason line or the completed stamp. */
+.action-row--linked {
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "check title aside project operations";
+}
+
 .action-row:hover {
   background: var(--surface-hover);
 }
@@ -269,6 +276,34 @@
   color: var(--accent-strong);
   font-size: var(--text-xs);
   white-space: nowrap;
+}
+
+/* The action's project, on global rows only. A quiet text link that opens
+   the project at this action; inside a project list it is omitted. */
+.action-row__project {
+  grid-area: project;
+  justify-self: end;
+  max-width: 12rem;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.action-row__project:hover,
+.action-row__project:focus-visible {
+  color: var(--accent-text);
+}
+
+.action-row__project:focus {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 .action-row--completed .action-row__title {
@@ -461,6 +496,11 @@
     grid-template-areas: "check title aside meta operations";
   }
 
+  .action-row--linked {
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas: "check title aside project meta operations";
+  }
+
   .action-row .metadata-controls {
     grid-area: meta;
   }
@@ -651,4 +691,142 @@
   .canvas-page-header__description {
     margin-top: var(--space-2);
   }
+}
+
+/* --- Search ---------------------------------------------------------------
+   One field, one list. Results are references — a kind stamp, the record's
+   own title, its project when it has one, and a short matched snippet. Each
+   result is a single button; there is no second control inside it. */
+
+.search {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.search__field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.search__input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.search__input:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+}
+
+.search__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.search__count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.search__hint {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  max-width: 44rem;
+}
+
+.search__results {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  width: 100%;
+  min-height: 2.5rem;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--separator);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.search-result:hover {
+  background: var(--surface-hover);
+}
+
+.search-result:hover .search-result__title,
+.search-result:focus-visible .search-result__title {
+  color: var(--accent-text);
+}
+
+.search-result:focus {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.search-result__kind {
+  grid-column: 1 / -1;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.search-result__title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.search-result__project {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result__snippet {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+
+.search-result__when {
+  justify-self: end;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
 }

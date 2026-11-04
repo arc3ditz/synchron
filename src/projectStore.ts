@@ -1,8 +1,26 @@
-export type ProjectStatus = "active" | "archived";
+/**
+ * The four states a project moves through. States are names, not scores: the
+ * user chooses them, and every transition keeps the project's data intact.
+ */
+export const PROJECT_STATUSES = ["active", "on-hold", "completed", "archived"] as const;
+
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+/** The plain-language name of a status, used by every surface that shows it. */
+export function projectStatusLabel(status: ProjectStatus): string {
+  if (status === "on-hold") return "On hold";
+  return status[0].toUpperCase() + status.slice(1);
+}
+
+/** Whether a project carries the same restrictions archiving always had. */
+export function isProjectLocked(status: ProjectStatus): boolean {
+  return status === "archived";
+}
 
 /**
  * A note is project-owned context, not an action. It records something worth
- * remembering; it has no completion state and never appears in Today.
+ * remembering; it has no completion state and never appears in Today. It may
+ * reference the project's own actions it relates to.
  */
 export interface ProjectNote {
   id: string;
@@ -10,11 +28,19 @@ export interface ProjectNote {
   content: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * References to actions in the same project. Absent means "no links";
+   * ids are kept deduplicated in order. Actions stay canonical — this is a
+   * reference list, never a copy — and a removed action's id is simply
+   * ignored wherever the list is read.
+   */
+  relatedActionIds?: string[];
 }
 
 /**
  * A decision keeps both what was chosen and why. The statement and rationale
- * stay together so the reasoning is not separated from the choice later.
+ * stay together so the reasoning is not separated from the choice later. It
+ * may reference the project's own actions it led to.
  */
 export interface ProjectDecision {
   id: string;
@@ -22,6 +48,8 @@ export interface ProjectDecision {
   rationale: string;
   createdAt: string;
   updatedAt: string;
+  /** Same rules as ProjectNote.relatedActionIds. */
+  relatedActionIds?: string[];
 }
 
 /**
@@ -52,6 +80,13 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
+  /**
+   * The last time the project was actually opened for reading or editing —
+   * stamped once per visit, never on every render, and never backdated.
+   * Absent means the stored record predates visit tracking; nothing is
+   * fabricated, and continuation falls back to recorded activity.
+   */
+  lastOpenedAt?: string;
   notes: ProjectNote[];
   decisions: ProjectDecision[];
 }
@@ -95,6 +130,34 @@ export function normalizeProjectName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
 }
 
+function normalizeStatus(value: unknown): ProjectStatus {
+  if (value === "archived" || value === "on-hold" || value === "completed") return value;
+  // Unknown or missing statuses fall back to active rather than being
+  // guessed: a record that cannot prove where it stopped resumes as active
+  // and the user can move it again from there.
+  return "active";
+}
+
+/**
+ * Related-action references are normalized the same way other optional
+ * context is: only clean, non-empty ids survive, in first-order, deduplicated.
+ * An invalid or absent field simply means "no links".
+ */
+function normalizeRelatedActionIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const candidate of value) {
+    if (typeof candidate !== "string") continue;
+    const id = candidate.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids.length > 0 ? ids : undefined;
+}
+
 function normalizeNote(value: unknown): ProjectNote | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || !value.id.trim()) return null;
@@ -104,13 +167,16 @@ function normalizeNote(value: unknown): ProjectNote | null {
   const title = normalizeProjectName(value.title);
   if (!title) return null;
 
-  return {
+  const note: ProjectNote = {
     id: value.id,
     title,
     content: typeof value.content === "string" ? value.content.trim() : "",
     createdAt: value.createdAt,
     updatedAt: isTimestamp(value.updatedAt) ? value.updatedAt : value.createdAt,
   };
+  const relatedActionIds = normalizeRelatedActionIds(value.relatedActionIds);
+  if (relatedActionIds) note.relatedActionIds = relatedActionIds;
+  return note;
 }
 
 function normalizeDecision(value: unknown): ProjectDecision | null {
@@ -122,13 +188,16 @@ function normalizeDecision(value: unknown): ProjectDecision | null {
   const statement = normalizeProjectName(value.statement);
   if (!statement) return null;
 
-  return {
+  const decision: ProjectDecision = {
     id: value.id,
     statement,
     rationale: typeof value.rationale === "string" ? value.rationale.trim() : "",
     createdAt: value.createdAt,
     updatedAt: isTimestamp(value.updatedAt) ? value.updatedAt : value.createdAt,
   };
+  const relatedActionIds = normalizeRelatedActionIds(value.relatedActionIds);
+  if (relatedActionIds) decision.relatedActionIds = relatedActionIds;
+  return decision;
 }
 
 function normalizeResume(value: unknown): ProjectResume | null {
@@ -178,7 +247,7 @@ function normalizeProject(value: unknown): Project | null {
   const name = normalizeProjectName(value.name);
   if (!name) return null;
 
-  const status: ProjectStatus = value.status === "archived" ? "archived" : "active";
+  const status = normalizeStatus(value.status);
   const updatedAt = isTimestamp(value.updatedAt) ? value.updatedAt : value.createdAt;
   const project: Project = {
     id: value.id,
@@ -202,6 +271,11 @@ function normalizeProject(value: unknown): Project | null {
   if (resume) project.resume = resume;
   if (status === "archived" && isTimestamp(value.archivedAt)) {
     project.archivedAt = value.archivedAt;
+  }
+  // A visit record is kept only when it is real. Missing or malformed values
+  // stay absent, so nothing invents a time the user did not spend here.
+  if (isTimestamp(value.lastOpenedAt)) {
+    project.lastOpenedAt = value.lastOpenedAt;
   }
 
   return project;
@@ -354,6 +428,40 @@ export function restoreProjectRecord(
     status: "active",
     updatedAt: now,
   };
+}
+
+/**
+ * Moves a project to any other lifecycle state in one record change. Only the
+ * status and its own bookkeeping change: notes, decisions, the resume note,
+ * and linked actions are carried over untouched, so remembering is never
+ * destructive. Leaving archived clears archivedAt; entering it records it.
+ * A same-status request is a no-op that returns the same object.
+ */
+export function setProjectStatusRecord(
+  project: Project,
+  status: ProjectStatus,
+  now = new Date().toISOString(),
+): Project {
+  if (project.status === status) return project;
+
+  const next: Project = { ...project, status, updatedAt: now };
+  if (status === "archived") next.archivedAt = now;
+  else if ("archivedAt" in next) delete next.archivedAt;
+  return next;
+}
+
+/**
+ * Stamps the moment the project was actually opened. The stamp only moves
+ * forward, so a stale pending write can never rewrite history backwards, and
+ * a repeat with the same value is a no-op. Nothing here invents a visit for a
+ * record that has none.
+ */
+export function touchProjectVisitRecord(
+  project: Project,
+  at = new Date().toISOString(),
+): Project {
+  if (project.lastOpenedAt && project.lastOpenedAt >= at) return project;
+  return { ...project, lastOpenedAt: at };
 }
 
 /**
@@ -572,4 +680,130 @@ export function deleteProjectDecision(
   if (decisions.length === project.decisions.length) return project;
 
   return { ...project, decisions, updatedAt: now };
+}
+
+/**
+ * Replaces a note's related-action references. The list is normalized the same
+ * way load-time normalization would do it: clean ids only, deduplicated, and
+ * an empty result removes the field entirely. Editing the links is a real
+ * edit, so the note and the project both record the change.
+ */
+export function setProjectNoteRelatedActions(
+  project: Project,
+  noteId: string,
+  relatedActionIds: string[],
+  now = new Date().toISOString(),
+): Project | null {
+  const note = project.notes.find((candidate) => candidate.id === noteId);
+  if (!note) return null;
+
+  const normalized = normalizeRelatedActionIds(relatedActionIds);
+  if (
+    normalized === undefined
+      ? note.relatedActionIds === undefined
+      : normalized.length === (note.relatedActionIds?.length ?? 0) &&
+        normalized.every((id, index) => id === note.relatedActionIds?.[index])
+  ) {
+    return project;
+  }
+
+  const nextNote: ProjectNote =
+    normalized
+      ? { ...note, relatedActionIds: normalized, updatedAt: now }
+      : (() => {
+          const { relatedActionIds: _drop, ...withoutLinks } = note;
+          return { ...withoutLinks, updatedAt: now };
+        })();
+  return {
+    ...project,
+    notes: project.notes.map((candidate) => (candidate.id === noteId ? nextNote : candidate)),
+    updatedAt: now,
+  };
+}
+
+/** Same rules as setProjectNoteRelatedActions, for a decision. */
+export function setProjectDecisionRelatedActions(
+  project: Project,
+  decisionId: string,
+  relatedActionIds: string[],
+  now = new Date().toISOString(),
+): Project | null {
+  const decision = project.decisions.find((candidate) => candidate.id === decisionId);
+  if (!decision) return null;
+
+  const normalized = normalizeRelatedActionIds(relatedActionIds);
+  if (
+    normalized === undefined
+      ? decision.relatedActionIds === undefined
+      : normalized.length === (decision.relatedActionIds?.length ?? 0) &&
+        normalized.every((id, index) => id === decision.relatedActionIds?.[index])
+  ) {
+    return project;
+  }
+
+  const nextDecision: ProjectDecision =
+    normalized
+      ? { ...decision, relatedActionIds: normalized, updatedAt: now }
+      : (() => {
+          const { relatedActionIds: _drop, ...withoutLinks } = decision;
+          return { ...withoutLinks, updatedAt: now };
+        })();
+  return {
+    ...project,
+    decisions: project.decisions.map((candidate) =>
+      candidate.id === decisionId ? nextDecision : candidate,
+    ),
+    updatedAt: now,
+  };
+}
+
+/**
+ * Removes one action id from every note and decision that references it — the
+ * record's own project only. Used when an action is deleted so no stored
+ * reference is left pointing at work that no longer exists.
+ */
+export function removeRelatedActionReferences(
+  projects: Project[],
+  actionId: string,
+  now = new Date().toISOString(),
+): Project[] {
+  let changed = false;
+  const next = projects.map((project) => {
+    let projectChanged = false;
+    const noteResult = project.notes.map((note) => {
+      if (!note.relatedActionIds?.includes(actionId)) return note;
+      projectChanged = true;
+      const remaining = note.relatedActionIds.filter((id) => id !== actionId);
+      return remaining.length > 0
+        ? { ...note, relatedActionIds: remaining, updatedAt: now }
+        : (() => {
+            const { relatedActionIds: _drop, ...withoutLinks } = note;
+            return { ...withoutLinks, updatedAt: now };
+          })();
+    });
+    const decisionResult = project.decisions.map((decision) => {
+      if (!decision.relatedActionIds?.includes(actionId)) return decision;
+      projectChanged = true;
+      const remaining = decision.relatedActionIds.filter((id) => id !== actionId);
+      return remaining.length > 0
+        ? { ...decision, relatedActionIds: remaining, updatedAt: now }
+        : (() => {
+            const { relatedActionIds: _drop, ...withoutLinks } = decision;
+            return { ...withoutLinks, updatedAt: now };
+          })();
+    });
+
+    if (projectChanged) changed = true;
+    else return project;
+    return {
+      ...project,
+      notes: noteResult,
+      decisions: decisionResult,
+      updatedAt: now,
+    };
+  });
+
+  // An action id nothing references returns the same array, so no write or
+  // timestamp churn happens for a removal that changes nothing.
+  return changed ? next : projects;
 }

@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { ArrowLeft, Archive, ArchiveRestore, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import { selectNextOpenAction, type Action } from "../actionStore";
 import { formatProjectDate, formatRelativeProjectDate } from "../dates";
 import {
@@ -23,14 +23,17 @@ import type {
   ProjectEditableFields,
   ProjectNote,
   ProjectResume,
+  ProjectStatus,
 } from "../projectStore";
+import { projectStatusLabel } from "../projectStore";
+import { buildProjectSummary, formatProjectCountLabel } from "../projectStats";
 import type { ActionsController } from "../hooks/useActions";
 import type { ProjectMutationResult, ProjectsController } from "../hooks/useProjects";
 import { ActionForm, ActionList, formatDueDate, formatDueLabel, todayKey } from "./ActionViews";
 import { EditIcon, PlusIcon, TrashIcon } from "./icons";
 import { AnchoredPopover, useConfirm } from "./Overlays";
 
-type ProjectFilter = "active" | "archived" | "all";
+type ProjectFilter = ProjectStatus | "all";
 
 /**
  * How a project should open. The Projects index row menu asks for the shared
@@ -38,7 +41,12 @@ type ProjectFilter = "active" | "archived" | "all";
  */
 export type ProjectOpenIntent = "edit";
 
-const PROJECT_FILTERS: ProjectFilter[] = ["active", "archived", "all"];
+const PROJECT_FILTERS: ProjectFilter[] = ["active", "on-hold", "completed", "archived", "all"];
+
+/** The plain-language label of an index filter option. */
+function projectFilterLabel(filter: ProjectFilter): string {
+  return filter === "all" ? "All" : projectStatusLabel(filter);
+}
 
 function sortByRecent(projects: Project[], actions: Action[]): Project[] {
   return [...projects].sort(
@@ -141,7 +149,7 @@ function ProjectFilterBar({
           aria-pressed={filter === option}
           onClick={() => onChange(option)}
         >
-          {option[0].toUpperCase() + option.slice(1)}{" "}
+          {projectFilterLabel(option)}{" "}
           <span className="filter-bar__count">{counts[option]}</span>
         </button>
       ))}
@@ -230,19 +238,10 @@ function ProjectRow({
   /** Runs the shared delete confirmation; see useProjectDelete. */
   onDeleteProject: ProjectDeleteRequest;
 }) {
-  const isArchived = project.status === "archived";
   const rowRef = useRef<HTMLLIElement>(null);
-  const lastActivityAt = projectLastActivityAt(project, actions);
-  const openCount = actions.filter(
-    (action) => action.projectId === project.id && action.status === "open",
-  ).length;
-
-  function toggleArchive() {
-    const row = rowRef.current;
-    if (isArchived) projects.restoreProject(project.id);
-    else projects.archiveProject(project.id);
-    focusAfterProjectRowChange(row);
-  }
+  const isArchived = project.status === "archived";
+  const isLocked = isArchived;
+  const summary = useMemo(() => buildProjectSummary(project, actions), [project, actions]);
 
   function requestDelete() {
     // Confirm the delete against this row's own delete control: it may remain
@@ -256,7 +255,10 @@ function ProjectRow({
   }
 
   return (
-    <li ref={rowRef} className={isArchived ? "project-row project-row--archived" : "project-row"}>
+    <li
+      ref={rowRef}
+      className={isArchived ? "project-row project-row--archived" : "project-row"}
+    >
       {/* The name, description, and focus line are all visible inside the
           button, so the accessible name includes them rather than overriding
           them. The management controls are siblings, not children, so opening
@@ -276,34 +278,29 @@ function ProjectRow({
         )}
       </button>
 
-      {/* What the row's lines do not already say: live activity, drawn from the
-          same store values everywhere else reports it. */}
+      {/* What the row's lines do not already say, drawn from the canonical
+          records: the project's next action by its own ranking, real open and
+          completed counts, and when it last moved. No percentages, no scores. */}
       <div className="project-row__meta">
-        {isArchived ? (
-          <>
-            <span className="project-row__status">Archived</span>
-            <span className="project-row__activity">
-              {formatRelativeProjectDate(project.archivedAt ?? lastActivityAt)}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="project-row__count">
-              {openCount === 0
-                ? "No open actions"
-                : openCount === 1
-                  ? "1 open action"
-                  : `${openCount} open actions`}
-            </span>
-            <span className="project-row__activity">
-              Updated {formatRelativeProjectDate(lastActivityAt)}
-            </span>
-          </>
+        {summary.next && (
+          <span className="project-row__next" title={summary.next.action.title}>
+            <span className="project-row__next-label">Next</span>
+            {summary.next.action.title}
+          </span>
         )}
+        <span className="project-row__count">
+          {formatProjectCountLabel(summary.openCount, summary.completedCount)}
+        </span>
+        <span className="project-row__activity">
+          {isArchived
+            ? `Archived ${formatRelativeProjectDate(project.archivedAt ?? summary.lastActivityAt)}`
+            : `Updated ${formatRelativeProjectDate(summary.lastActivityAt)}`}
+        </span>
       </div>
 
-      {/* Management actions are direct, quiet controls. Destructive delete
-          still runs the shared confirmation dialog. */}
+      {/* Management actions are direct, quiet controls. Status lives in the
+          shared overflow menu; destructive delete still runs the shared
+          confirmation dialog. */}
       <div className="project-row__operations">
         <button
           type="button"
@@ -313,14 +310,30 @@ function ProjectRow({
         >
           <EditIcon aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          className="action-icon-button"
-          onClick={toggleArchive}
-          aria-label={isArchived ? `Restore ${project.name}` : `Archive ${project.name}`}
+        <AnchoredPopover
+          label={`Status and options for ${project.name}`}
+          triggerLabel=""
+          className="project-row__menu-trigger"
+          icon={<MoreHorizontal aria-hidden="true" />}
         >
-          {isArchived ? <ArchiveRestore aria-hidden="true" /> : <Archive aria-hidden="true" />}
-        </button>
+          {(close) => (
+            <ProjectMenuActions
+              status={project.status}
+              close={close}
+              onEdit={() => onOpen(project.id, "edit")}
+              onSetStatus={(
+                next: ProjectStatus,
+                options: { focusRow?: boolean } = {},
+              ) => {
+                if (!isLocked || next === "active") {
+                  projects.setProjectStatus(project.id, next);
+                }
+                if (options.focusRow !== false) focusAfterProjectRowChange(rowRef.current);
+              }}
+              onDelete={requestDelete}
+            />
+          )}
+        </AnchoredPopover>
         <button
           type="button"
           className="action-icon-button project-row__delete"
@@ -358,12 +371,22 @@ function ProjectList({
             title: "No active projects.",
             body: "Start a new project with the button above, or restore one from the archive.",
           }
-        : filter === "archived"
+        : filter === "on-hold"
           ? {
-              title: "Nothing archived.",
-              body: "Projects you archive keep their details and remain available here.",
+              title: "Nothing on hold.",
+              body: "Projects you pause keep their details and remain available here.",
             }
-          : { title: "No projects yet.", body: "Create a project above to get started." };
+          : filter === "completed"
+            ? {
+                title: "Nothing completed.",
+                body: "Marking a project completed keeps every note, decision, and action in it.",
+              }
+            : filter === "archived"
+              ? {
+                  title: "Nothing archived.",
+                  body: "Projects you archive keep their details and remain available here.",
+                }
+              : { title: "No projects yet.", body: "Create a project above to get started." };
 
     return (
       <div className="empty empty--compact">
@@ -424,33 +447,38 @@ function ProjectsIndex({
     );
     return Array.from(new Set(messages));
   }, [projects.storageError, actionsStorageError]);
-  const activeProjects = useMemo(
-    () =>
-      sortByRecent(
-        projects.projects.filter((project) => project.status === "active"),
-        actions,
-      ),
-    [projects.projects, actions],
-  );
-  const archivedProjects = useMemo(
-    () =>
-      sortByRecent(
-        projects.projects.filter((project) => project.status === "archived"),
-        actions,
-      ),
-    [projects.projects, actions],
-  );
+  const grouped = useMemo(() => {
+    const byStatus: Record<ProjectStatus, Project[]> = {
+      "active": [],
+      "on-hold": [],
+      "completed": [],
+      "archived": [],
+    };
+    for (const project of projects.projects) {
+      byStatus[project.status]?.push(project);
+    }
+    for (const list of Object.values(byStatus)) {
+      list.sort((left, right) =>
+        projectLastActivityAt(right, actions).localeCompare(projectLastActivityAt(left, actions)) ||
+        left.name.localeCompare(right.name),
+      );
+    }
+    return byStatus;
+  }, [projects.projects, actions]);
   const counts: Record<ProjectFilter, number> = {
-    active: activeProjects.length,
-    archived: archivedProjects.length,
+    active: grouped["active"].length,
+    "on-hold": grouped["on-hold"].length,
+    completed: grouped["completed"].length,
+    archived: grouped["archived"].length,
     all: projects.projects.length,
   };
-  const visibleProjects =
-    filter === "active"
-      ? activeProjects
-      : filter === "archived"
-        ? archivedProjects
-        : sortByRecent(projects.projects, actions);
+  const visibleProjects = useMemo(
+    () =>
+      filter === "all"
+        ? sortByRecent(projects.projects, actions)
+        : grouped[filter],
+    [filter, grouped, projects.projects, actions],
+  );
   const isFirstProject = projects.projects.length === 0;
 
   function createProject(name: string): ProjectMutationResult {
@@ -1312,29 +1340,89 @@ function ProjectOverview({
 }
 
 
+/**
+ * The project's own actions, offered to a note or decision form as the only
+ * things it can relate to. Relationships never cross projects.
+ */
+function RelatedActionPicker({
+  actions,
+  selectedIds,
+  onToggle,
+}: {
+  actions: Action[];
+  selectedIds: string[];
+  onToggle: (actionId: string) => void;
+}) {
+  if (actions.length === 0) return undefined;
+
+  return (
+    <div className="context-form__field">
+      <span className="context-form__label">Related actions</span>
+      <ul className="related-actions" aria-label="Related actions">
+        {actions.map((action) => {
+          const checked = selectedIds.includes(action.id);
+          return (
+            <li key={action.id}>
+              <label className={checked ? "related-actions__option related-actions__option--selected" : "related-actions__option"}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(action.id)}
+                />
+                <span className="related-actions__title">{action.title}</span>
+                <span className="related-actions__state">
+                  {action.status === "completed" ? "Completed" : "Open"}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function NoteForm({
   initialTitle = "",
   initialContent = "",
+  initialRelatedActionIds = [],
+  projectActions,
   submitLabel,
   onSave,
   onCancel,
 }: {
   initialTitle?: string;
   initialContent?: string;
+  initialRelatedActionIds?: string[];
+  /** The project's own actions, the only ones a note can relate to. */
+  projectActions: Action[];
   submitLabel: string;
-  onSave: (title: string, content: string) => string | undefined;
+  onSave: (
+    title: string,
+    content: string,
+    relatedActionIds: string[],
+  ) => string | undefined;
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
+  const [relatedActionIds, setRelatedActionIds] = useState<string[]>(initialRelatedActionIds);
   const [error, setError] = useState<string>();
   const fieldId = useId();
   const errorId = useId();
   const titleRef = useRef<HTMLInputElement>(null);
 
+  function toggleRelated(actionId: string) {
+    setRelatedActionIds((current) =>
+      current.includes(actionId)
+        ? current.filter((id) => id !== actionId)
+        : [...current, actionId],
+    );
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextError = onSave(title, content);
+    const nextError = onSave(title, content, relatedActionIds);
     if (nextError) {
       setError(nextError);
       titleRef.current?.focus();
@@ -1391,6 +1479,11 @@ function NoteForm({
           }}
         />
       </div>
+      <RelatedActionPicker
+        actions={projectActions}
+        selectedIds={relatedActionIds}
+        onToggle={toggleRelated}
+      />
       {error && (
         <p id={errorId} className="context-form__error" role="alert">
           {error}
@@ -1411,26 +1504,44 @@ function NoteForm({
 function DecisionForm({
   initialStatement = "",
   initialRationale = "",
+  initialRelatedActionIds = [],
+  projectActions,
   submitLabel,
   onSave,
   onCancel,
 }: {
   initialStatement?: string;
   initialRationale?: string;
+  initialRelatedActionIds?: string[];
+  /** The project's own actions, the only ones a decision can relate to. */
+  projectActions: Action[];
   submitLabel: string;
-  onSave: (statement: string, rationale: string) => string | undefined;
+  onSave: (
+    statement: string,
+    rationale: string,
+    relatedActionIds: string[],
+  ) => string | undefined;
   onCancel: () => void;
 }) {
   const [statement, setStatement] = useState(initialStatement);
   const [rationale, setRationale] = useState(initialRationale);
+  const [relatedActionIds, setRelatedActionIds] = useState<string[]>(initialRelatedActionIds);
   const [error, setError] = useState<string>();
   const fieldId = useId();
   const errorId = useId();
   const statementRef = useRef<HTMLTextAreaElement>(null);
 
+  function toggleRelated(actionId: string) {
+    setRelatedActionIds((current) =>
+      current.includes(actionId)
+        ? current.filter((id) => id !== actionId)
+        : [...current, actionId],
+    );
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextError = onSave(statement, rationale);
+    const nextError = onSave(statement, rationale, relatedActionIds);
     if (nextError) {
       setError(nextError);
       statementRef.current?.focus();
@@ -1487,6 +1598,11 @@ function DecisionForm({
           }}
         />
       </div>
+      <RelatedActionPicker
+        actions={projectActions}
+        selectedIds={relatedActionIds}
+        onToggle={toggleRelated}
+      />
       {error && (
         <p id={errorId} className="context-form__error" role="alert">
           {error}
@@ -1504,18 +1620,63 @@ function DecisionForm({
   );
 }
 
+function ContextRelatedActions({
+  relatedActionIds,
+  projectActions,
+  onOpenAction,
+}: {
+  relatedActionIds?: string[];
+  projectActions: Action[];
+  onOpenAction: (actionId: string) => void;
+}) {
+  if (!relatedActionIds || relatedActionIds.length === 0) return undefined;
+
+  // A link is only rendered while the action still exists in this project.
+  // Deleting an action silently retires its link — the decision the
+  // relationship model pins — so nothing here can strand a dead reference.
+  const related = relatedActionIds
+    .map((id) => projectActions.find((action) => action.id === id))
+    .filter((action): action is Action => Boolean(action));
+  if (related.length === 0) return undefined;
+
+  return (
+    <div className="context-item__related">
+      <span className="context-item__label">Related actions</span>
+      <ul className="context-item__related-list">
+        {related.map((action) => (
+          <li key={action.id}>
+            <button
+              type="button"
+              className="context-item__related-link"
+              onClick={() => onOpenAction(action.id)}
+            >
+              {action.title}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function NoteItem({
   note,
   project,
   projects,
+  projectActions,
   isArchived,
   onRemoved,
+  onOpenAction,
 }: {
   note: ProjectNote;
   project: Project;
   projects: ProjectsController;
+  /** The project's own actions, for the picker and for link navigation. */
+  projectActions: Action[];
   isArchived: boolean;
   onRemoved: () => void;
+  /** Opens one of the note's related actions in the Tasks section. */
+  onOpenAction: (actionId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string>();
@@ -1523,9 +1684,16 @@ function NoteItem({
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const confirm = useConfirm();
 
-  function save(title: string, content: string): string | undefined {
+  function save(
+    title: string,
+    content: string,
+    relatedActionIds: string[],
+  ): string | undefined {
     const result = projects.updateNote(project.id, note.id, title, content);
     if (!result.ok) return result.error;
+
+    const linksResult = projects.setNoteRelatedActions(project.id, note.id, relatedActionIds);
+    if (!linksResult.ok) return linksResult.error;
 
     setError(undefined);
     setEditing(false);
@@ -1550,6 +1718,8 @@ function NoteItem({
         <NoteForm
           initialTitle={note.title}
           initialContent={note.content}
+          initialRelatedActionIds={note.relatedActionIds}
+          projectActions={projectActions}
           submitLabel="Save note"
           onSave={save}
           onCancel={cancel}
@@ -1602,6 +1772,11 @@ function NoteItem({
             )}
           </div>
           {note.content && <p className="context-item__body">{note.content}</p>}
+          <ContextRelatedActions
+            relatedActionIds={note.relatedActionIds}
+            projectActions={projectActions}
+            onOpenAction={onOpenAction}
+          />
           <p className="context-item__meta">{formatContextMeta("Note", note)}</p>
           {error && (
             <p className="project-detail__error" role="alert">
@@ -1618,14 +1793,20 @@ function DecisionItem({
   decision,
   project,
   projects,
+  projectActions,
   isArchived,
   onRemoved,
+  onOpenAction,
 }: {
   decision: ProjectDecision;
   project: Project;
   projects: ProjectsController;
+  /** The project's own actions, for the picker and for link navigation. */
+  projectActions: Action[];
   isArchived: boolean;
   onRemoved: () => void;
+  /** Opens one of the decision's related actions in the Tasks section. */
+  onOpenAction: (actionId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string>();
@@ -1633,9 +1814,20 @@ function DecisionItem({
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const confirm = useConfirm();
 
-  function save(statement: string, rationale: string): string | undefined {
+  function save(
+    statement: string,
+    rationale: string,
+    relatedActionIds: string[],
+  ): string | undefined {
     const result = projects.updateDecision(project.id, decision.id, statement, rationale);
     if (!result.ok) return result.error;
+
+    const linksResult = projects.setDecisionRelatedActions(
+      project.id,
+      decision.id,
+      relatedActionIds,
+    );
+    if (!linksResult.ok) return linksResult.error;
 
     setError(undefined);
     setEditing(false);
@@ -1660,6 +1852,8 @@ function DecisionItem({
         <DecisionForm
           initialStatement={decision.statement}
           initialRationale={decision.rationale}
+          initialRelatedActionIds={decision.relatedActionIds}
+          projectActions={projectActions}
           submitLabel="Save decision"
           onSave={save}
           onCancel={cancel}
@@ -1723,6 +1917,11 @@ function DecisionItem({
               {decision.rationale || "No rationale was recorded."}
             </p>
           </div>
+          <ContextRelatedActions
+            relatedActionIds={decision.relatedActionIds}
+            projectActions={projectActions}
+            onOpenAction={onOpenAction}
+          />
           <p className="context-item__meta">{formatContextMeta("Decision", decision)}</p>
           {error && (
             <p className="project-detail__error" role="alert">
@@ -1738,6 +1937,8 @@ function DecisionItem({
 function ProjectNotes({
   project,
   projects,
+  projectActions,
+  onOpenAction,
   revealId,
   onRevealHandled,
   createRequest,
@@ -1745,6 +1946,9 @@ function ProjectNotes({
 }: {
   project: Project;
   projects: ProjectsController;
+  /** The project's own actions, offered as related links on its notes. */
+  projectActions: Action[];
+  onOpenAction: (actionId: string) => void;
   revealId?: string;
   onRevealHandled?: () => void;
   /** Opens the note form on arrival, as asked from the overview. */
@@ -1808,9 +2012,21 @@ function ProjectNotes({
       {creating && (
         <NoteForm
           submitLabel="Add note"
-          onSave={(title, content) => {
+          projectActions={projectActions}
+          onSave={(title, content, relatedActionIds) => {
             const result = projects.addNote(project.id, title, content);
             if (!result.ok) return result.error;
+            // The form may relate the new note to the project's own actions.
+            // New notes are stored first, so the added note is its first entry.
+            const addedNote = result.project.notes[0];
+            if (relatedActionIds.length > 0 && addedNote) {
+              const linksResult = projects.setNoteRelatedActions(
+                project.id,
+                addedNote.id,
+                relatedActionIds,
+              );
+              if (!linksResult.ok) return linksResult.error;
+            }
             closeCreate();
             return undefined;
           }}
@@ -1835,8 +2051,10 @@ function ProjectNotes({
                 note={note}
                 project={project}
                 projects={projects}
+                projectActions={projectActions}
                 isArchived={isArchived}
                 onRemoved={focusAddButton}
+                onOpenAction={onOpenAction}
               />
             ))}
           </ul>
@@ -1859,6 +2077,8 @@ function ProjectNotes({
 function ProjectDecisions({
   project,
   projects,
+  projectActions,
+  onOpenAction,
   revealId,
   onRevealHandled,
   createRequest,
@@ -1866,6 +2086,9 @@ function ProjectDecisions({
 }: {
   project: Project;
   projects: ProjectsController;
+  /** The project's own actions, offered as related links on its decisions. */
+  projectActions: Action[];
+  onOpenAction: (actionId: string) => void;
   revealId?: string;
   onRevealHandled?: () => void;
   /** Opens the decision form on arrival, as asked from the overview. */
@@ -1927,9 +2150,21 @@ function ProjectDecisions({
       {creating && (
         <DecisionForm
           submitLabel="Add decision"
-          onSave={(statement, rationale) => {
+          projectActions={projectActions}
+          onSave={(statement, rationale, relatedActionIds) => {
             const result = projects.addDecision(project.id, statement, rationale);
             if (!result.ok) return result.error;
+            // New decisions are stored first, so the added decision is its
+            // first entry.
+            const addedDecision = result.project.decisions[0];
+            if (relatedActionIds.length > 0 && addedDecision) {
+              const linksResult = projects.setDecisionRelatedActions(
+                project.id,
+                addedDecision.id,
+                relatedActionIds,
+              );
+              if (!linksResult.ok) return linksResult.error;
+            }
             closeCreate();
             return undefined;
           }}
@@ -1954,8 +2189,10 @@ function ProjectDecisions({
                 decision={decision}
                 project={project}
                 projects={projects}
+                projectActions={projectActions}
                 isArchived={isArchived}
                 onRemoved={focusAddButton}
+                onOpenAction={onOpenAction}
               />
             ))}
           </ul>
@@ -2021,60 +2258,80 @@ function describeProjectDeletion(project: Project, linkedActionCount: number): s
  * One menu body for both surfaces that manage a project — the workspace
  * header and the Projects index row. Sharing it keeps the actions, their
  * order, and their labels identical, so neither menu can drift.
+ *
+ * Status transitions move one step at a time and always keep the project's
+ * data: pausing, completing, archiving, and restoring each carry every note,
+ * decision, and linked action along. Delete is the only destructive option
+ * and opens the shared confirmation first.
  */
 function ProjectMenuActions({
-  isArchived,
+  status,
   close,
   onEdit,
-  onToggleArchive,
+  onSetStatus,
   onDelete,
   showEdit = true,
 }: {
-  isArchived: boolean;
+  status: ProjectStatus;
   close: (restoreFocus?: boolean) => void;
   onEdit: () => void;
-  onToggleArchive: () => void;
+  onSetStatus: (status: ProjectStatus) => void;
   onDelete: () => void;
   /** The workspace header shows Edit as its own action, so its menu omits it. */
   showEdit?: boolean;
 }) {
+  interface Option {
+    key: string;
+    label: string;
+    run: () => void;
+    destructive?: boolean;
+  }
+
+  const statusOptions: Option[] =
+    status === "active"
+      ? [
+          { key: "on-hold", label: "Put on hold", run: () => onSetStatus("on-hold") },
+          { key: "completed", label: "Mark completed", run: () => onSetStatus("completed") },
+          { key: "archived", label: "Archive", run: () => onSetStatus("archived") },
+        ]
+      : status === "on-hold"
+        ? [
+            { key: "active", label: "Resume", run: () => onSetStatus("active") },
+            { key: "completed", label: "Mark completed", run: () => onSetStatus("completed") },
+            { key: "archived", label: "Archive", run: () => onSetStatus("archived") },
+          ]
+        : status === "completed"
+          ? [
+              { key: "active", label: "Reopen", run: () => onSetStatus("active") },
+              { key: "archived", label: "Archive", run: () => onSetStatus("archived") },
+            ]
+          : [{ key: "active", label: "Restore", run: () => onSetStatus("active") }];
+
+  const options: Option[] = [
+    ...(showEdit ? [{ key: "edit", label: "Edit", run: onEdit }] : []),
+    ...statusOptions,
+    { key: "delete", label: "Delete", run: onDelete, destructive: true },
+  ];
+
   return (
     <div className="menu-list">
-      {showEdit && (
+      {options.map((option) => (
         <button
+          key={option.key}
           type="button"
-          className="menu-option"
+          className={
+            option.destructive ? "menu-option menu-option--delete" : "menu-option"
+          }
           onClick={() => {
-            close();
-            onEdit();
+            // The delete confirmation takes over from here; it restores the
+            // trigger itself, so the menu closes without a second focus move.
+            close(option.destructive ? false : true);
+            option.run();
           }}
         >
-          <span className="menu-option__label">Edit</span>
+          <span className="menu-option__label">{option.label}</span>
         </button>
-      )}
-      <button
-        type="button"
-        className="menu-option"
-        onClick={() => {
-          close();
-          onToggleArchive();
-        }}
-      >
-        <span className="menu-option__label">
-          {isArchived ? "Restore" : "Archive"}
-        </span>
-      </button>
-      <button
-        type="button"
-        className="menu-option menu-option--delete"
-        onClick={() => {
-          // The confirmation dialog takes over from here.
-          close(false);
-          onDelete();
-        }}
-      >
-        <span className="menu-option__label">Delete</span>
-      </button>
+      ))}
     </div>
   );
 }
@@ -2121,25 +2378,25 @@ function useProjectDelete(
 }
 
 /**
- * The project's identity: its name, what it is for, and whether it is still
- * live — with the two actions that manage it on the right. It is deliberately
- * compact: this is a working page, not a title screen.
+ * The project's identity: its name, what it is for, and where it stands in
+ * its lifecycle — with the actions that manage it on the right. It is
+ * deliberately compact: this is a working page, not a title screen.
  */
 function ProjectHeader({
   project,
   titleRef,
-  isArchived,
   onEdit,
-  onToggleArchive,
+  onSetStatus,
   onDelete,
 }: {
   project: Project;
   titleRef: RefObject<HTMLHeadingElement | null>;
-  isArchived: boolean;
   onEdit: () => void;
-  onToggleArchive: () => void;
+  onSetStatus: (status: ProjectStatus) => void;
   onDelete: () => void;
 }) {
+  const statusLabel = projectStatusLabel(project.status);
+
   return (
     <header className="project-header">
       <div className="project-header__identity">
@@ -2152,8 +2409,11 @@ function ProjectHeader({
         )}
 
         <p className="project-header__status">
-          <span className="project-header__status-dot" aria-hidden="true" />
-          {isArchived ? "Archived" : "Active"}
+          <span
+            className={`project-header__status-dot project-header__status-dot--${project.status}`}
+            aria-hidden="true"
+          />
+          {statusLabel}
         </p>
       </div>
 
@@ -2173,10 +2433,10 @@ function ProjectHeader({
         >
           {(close) => (
             <ProjectMenuActions
-              isArchived={isArchived}
+              status={project.status}
               close={close}
               onEdit={onEdit}
-              onToggleArchive={onToggleArchive}
+              onSetStatus={(next) => onSetStatus(next)}
               onDelete={onDelete}
               showEdit={false}
             />
@@ -2249,6 +2509,13 @@ function ProjectDetail({
       ).length,
     [actions.actions, project.id],
   );
+  // The project's own actions, in store order. They are both the picker
+  // options for note and decision relationships and the records those links
+  // resolve against.
+  const projectActions = useMemo(
+    () => actions.actions.filter((action) => action.projectId === project.id),
+    [actions.actions, project.id],
+  );
   const navCounts: Record<WorkspaceSectionId, number> = {
     overview: 0,
     tasks: openActionCount,
@@ -2269,6 +2536,16 @@ function ProjectDetail({
     // the project controls.
     titleRef.current?.focus();
   }, [project.id]);
+
+  // Opening the project is the visit. It is stamped once per open — the ref
+  // guard keeps React's double effect invocation from writing twice — and it
+  // is never set while merely rendering the list.
+  const stampedVisitRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (stampedVisitRef.current === project.id) return;
+    stampedVisitRef.current = project.id;
+    projects.recordProjectOpened(project.id);
+  }, [project.id, projects]);
 
   useEffect(() => {
     // A project opened from elsewhere with a target reveals and focuses that
@@ -2380,10 +2657,8 @@ function ProjectDetail({
     focusMenuTrigger();
   }
 
-  function toggleArchive() {
-    const result = isArchived
-      ? projects.restoreProject(project.id)
-      : projects.archiveProject(project.id);
+  function setStatus(next: ProjectStatus) {
+    const result = projects.setProjectStatus(project.id, next);
     setActionError(result.ok ? undefined : result.error);
   }
 
@@ -2418,9 +2693,8 @@ function ProjectDetail({
       <ProjectHeader
         project={project}
         titleRef={titleRef}
-        isArchived={isArchived}
         onEdit={beginEditDetails}
-        onToggleArchive={toggleArchive}
+        onSetStatus={setStatus}
         onDelete={requestDelete}
       />
 
@@ -2580,6 +2854,8 @@ function ProjectDetail({
             <ProjectNotes
               project={project}
               projects={projects}
+              projectActions={projectActions}
+              onOpenAction={openAction}
               revealId={revealId}
               onRevealHandled={clearRevealId}
               createRequest={createKind === "note"}
@@ -2591,6 +2867,8 @@ function ProjectDetail({
             <ProjectDecisions
               project={project}
               projects={projects}
+              projectActions={projectActions}
+              onOpenAction={openAction}
               revealId={revealId}
               onRevealHandled={clearRevealId}
               createRequest={createKind === "decision"}

@@ -11,8 +11,13 @@ import {
   loadProjectStore,
   normalizeProjectName,
   persistProjectStore,
+  removeRelatedActionReferences,
   renameProjectRecord,
   restoreProjectRecord,
+  setProjectDecisionRelatedActions,
+  setProjectNoteRelatedActions,
+  setProjectStatusRecord,
+  touchProjectVisitRecord,
   touchProjectsRecord,
   updateProjectDecision,
   updateProjectDescriptionRecord,
@@ -23,6 +28,7 @@ import {
   type Project,
   type ProjectEditableFields,
   type ProjectStoreData,
+  type ProjectStatus,
 } from "../projectStore";
 
 export type ProjectMutationResult =
@@ -39,6 +45,25 @@ export interface ProjectsController extends ProjectStoreData {
   updateProject: (id: string, fields: ProjectEditableFields) => ProjectMutationResult;
   archiveProject: (id: string) => ProjectMutationResult;
   restoreProject: (id: string) => ProjectMutationResult;
+  /** Moves a project to any lifecycle state, keeping everything it holds. */
+  setProjectStatus: (id: string, status: ProjectStatus) => ProjectMutationResult;
+  /** Stamps the moment the project was actually opened. */
+  recordProjectOpened: (id: string) => void;
+  /**
+   * Removes a deleted action's id from any note or decision that references
+   * it, so stored relationships never point at work that no longer exists.
+   */
+  removeActionLinks: (actionId: string) => void;
+  setNoteRelatedActions: (
+    projectId: string,
+    noteId: string,
+    relatedActionIds: string[],
+  ) => ProjectMutationResult;
+  setDecisionRelatedActions: (
+    projectId: string,
+    decisionId: string,
+    relatedActionIds: string[],
+  ) => ProjectMutationResult;
   deleteProject: (id: string) => ProjectMutationResult;
   /**
    * Moves linked projects' updatedAt forward after action work changes their
@@ -194,6 +219,46 @@ export function useProjects(): ProjectsController {
     [commit, data],
   );
 
+  const setProjectStatus = useCallback(
+    (id: string, status: ProjectStatus): ProjectMutationResult => {
+      const project = data.projects.find((candidate) => candidate.id === id);
+      if (!project) return { ok: false, error: MISSING_PROJECT_ERROR };
+
+      const nextProject = setProjectStatusRecord(project, status);
+      if (nextProject === project) return { ok: true, project };
+
+      commit({
+        projects: data.projects.map((candidate) => (candidate.id === id ? nextProject : candidate)),
+      });
+      return { ok: true, project: nextProject };
+    },
+    [commit, data],
+  );
+
+  const recordProjectOpened = useCallback(
+    (id: string) => {
+      const project = data.projects.find((candidate) => candidate.id === id);
+      if (!project) return;
+
+      const nextProject = touchProjectVisitRecord(project);
+      if (nextProject === project) return;
+
+      commit({
+        projects: data.projects.map((candidate) => (candidate.id === id ? nextProject : candidate)),
+      });
+    },
+    [commit, data],
+  );
+
+  const removeActionLinks = useCallback(
+    (actionId: string) => {
+      const nextProjects = removeRelatedActionReferences(data.projects, actionId);
+      if (nextProjects === data.projects) return;
+      commit({ projects: nextProjects });
+    },
+    [commit, data],
+  );
+
   const deleteProject = useCallback(
     (id: string): ProjectMutationResult => {
       const project = data.projects.find((candidate) => candidate.id === id);
@@ -335,6 +400,26 @@ export function useProjects(): ProjectsController {
     [mutateProject],
   );
 
+  const setNoteRelatedActions = useCallback(
+    (projectId: string, noteId: string, relatedActionIds: string[]): ProjectMutationResult =>
+      mutateProject(
+        projectId,
+        (project) => setProjectNoteRelatedActions(project, noteId, relatedActionIds),
+        MISSING_NOTE_ERROR,
+      ),
+    [mutateProject],
+  );
+
+  const setDecisionRelatedActions = useCallback(
+    (projectId: string, decisionId: string, relatedActionIds: string[]): ProjectMutationResult =>
+      mutateProject(
+        projectId,
+        (project) => setProjectDecisionRelatedActions(project, decisionId, relatedActionIds),
+        MISSING_DECISION_ERROR,
+      ),
+    [mutateProject],
+  );
+
   return {
     ...data,
     storageError,
@@ -346,13 +431,18 @@ export function useProjects(): ProjectsController {
     updateProject,
     archiveProject,
     restoreProject,
+    setProjectStatus,
+    recordProjectOpened,
+    removeActionLinks,
     deleteProject,
     recordProjectActivity,
     addNote,
     updateNote,
     deleteNote,
+    setNoteRelatedActions,
     addDecision,
     updateDecision,
     deleteDecision,
+    setDecisionRelatedActions,
   };
 }

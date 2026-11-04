@@ -13,6 +13,13 @@
     "check:project-activity": "node --experimental-strip-types scripts/verify-project-activity.ts",
     "check:action-projects": "node --experimental-strip-types scripts/verify-action-projects.ts",
     "check:home-overview": "node --experimental-strip-types scripts/verify-home-overview.ts",
+    "check:project-visit": "node --experimental-strip-types scripts/verify-project-visit.ts",
+    "check:project-lifecycle": "node --experimental-strip-types scripts/verify-project-lifecycle.ts",
+    "check:project-stats": "node --experimental-strip-types scripts/verify-project-stats.ts",
+    "check:search": "node --experimental-strip-types scripts/verify-search.ts",
+    "check:project-links": "node --experimental-strip-types scripts/verify-project-links.ts",
+    "check:dom": "node --experimental-strip-types scripts/verify-dom.ts",
+    "check": "npm run -s check:scheduling && npm run -s check:projects && npm run -s check:project-context && npm run -s check:project-resume && npm run -s check:project-activity && npm run -s check:home-overview && npm run -s check:project-visit && npm run -s check:project-lifecycle && npm run -s check:project-stats && npm run -s check:search && npm run -s check:project-links && npm run -s check:action-projects && npm run -s check:dom && tsc --noEmit && npm run build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -28,6 +35,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^30.1.3",
     "typescript": "~6.0.3",
     "vite": "^8.0.16"
   }

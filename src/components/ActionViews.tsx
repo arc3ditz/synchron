@@ -395,6 +395,7 @@ export function ActionRow({
   todayDate,
   showReason = false,
   anchorId,
+  onOpenProject,
 }: {
   action: Action;
   actions: ActionsController;
@@ -403,6 +404,13 @@ export function ActionRow({
   showReason?: boolean;
   /** Stable DOM id so project context can link to this action. */
   anchorId?: string;
+  /**
+   * Makes the action's project name a navigable link. The project picker
+   * above stays the editing affordance; this is only reading navigation and
+   * is offered where the full action list is global. Inside a project's own
+   * detail, no link is passed and nothing extra shows.
+   */
+  onOpenProject?: (projectId: string) => void;
 }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(action.title);
@@ -420,10 +428,34 @@ export function ActionRow({
     focusAfterRowRemoval(row, ".action-row__title", ".action-form__input");
   };
 
-  return <li ref={rowRef} id={anchorId} tabIndex={anchorId ? -1 : undefined} className={action.status === "completed" ? "action-row action-row--completed" : "action-row"}>
+  // The navigable project link renders only when the action belongs to a
+  // project that still exists. Linked rows get a dedicated grid column for
+  // it, so the reason line and the project name never overlap.
+  const linkedProject =
+    onOpenProject && action.projectId
+      ? projects?.find((candidate) => candidate.id === action.projectId)
+      : undefined;
+
+  const rowClassName = action.status === "completed"
+    ? "action-row action-row--completed"
+    : linkedProject
+      ? "action-row action-row--linked"
+      : "action-row";
+
+  return <li ref={rowRef} id={anchorId} tabIndex={anchorId ? -1 : undefined} className={rowClassName}>
     <button type="button" className="action-row__check" role="checkbox" aria-checked={action.status === "completed"} aria-label={action.title} onClick={(event) => { const row = event.currentTarget.closest(".action-row"); if (action.status === "completed") actions.reopenAction(action.id); else actions.completeAction(action.id); focusAfterRowRemoval(row, ".action-row__title", ".action-form__input"); }}><span className="action-row__check-box" aria-hidden="true">{action.status === "completed" && <CheckIcon aria-hidden="true" />}</span></button>
     {editingTitle ? <input autoFocus aria-label={`Edit ${action.title}`} className="action-row__edit" value={title} onChange={(event) => setTitle(event.target.value)} onBlur={saveTitle} onKeyDown={(event) => { if (event.key === "Enter") saveTitle(); if (event.key === "Escape") { setTitle(action.title); setEditingTitle(false); } }} /> : <button type="button" className="action-row__title" onClick={() => setEditingTitle(true)}>{action.title}</button>}
     {showReason && reasons.length > 0 && <span className="action-row__reason">{reasons[0]}</span>}
+    {onOpenProject && linkedProject && (
+      <button
+        type="button"
+        className="action-row__project"
+        aria-label={`Open project ${linkedProject.name}`}
+        onClick={() => onOpenProject(action.projectId!)}
+      >
+        {linkedProject.name}
+      </button>
+    )}
     {action.status === "open" && todayDate && <MetadataControls dueDate={action.dueDate} importance={action.importance} effortMinutes={action.effortMinutes} focused={isFocusedToday} todayDate={todayDate} projects={projects} projectId={action.projectId} onDueDate={(value) => actions.updateAction(action.id, { dueDate: value })} onImportance={(value) => actions.updateAction(action.id, { importance: value })} onEffort={(value) => actions.updateAction(action.id, { effortMinutes: value })} onProject={projects ? updateProject : undefined} onFocus={() => isFocusedToday ? actions.removeActionFocus(action.id) : actions.focusActionToday(action.id, todayDate)} />}
     {action.status === "completed" && <span className="action-row__status">Completed</span>}
     <div className="action-row__operations"><button type="button" className="action-icon-button" title="Edit action" aria-label={`Edit ${action.title}`} onClick={() => setEditingTitle(true)}><EditIcon aria-hidden="true" /></button><button type="button" className="action-icon-button action-icon-button--quiet" title="Delete action" aria-label={`Delete ${action.title}`} onClick={(event) => { const row = event.currentTarget.closest(".action-row"); confirm({ title: "Delete action?", description: `“${action.title}” will be removed. This cannot be undone.`, confirmLabel: "Delete", trigger: event.currentTarget, onConfirm: () => { actions.deleteAction(action.id); focusAfterRowRemoval(row, ".action-row__title", ".action-form__input"); } }); }}><TrashIcon aria-hidden="true" /></button></div>
@@ -438,6 +470,7 @@ export function ActionList({
   todayDate,
   showReason = false,
   anchorPrefix,
+  onOpenProject,
 }: {
   items: Action[];
   actions: ActionsController;
@@ -447,7 +480,9 @@ export function ActionList({
   showReason?: boolean;
   /** Prefix for stable DOM ids, so project context can link to an action row. */
   anchorPrefix?: string;
+  /** Makes each linked project name navigable where that makes sense. */
+  onOpenProject?: (projectId: string) => void;
 }) {
   if (items.length === 0) return <div className="empty empty--compact"><p className="empty__body">{empty}</p></div>;
-  return <ul className="action-list">{items.map((action) => <ActionRow key={action.id} action={action} actions={actions} projects={projects} todayDate={todayDate} showReason={showReason} anchorId={anchorPrefix ? `${anchorPrefix}${action.id}` : undefined} />)}</ul>;
+  return <ul className="action-list">{items.map((action) => <ActionRow key={action.id} action={action} actions={actions} projects={projects} todayDate={todayDate} showReason={showReason} anchorId={anchorPrefix ? `${anchorPrefix}${action.id}` : undefined} onOpenProject={onOpenProject} />)}</ul>;
 }

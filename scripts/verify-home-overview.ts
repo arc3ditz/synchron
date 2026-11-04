@@ -24,7 +24,7 @@ const storeMap = new Map<string, string>();
   },
 };
 
-const { buildHomeAttention, buildHomeContext, daysSince, formatQuietSpan, selectContinueProject } =
+const { buildHomeAttention, buildHomeContext, daysSince, formatQuietSpan, selectContinueProject, selectTopNextAction } =
   await import("../src/homeOverview.ts");
 
 let failures = 0;
@@ -226,6 +226,54 @@ const { currentFocus: _clearedFocus, ...cleared } = focused;
 check(
   "removing the final signal removes it from eligibility",
   selectContinueProject([cleared], []) === undefined,
+);
+
+console.log("Visits join continuation");
+
+// Opening the project is something the user did; the later of the visit and
+// the recorded activity decides who is the place they left off.
+const workedLater = project({ id: "worked-later", name: "Worked later", updatedAt: lastWeek, currentFocus: "Ship the beta" });
+const visitedToday = project({
+  id: "visited-today",
+  name: "Visited today",
+  updatedAt: twoDaysAgo,
+  lastOpenedAt: yesterday,
+  currentFocus: "Finish the pricing page",
+});
+check(
+  "a real visit outranks older activity",
+  selectContinueProject([workedLater, visitedToday], [])?.id === "visited-today",
+);
+
+const staleVisit = project({
+  id: "stale-visit",
+  name: "Stale visit",
+  updatedAt: longAgo,
+  lastOpenedAt: longAgo,
+  currentFocus: "Draft the outline",
+});
+const newerWork = project({
+  id: "newer-work",
+  name: "Newer work",
+  updatedAt: yesterday,
+  resume: { note: "Left at the intro.", createdAt: yesterday, updatedAt: yesterday },
+});
+check(
+  "a stale visit never outweighs newer recorded work",
+  selectContinueProject([newerWork, staleVisit], [])?.id === "newer-work",
+);
+
+const archivedVisit = project({
+  id: "archived-visit",
+  name: "Archived visit",
+  status: "archived",
+  updatedAt: yesterday,
+  lastOpenedAt: yesterday,
+  currentFocus: "Consolidate the archive",
+});
+check(
+  "a fresh visit on an archived project is never offered",
+  selectContinueProject([archivedVisit, visitedToday], [])?.id === "visited-today",
 );
 
 console.log("Needs attention");
@@ -445,6 +493,75 @@ check(
   "context is deterministic across calls",
   JSON.stringify(buildHomeContext(manyProjects, [], today)) === JSON.stringify(recentContext),
 );
+
+console.log("Do this next");
+
+// One candidate per active project: that project's own next action, by the
+// ranking it already uses. A workspace winner is then the best of those.
+const lateProject = project({ id: "late-project", name: "Late" });
+const onTimeProject = project({ id: "on-time-project", name: "On time" });
+const workspaceOverdueAction = action({
+  id: "workspace-overdue",
+  title: "Fix the regression",
+  projectId: "late-project",
+  dueDate: "2026-10-20",
+});
+const dueSoonAction = action({
+  id: "workspace-due",
+  title: "Send the update",
+  projectId: "on-time-project",
+  dueDate: "2026-10-30",
+});
+const winner = selectTopNextAction([lateProject, onTimeProject], [workspaceOverdueAction, dueSoonAction], today);
+check("a workspace next action exists when projects hold work", winner !== undefined);
+check("the overdue project's action wins", winner?.action.id === "workspace-overdue");
+check("the winner names its project", winner?.project.id === "late-project");
+check(
+  "the target is the established project-action anchor",
+  winner?.targetId === `project-action-${workspaceOverdueAction.id}`,
+);
+check("the winner states its reason", typeof winner?.reason === "string" && winner.reason.length > 0);
+
+const holdingProject = project({ id: "holding", name: "On hold", status: "on-hold" });
+const holdAction = action({
+  id: "hold-action",
+  title: "Pause review",
+  projectId: "holding",
+  importance: "critical",
+});
+const keptPaused = selectTopNextAction(
+  [lateProject, onTimeProject, holdingProject],
+  [overdueAction, dueSoonAction, holdAction],
+  today,
+);
+check(
+  "a critical action in a paused project is never the workspace next step",
+  keptPaused !== undefined && keptPaused.action.id !== "hold-action",
+);
+
+const finishedProject = project({ id: "finished-two", name: "Completed", status: "completed" });
+check(
+  "completed projects do not contribute candidates",
+  selectTopNextAction([finishedProject], [action({ id: "done-two", projectId: "finished-two" })], today) === undefined,
+);
+
+const noWork = selectTopNextAction([lateProject, onTimeProject], [], today);
+check("no work means no recommendation is invented", noWork === undefined);
+
+const tieA = action({ id: "tie-a", title: "Same rank one", projectId: "late-project", createdAt: created });
+const tieB = action({ id: "tie-b", title: "Same rank two", projectId: "on-time-project", createdAt: created });
+const tieOne = selectTopNextAction(
+  [project({ id: "second", name: "Second" }), project({ id: "first", name: "First" })],
+  [{ ...tieA, projectId: "second" }, { ...tieB, projectId: "first" }],
+  today,
+);
+const tieTwo = selectTopNextAction(
+  [project({ id: "second", name: "Second" }), project({ id: "first", name: "First" })],
+  [{ ...tieA, projectId: "second" }, { ...tieB, projectId: "first" }],
+  today,
+);
+check("a rank tie resolves by project name, not chance", tieOne?.project.name === "First" && tieOne?.action.id === "tie-b");
+check("the workspace choice is deterministic across calls", JSON.stringify(tieOne) === JSON.stringify(tieTwo));
 
 console.log("Day arithmetic");
 

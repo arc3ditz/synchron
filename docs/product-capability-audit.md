@@ -390,3 +390,44 @@ Do not read these as working:
 **Shared primitives to reuse, not duplicate:** `ProjectMenuActions` (`:2009`), `useProjectDelete` (`:2074`), `describeProjectDeletion` (`:1986`), `ContextLinks` (`:114`), `sectionForTarget` (`:807`), `goToTasks` / `goToSection` (`:2209`), `projectActivityTargetId`, `AnchoredPopover` / `Tooltip` / `ConfirmationProvider` (`Overlays.tsx`).
 
 **CSS conventions:** BEM-ish `block__element--modifier`. New workspace blocks: `workspace-nav`, `project-overview`, `project-edit`, `project-background`, `projects-index__header`, `project-row__menu-trigger`, `project-detail__menu-trigger`, `menu-option--delete`. New Home blocks live in `src/components/Home.css`: `home-header`, `home-capture`, `home-section`, `home-continue__*`, `home-attention__*`, `home-context__*`, `home-empty`.
+
+---
+
+## §7 — Implementation record (continuity-update pass, November 2026)
+
+Sections 1–6 record the audit as conducted; line references and the anchor-contract
+appendix reflect the baseline, not the delivered tree. This section documents what was
+actually implemented and what remains unverified. All work is uncommitted on branch
+`continuity-update` — committing, merging, and pushing are deliberately left to the
+project owner.
+
+### What shipped, per phase
+
+| Audit item | Delivered |
+|---|---|
+| Phase 0–1 (in-flight work; the "Add an action" regression) | The regression is obsolete: the workspace rework removed the broken section; the remaining rework behavior is covered by the full gate below. |
+| Phase 1b — DOM-level verification + aggregate runner | `scripts/verify-dom.ts` (jsdom harness that bundles the real app with rolldown, pins anchor targets, cross-surface navigation, project row summaries, lifecycle menu transitions, and visit stamping); aggregate `npm run check`; `.github/workflows/check.yml` (Node 24, `npm ci`, `npm run check`). |
+| Phase 2 — Continuity truth | `lastOpenedAt` on projects (normalized on load, never invented, never backdated); continuation orders by the later of visit and recorded activity (`selectContinueProject`); `touchProjectVisitRecord` is forward-only and same-value stable. |
+| Phase 3 — One "do next" | `selectTopNextAction` (exported, pure) reuses the within-project ranking; Home renders `HomeNextAction` above the continue card with Completion and scheduling intact, plus a navigable project name. Between projects, the action-id tail of the rank is neutralized so project name is the meaningful next difference — the recorded behavior, now honestly documented in the code. |
+| Phase 4 — Lifecycle states | `active` · `on-hold` · `completed` · `archived`; `projectStatusLabel`, `isProjectLocked` (only archived is read-only); `setProjectStatusRecord` single-move mutation, archived transitions stamp/clear `archivedAt`, content untouched, same-status request returns the same object. UI: generalized `ProjectMenuActions` used by both the row overflow menu and the header menu; Projects index has an Active/On hold/Completed/Archived/All filter with counts; ProjectHeader dot variants. |
+| Phase 5 — Honest health at the index | `src/projectStats.ts` (`buildProjectSummary`, `formatProjectCountLabel`); row shows the project's own next action, `N open actions · M completed`, and last activity / archived date. No percentages or invented scores anywhere. |
+| Phase 6 — Search | Top-level `search` sidebar entry; `src/search.ts` (pure, references-not-copies, case-insensitive substring, kind-priority order, 40-result cap); results land on the exact matched record via the anchor convention; verified end-to-end in the DOM harness. |
+| Phase 7 — Link context to work | Optional `relatedActionIds` on notes and decisions (additive, absent means "no links", tolerated dangling references); `RelatedActionPicker` in forms (project's own actions only); `ContextRelatedActions` renders navigable links; deleting an action prunes references (`onActionDeleted` wiring in `App.tsx`) and never strands a live label; verified by `verify-project-links` and the DOM harness. |
+| Phase 8 — Action → project link | Global Actions and Today rows show a navigable project name (`action-row__project`); rows inside a project do not; DOM-tested. |
+| Phase 9 — Small cleanup | Dead fallback branch and `emptyTitle`/`emptyBody` removed; `detachProjectActions` rewind guard added and its pinning assertion changed deliberately to the change-then-guard behavior (`verify-action-projects` rewritten accordingly); `describeNextAction` coverage added to `verify-project-resume` (`startsWith("Due ")` — locale-safe); `Archive`/`ArchiveRestore` icons replaced by the shared menu. |
+
+### Verification actually run
+
+- `npm run check` — 12 verify suites + DOM harness + `tsc --noEmit` + `npm run build`, all green on this machine (Nov 2026, Node v24.21.0).
+- `scripts/verify-dom.ts` — 26 assertions against the live bundle (no browser engine); anchors `project-action-*`, `project-note-*`, `project-decision-*`, `project-resume-note` all resolve to the revealed section.
+- Pure suites for visit stamping, lifecycle, stats, search, related actions all green; `verify-home-overview` extended with visit and workspace-next-action coverage.
+
+### What is honestly not covered
+
+- **No visual regression harness.** CSS changes were authored, not screenshot-compared; contrast and focus hand-offs were reviewed statically and against the DOM harness, not rendered look-and-feel.
+- **The Tauri shell is untested** — IPC, signing, and the filesystem path were not exercised.
+- **Layout math in jsdom is synthetic** — jsdom reports zero sizes; popover and overflow behavior verified as data flow, not pixels.
+- **jsdom fidelity** — `scrollTo` and `scrollIntoView` are stubbed; real scrolling behavior is untested.
+- **No threshold coverage on coprime viewports**; normal and narrow container queries were reviewed in code only.
+- **The audit's line references are stale by design** — consult `git diff` for the current tree.
+- **`ProjectResumeNote` and `ProjectFocus` remain Overview-only** — anchor reveal verified by the DOM harness; none of this document supersedes the current code.

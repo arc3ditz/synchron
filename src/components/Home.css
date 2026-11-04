@@ -259,6 +259,46 @@
   font-size: var(--text-sm);
 }
 
+/* --- Home next action -----------------------------------------------------
+   The single cross-project next step, above the continue card. It stays an
+   open section, not a second card: the continue card below is the one focal
+   panel, and a stack of bordered boxes would read as dashboard clutter. The
+   section shares the action-list row the rest of the app uses. */
+
+.home-next {
+  margin-top: 0;
+  margin-bottom: var(--space-5);
+}
+
+.home-next .action-list {
+  margin-top: 0;
+}
+
+.home-next__project {
+  margin-top: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.home-next__project-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: inherit;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.home-next__project-link:hover {
+  color: var(--accent-text);
+}
+
+.home-next__project-link:focus {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
 /* One control per project row: the name and its reason sit inside the
    button, so the whole line opens the project at that item. */
 .home-attention__list {

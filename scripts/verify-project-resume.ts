@@ -324,6 +324,45 @@ check(
   selectNextOpenAction([criticalNoDue, upcomingLater], today)?.action.id === "upcoming-later",
 );
 
+console.log("Next action selection");
+
+const overdueSample = action({ id: "overdue-sample", dueDate: "2026-10-20" });
+check(
+  "describeNextAction names an overdue action as overdue",
+  describeNextAction(overdueSample, "2026-10-25") === "Overdue",
+);
+const dueTodaySample = action({ id: "due-today-sample", dueDate: "2026-10-25" });
+check(
+  "describeNextAction names today's action as due today",
+  describeNextAction(dueTodaySample, "2026-10-25") === "Due today",
+);
+const criticalSample = action({ id: "critical-sample", importance: "critical" });
+check(
+  "describeNextAction calls out a critical action",
+  describeNextAction(criticalSample, "2026-10-25") === "Critical importance",
+);
+const plainSample = action({ id: "plain-sample" });
+check(
+  "describeNextAction falls back to the oldest open action",
+  describeNextAction(plainSample, "2026-10-25") === "Oldest open action",
+);
+const futureSample = action({ id: "future-sample", dueDate: "2026-11-30" });
+const futureReason = describeNextAction(futureSample, "2026-10-25");
+check(
+  "describeNextAction names an upcoming due date",
+  futureReason.startsWith("Due "),
+);
+const focusedSample = action({ id: "focused-sample", focusedDate: "2026-10-25" });
+check(
+  "describeNextAction names today's focus",
+  describeNextAction(focusedSample, "2026-10-25") === "In today’s focus",
+);
+check(
+  "selectNextOpenAction's reason matches describeNextAction's wording",
+  selectNextOpenAction([action({ id: "candidate", dueDate: "2026-10-20" })], "2026-10-25")
+    ?.reason === describeNextAction(overdueSample, "2026-10-25"),
+);
+
 console.log("Blocked storage");
 
 (globalThis as unknown as { window: unknown }).window = {

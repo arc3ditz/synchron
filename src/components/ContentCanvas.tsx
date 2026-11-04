@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { getActionReasons, prioritizeActions } from "../actionStore";
+import { formatRelativeProjectDate } from "../dates";
+import { searchWorkspace, type WorkspaceSearchHit } from "../search";
 import type { ActionsController } from "../hooks/useActions";
 import type { ProjectsController } from "../hooks/useProjects";
 import type { Project } from "../projectStore";
@@ -62,25 +64,202 @@ function FilterBar({ filter, onChange, counts }: { filter: ActionFilter; onChang
   return <div className="filter-bar" aria-label="Filter actions">{(["active", "completed", "all"] as ActionFilter[]).map((option) => <button key={option} type="button" className={filter === option ? "filter-bar__button filter-bar__button--active" : "filter-bar__button"} aria-pressed={filter === option} onClick={() => onChange(option)}>{option[0].toUpperCase() + option.slice(1)} <span className="filter-bar__count">{counts[option]}</span></button>)}</div>;
 }
 
-function ActionsCanvas({ actions, projects }: { actions: ActionsController; projects: ProjectsController }) {
+function ActionsCanvas({
+  actions,
+  projects,
+  todayDate,
+  onOpenProject,
+}: {
+  actions: ActionsController;
+  projects: ProjectsController;
+  todayDate: string;
+  /** Lets a row's project name behave as navigation, not only as an edit. */
+  onOpenProject: (projectId: string, targetId?: string) => void;
+}) {
   const [filter, setFilter] = useState<ActionFilter>("active");
   const openActions = actions.actions.filter((action) => action.status === "open");
   const completedActions = actions.actions.filter((action) => action.status === "completed");
   const counts: Record<ActionFilter, number> = { active: openActions.length, completed: completedActions.length, all: actions.actions.length };
   const visibleActions = filter === "active" ? openActions : filter === "completed" ? completedActions : actions.actions;
-  return <><ActionForm onSubmit={actions.addAction} projects={projects.projects} /><FilterBar filter={filter} onChange={setFilter} counts={counts} /><ActionList items={visibleActions} actions={actions} projects={projects.projects} todayDate={todayKey()} empty={filter === "completed" ? "No completed actions." : "No actions here yet."} /></>;
+  return (
+    <>
+      <ActionForm onSubmit={actions.addAction} projects={projects.projects} />
+      <FilterBar filter={filter} onChange={setFilter} counts={counts} />
+      <ActionList
+        items={visibleActions}
+        actions={actions}
+        projects={projects.projects}
+        todayDate={todayDate}
+        empty={filter === "completed" ? "No completed actions." : "No actions here yet."}
+        onOpenProject={onOpenProject}
+      />
+    </>
+  );
 }
 
-function TodayCanvas({ actions, projects }: { actions: ActionsController; projects: ProjectsController }) {
+function TodayCanvas({
+  actions,
+  projects,
+  onOpenProject,
+}: {
+  actions: ActionsController;
+  projects: ProjectsController;
+  onOpenProject: (projectId: string, targetId?: string) => void;
+}) {
   const todayDate = todayKey();
   const todayActions = useMemo(() => prioritizeActions(actions.actions, todayDate), [actions.actions, todayDate]);
   const upNext = todayActions[0];
   const laterToday = todayActions.slice(1);
-  return <><ActionForm onSubmit={actions.addAction} projects={projects.projects} />{upNext ? <section className="today-section"><div className="today-section__heading"><h2 className="today-section__title">Up Next</h2><span className="today-section__note">{getActionReasons(upNext, todayDate)[0]}</span></div><ActionList items={[upNext]} actions={actions} projects={projects.projects} todayDate={todayDate} empty="" showReason /></section> : <div className="empty today-empty"><h2 className="empty__title">Nothing is asking for your attention today.</h2><p className="empty__body">Choose an existing action to focus on today, or create a new one above. Focusing an action does not change its due date.</p></div>}{laterToday.length > 0 && <section className="today-section today-section--later"><h2 className="today-section__title">Also today</h2><ActionList items={laterToday} actions={actions} projects={projects.projects} todayDate={todayDate} empty="" showReason /></section>}</>;
+  return (
+    <>
+      <ActionForm onSubmit={actions.addAction} projects={projects.projects} />
+      {upNext ? (
+        <section className="today-section">
+          <div className="today-section__heading">
+            <h2 className="today-section__title">Up Next</h2>
+            <span className="today-section__note">{getActionReasons(upNext, todayDate)[0]}</span>
+          </div>
+          <ActionList items={[upNext]} actions={actions} projects={projects.projects} todayDate={todayDate} empty="" showReason onOpenProject={onOpenProject} />
+        </section>
+      ) : (
+        <div className="empty today-empty">
+          <h2 className="empty__title">Nothing is asking for your attention today.</h2>
+          <p className="empty__body">Choose an existing action to focus on today, or create a new one above. Focusing an action does not change its due date.</p>
+        </div>
+      )}
+      {laterToday.length > 0 && (
+        <section className="today-section today-section--later">
+          <h2 className="today-section__title">Also today</h2>
+          <ActionList items={laterToday} actions={actions} projects={projects.projects} todayDate={todayDate} empty="" showReason onOpenProject={onOpenProject} />
+        </section>
+      )}
+    </>
+  );
 }
 
-const APPEARANCE_CHOICES: {
-  value: ThemePreference;
+const SEARCH_KIND_LABELS: Record<WorkspaceSearchHit["kind"], string> = {
+  project: "Project",
+  action: "Action",
+  note: "Note",
+  decision: "Decision",
+  inbox: "Inbox",
+};
+
+/**
+ * The workspace's only search surface. Results are references to the records
+ * that matched, ordered deterministically, and each one opens exactly where
+ * it lives: a project at its top, a note, decision, or linked action inside
+ * its project at the established anchor, an unlinked action in Actions, and
+ * an inbox capture in the inbox.
+ */
+function SearchCanvas({
+  actions,
+  projects,
+  onOpenProject,
+  onNavigate,
+}: {
+  actions: ActionsController;
+  projects: ProjectsController;
+  onOpenProject: (projectId: string, targetId?: string) => void;
+  onNavigate: (id: SectionId) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim();
+  const results = useMemo(
+    () =>
+      searchWorkspace(query, {
+        projects: projects.projects,
+        actions: actions.actions,
+        inbox: actions.inbox,
+      }),
+    [query, projects.projects, actions.actions, actions.inbox],
+  );
+  const projectNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const project of projects.projects) names.set(project.id, project.name);
+    return names;
+  }, [projects.projects]);
+
+  function openResult(hit: WorkspaceSearchHit) {
+    if (hit.kind === "inbox") {
+      onNavigate("inbox");
+      return;
+    }
+    if (!hit.projectId) {
+      onNavigate("actions");
+      return;
+    }
+    onOpenProject(hit.projectId, hit.targetId);
+  }
+
+  return (
+    <section className="search" aria-label="Search the workspace">
+      <div className="search__field">
+        <label className="visually-hidden" htmlFor="search-input">
+          Search the workspace
+        </label>
+        <input
+          id="search-input"
+          className="search__input"
+          type="search"
+          placeholder="Search projects, notes, decisions, actions, and inbox"
+          value={query}
+          autoFocus
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {normalizedQuery && results.length > 0 && (
+          <span className="search__count" role="status">
+            {results.length === 1 ? "1 result" : `${results.length} results`}
+          </span>
+        )}
+      </div>
+
+      {!normalizedQuery ? (
+        <p className="search__hint">
+          Search covers project names and descriptions, action titles, note titles and
+          content, decisions and their reasoning, and captured inbox items.
+        </p>
+      ) : results.length === 0 ? (
+        <div className="empty empty--compact">
+          <h2 className="empty__title">Nothing matches “{normalizedQuery}”.</h2>
+          <p className="empty__body">
+            Try a shorter phrase, or a word you know is written in a title or note.
+          </p>
+        </div>
+      ) : (
+        <ul className="search__results">
+          {results.map((hit) => (
+            <li key={hit.key}>
+              <button
+                type="button"
+                className="search-result"
+                onClick={() => openResult(hit)}
+              >
+                <span className={`search-result__kind search-result__kind--${hit.kind}`}>
+                  {SEARCH_KIND_LABELS[hit.kind]}
+                </span>
+                <span className="search-result__title">{hit.title}</span>
+                {hit.projectId && (
+                  <span className="search-result__project">
+                    {projectNames.get(hit.projectId) ?? ""}
+                  </span>
+                )}
+                {hit.snippet && (
+                  <span className="search-result__snippet">{hit.snippet}</span>
+                )}
+                <span className="search-result__when">
+                  {hit.matchField} · {formatRelativeProjectDate(hit.at)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const APPEARANCE_CHOICES: {  value: ThemePreference;
   title: string;
   description: string;
   icon: typeof SunIcon;
@@ -180,6 +359,34 @@ export function ContentCanvas({
     );
   }
 
+  if (section.id === "search") {
+    return (
+      <main className="canvas" id="main-content" tabIndex={-1}>
+        <div className={`canvas__inner canvas__inner--${section.id}`}>
+          <header className="canvas-page-header">
+            <h1 className="canvas__title" tabIndex={-1}>
+              Search
+            </h1>
+            <p className="canvas-page-header__description">
+              Find anything across every project in the workspace.
+            </p>
+          </header>
+          {actions.storageError && (
+            <p className="storage-warning" role="status">
+              {actions.storageError}
+            </p>
+          )}
+          <SearchCanvas
+            actions={actions}
+            projects={projects}
+            onOpenProject={(projectId, targetId) => onOpenProject(projectId, targetId)}
+            onNavigate={onNavigate}
+          />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="canvas" id="main-content" tabIndex={-1}>
       <div className={`canvas__inner canvas__inner--${section.id}`}>
@@ -198,23 +405,23 @@ export function ContentCanvas({
           </p>
         )}
         {section.id === "today" ? (
-          <TodayCanvas actions={actions} projects={projects} />
+          <TodayCanvas actions={actions} projects={projects} onOpenProject={onOpenProject} />
         ) : section.id === "inbox" ? (
           <InboxCanvas actions={actions} projects={projects} />
         ) : section.id === "actions" ? (
-          <ActionsCanvas actions={actions} projects={projects} />
+          <ActionsCanvas
+            actions={actions}
+            projects={projects}
+            todayDate={todayKey()}
+            onOpenProject={onOpenProject}
+          />
         ) : section.id === "settings" ? (
           <AppearanceCanvas
             preference={appearancePreference}
             resolved={resolvedAppearance}
             onChange={onAppearanceChange}
           />
-        ) : (
-          <div className="empty">
-            <h2 className="empty__title">{section.emptyTitle}</h2>
-            <p className="empty__body">{section.emptyBody}</p>
-          </div>
-        )}
+        ) : null}
       </div>
     </main>
   );

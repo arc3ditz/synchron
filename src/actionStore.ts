@@ -209,6 +209,8 @@ export function updateActionRecord(
  * Removes a deleted project's reference from every action that pointed at it.
  * The actions themselves remain in the store so their titles, dates, and
  * completion history survive; only the now-meaningless association is dropped.
+ * The stamp only moves forward, aligned with how project timestamps are
+ * guarded — a delayed detach can never turn an action's history backwards.
  */
 export function detachProjectActions(
   actions: Action[],
@@ -220,7 +222,7 @@ export function detachProjectActions(
     if (action.projectId !== projectId) return action;
     changed = true;
     const { projectId: _projectId, ...detached } = action;
-    return { ...detached, updatedAt: now };
+    return { ...detached, updatedAt: action.updatedAt && action.updatedAt > now ? action.updatedAt : now };
   });
 
   return changed ? next : actions;
@@ -303,6 +305,38 @@ export function describeNextAction(action: Action, todayDate: string): string {
 }
 
 /**
+ * Orders two open actions by the same reasoning the next-action selection
+ * uses: due commitments first, then explicit focus, then importance, then the
+ * action that has waited longest. Ties resolve by id so the order does not
+ * change between renders. Shared by within-project selection and by the
+ * cross-workspace choice so both surfaces can never disagree.
+ */
+export function compareNextActionRank(
+  left: Action,
+  right: Action,
+  todayDate: string,
+): number {
+  const bucketDifference = nextActionBucket(left, todayDate) - nextActionBucket(right, todayDate);
+  if (bucketDifference !== 0) return bucketDifference;
+
+  const leftDue = left.dueDate ?? "";
+  const rightDue = right.dueDate ?? "";
+  if (leftDue !== rightDue) {
+    if (!leftDue) return 1;
+    if (!rightDue) return -1;
+    return leftDue.localeCompare(rightDue);
+  }
+
+  const importanceDifference = IMPORTANCE_RANK[right.importance] - IMPORTANCE_RANK[left.importance];
+  if (importanceDifference !== 0) return importanceDifference;
+
+  const createdDifference = left.createdAt.localeCompare(right.createdAt);
+  if (createdDifference !== 0) return createdDifference;
+
+  return left.id.localeCompare(right.id);
+}
+
+/**
  * Picks the most relevant open action deterministically. Due commitments come
  * first, then explicit focus, then importance, then the action that has waited
  * longest. Ties resolve by id so the choice does not change between renders.
@@ -314,26 +348,7 @@ export function selectNextOpenAction(
   const open = actions.filter((action) => action.status === "open");
   if (open.length === 0) return undefined;
 
-  const [next] = [...open].sort((left, right) => {
-    const bucketDifference = nextActionBucket(left, todayDate) - nextActionBucket(right, todayDate);
-    if (bucketDifference !== 0) return bucketDifference;
-
-    const leftDue = left.dueDate ?? "";
-    const rightDue = right.dueDate ?? "";
-    if (leftDue !== rightDue) {
-      if (!leftDue) return 1;
-      if (!rightDue) return -1;
-      return leftDue.localeCompare(rightDue);
-    }
-
-    const importanceDifference = IMPORTANCE_RANK[right.importance] - IMPORTANCE_RANK[left.importance];
-    if (importanceDifference !== 0) return importanceDifference;
-
-    const createdDifference = left.createdAt.localeCompare(right.createdAt);
-    if (createdDifference !== 0) return createdDifference;
-
-    return left.id.localeCompare(right.id);
-  });
+  const [next] = [...open].sort((left, right) => compareNextActionRank(left, right, todayDate));
 
   return { action: next, reason: describeNextAction(next, todayDate) };
 }

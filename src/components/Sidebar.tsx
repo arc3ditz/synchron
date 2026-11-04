@@ -14,7 +14,7 @@ export function Sidebar({ sections, activeId, onSelect }: SidebarProps) {
     ["home", "today", "projects"].includes(section.id),
   );
   const workSections = sections.filter((section) =>
-    ["actions", "inbox"].includes(section.id),
+    ["actions", "search", "inbox"].includes(section.id),
   );
   const settings = sections.find((section) => section.id === "settings");
 
