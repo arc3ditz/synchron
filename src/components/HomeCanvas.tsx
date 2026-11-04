@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowRight } from "lucide-react";
 import { selectNextOpenAction } from "../actionStore";
 import { formatRelativeProjectDate } from "../dates";
+import { projectLastActivityAt } from "../projectActivity";
 import {
   buildHomeAttention,
-  buildHomeContext,
   selectContinueProject,
   type HomeAttentionItem,
-  type HomeContextEntry,
 } from "../homeOverview";
 import type { ActionsController } from "../hooks/useActions";
 import type { ProjectsController } from "../hooks/useProjects";
@@ -90,6 +88,7 @@ function HomeContinue({
   const todayDate = todayKey();
   const linked = actions.actions.filter((action) => action.projectId === project.id);
   const next = selectNextOpenAction(linked, todayDate);
+  const openCount = linked.filter((action) => action.status === "open").length;
 
   return (
     <section className="home-section home-continue" aria-labelledby="home-continue-heading">
@@ -122,6 +121,18 @@ function HomeContinue({
           </p>
         </blockquote>
       )}
+
+      {/* The activity line: how much work is open and when this project last
+          moved, in the same relative-date language every other surface uses. */}
+      <p className="home-continue__meta">
+        {openCount === 0
+          ? "No open actions"
+          : openCount === 1
+            ? "1 open action"
+            : `${openCount} open actions`}
+        <span className="home-continue__meta-sep" aria-hidden="true">·</span>
+        Updated {formatRelativeProjectDate(projectLastActivityAt(project, actions.actions))}
+      </p>
 
       <div className="home-continue__next">
         <p className="home-continue__next-label">Next action</p>
@@ -222,47 +233,6 @@ function HomeAttention({
   );
 }
 
-/** The newest notes, decisions, and work across active projects. */
-function HomeContext({
-  entries,
-  onOpenProject,
-}: {
-  entries: HomeContextEntry[];
-  onOpenProject: (projectId: string, targetId?: string) => void;
-}) {
-  return (
-    <section className="home-section home-context" aria-labelledby="home-context-heading">
-      <h2 id="home-context-heading" className="home-section__eyebrow">
-        Recent context
-      </h2>
-
-      <ul className="home-context__list">
-        {entries.map((entry) => {
-          const when = `${entry.label.toLowerCase()} ${formatRelativeProjectDate(entry.at)}`;
-          return (
-            <li key={entry.key} className="home-context__item">
-              <button
-                type="button"
-                className="home-context__link"
-                onClick={() => onOpenProject(entry.project.id, entry.targetId)}
-                aria-label={`Go to ${entry.kind.toLowerCase()}: ${entry.title} in ${entry.project.name} (${when})`}
-              >
-                <span className="home-context__kind">{entry.kind}</span>
-                <span className="home-context__body">
-                  <span className="home-context__text">{entry.title}</span>
-                  <span className="home-context__project">{entry.project.name}</span>
-                </span>
-                <span className="home-context__meta">{when}</span>
-                <ArrowRight className="home-context__arrow" aria-hidden="true" />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
 /**
  * The first thing a new user sees. It invites the first project rather than
  * showing empty panels, and points at the inbox if something was captured
@@ -317,6 +287,76 @@ function HomeEmpty({
 }
 
 /**
+ * Everything the lead card is not already carrying: each remaining project's
+ * name, open work, last movement, and status, one hairline row per project.
+ * Opening a project is the row button; the quiet meta never pretends to be
+ * something to click.
+ */
+function HomeAcrossProjects({
+  projects,
+  actions,
+  excludeProjectId,
+  onOpenProject,
+}: {
+  projects: Project[];
+  actions: ActionsController;
+  excludeProjectId?: string;
+  onOpenProject: (projectId: string) => void;
+}) {
+  const rows = projects.filter((project) => project.id !== excludeProjectId);
+  if (rows.length === 0) return null;
+
+  return (
+    <section className="home-section home-across" aria-labelledby="home-across-heading">
+      <h2 id="home-across-heading" className="home-section__eyebrow">
+        Across your projects
+      </h2>
+
+      <ul className="home-across__list">
+        {rows.map((project) => {
+          const isArchived = project.status === "archived";
+          const openCount = actions.actions.filter(
+            (action) => action.projectId === project.id && action.status === "open",
+          ).length;
+          return (
+            <li key={project.id} className="home-across__item">
+              <button
+                type="button"
+                className="home-across__open"
+                onClick={() => onOpenProject(project.id)}
+                aria-label={`Open project ${project.name}`}
+              >
+                <span
+                  className={
+                    isArchived
+                      ? "home-across__name home-across__name--archived"
+                      : "home-across__name"
+                  }
+                >
+                  {project.name}
+                </span>
+                {isArchived && (
+                  <span className="home-across__status">Archived</span>
+                )}
+              </button>
+              <p className="home-across__meta">
+                {openCount === 0
+                  ? "No open actions"
+                  : openCount === 1
+                    ? "1 open action"
+                    : `${openCount} open actions`}
+                <span className="home-continue__meta-sep" aria-hidden="true">·</span>
+                Updated {formatRelativeProjectDate(projectLastActivityAt(project, actions.actions))}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/**
  * Home is the workspace overview: the project to continue, the projects that
  * need a revisit, and the context that changed. It is derived entirely from
  * stored projects, actions, notes, and decisions.
@@ -345,15 +385,14 @@ export function HomeCanvas({
       }),
     [projects.projects, actions.actions, todayDate, continueProject?.id],
   );
-  const context = useMemo(
-    () => buildHomeContext(projects.projects, actions.actions, todayDate),
-    [projects.projects, actions.actions, todayDate],
-  );
-
+  const hasProjectContext = attention.length > 0 || projects.projects.length > 1;
   return (
     <>
       <div className="home-header">
-        <h1 className="canvas__title home-title">Home</h1>
+        <div className="home-header__intro">
+          <h1 className="canvas__title home-title">Home</h1>
+          <p className="home-header__tagline">Where your projects stand right now.</p>
+        </div>
         <HomeCapture onCapture={actions.addInboxItem} onOpenInbox={onOpenInbox} />
       </div>
 
@@ -371,21 +410,33 @@ export function HomeCanvas({
           onOpenInbox={onOpenInbox}
         />
       ) : (
-        <>
-          {continueProject ? (
-            <HomeContinue
-              project={continueProject}
-              actions={actions}
-              onOpenProject={onOpenProject}
-            />
-          ) : (
-            <HomeContinueEmpty onOpenProjects={onOpenProjects} />
+        <div className={hasProjectContext ? "home-dashboard" : "home-dashboard home-dashboard--single"}>
+          <div className="home-dashboard__main">
+            {continueProject ? (
+              <HomeContinue
+                project={continueProject}
+                actions={actions}
+                onOpenProject={onOpenProject}
+              />
+            ) : (
+              <HomeContinueEmpty onOpenProjects={onOpenProjects} />
+            )}
+          </div>
+
+          {hasProjectContext && (
+            <aside className="home-dashboard__side" aria-label="Project updates">
+              {attention.length > 0 && (
+                <HomeAttention items={attention} onOpenProject={onOpenProject} />
+              )}
+              <HomeAcrossProjects
+                projects={projects.projects}
+                actions={actions}
+                excludeProjectId={continueProject?.id}
+                onOpenProject={onOpenProject}
+              />
+            </aside>
           )}
-          {attention.length > 0 && (
-            <HomeAttention items={attention} onOpenProject={onOpenProject} />
-          )}
-          {context.length > 0 && <HomeContext entries={context} onOpenProject={onOpenProject} />}
-        </>
+        </div>
       )}
     </>
   );

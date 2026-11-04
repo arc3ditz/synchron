@@ -6,9 +6,9 @@
 
 :root {
   /* --- Brand palette (original Synchron tokens) --------------------------- */
-  --paper: #f5f1e8;
-  --ink: #24231f;
-  --amber: #d96c42;
+  --paper: #F5F1E8;
+  --ink: #24231F;
+  --amber: #D96C42;
 
   /* --- Typography -------------------------------------------------------- */
   /* The single typeface source for the entire app: the native system stack.
@@ -26,6 +26,9 @@
   --text-base: 0.875rem; /* 14px */
   --text-md: 0.9375rem; /* 15px */
   --text-lg: 1.0625rem; /* 17px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
 
   --leading-tight: 1.15;
   --leading-normal: 1.5;
@@ -41,6 +44,7 @@
   --space-4: 1rem;
   --space-5: 1.25rem;
   --space-6: 1.5rem;
+  --space-7: 1.75rem;
   --space-8: 2rem;
   --space-10: 2.5rem;
   --space-12: 3rem;
@@ -59,52 +63,54 @@
   --duration-base: 180ms;
 
   /* --- Layout ------------------------------------------------------------ */
-  --sidebar-width: 15rem;
+  --sidebar-width: 14.5rem;
 
   /* Sidebar metrics. These fixed values reproduce the original balanced
      reference layout at 1280 × 800; resizing changes only the rail width. */
-  --sidebar-pad-x: 0.75rem;
+  --sidebar-pad-x: 0.875rem;
   --sidebar-pad-y: 1.25rem;
-  --sidebar-brand-pad-x: 0.625rem;
+  --sidebar-brand-pad-x: 0.5rem;
   --sidebar-item-pad-x: 0.625rem;
-  --sidebar-item-pad-y: 0.4375rem;
-  --sidebar-item-gap: 2px;
-  --sidebar-icon-gap: 0.5rem;
+  --sidebar-item-pad-y: 0.5rem;
+  --sidebar-item-gap: 3px;
+  --sidebar-icon-gap: 0.625rem;
   --sidebar-icon-size: 16px;
-  --sidebar-label-size: 0.8125rem;
-  --sidebar-wordmark-size: 0.9375rem;
+  --sidebar-label-size: 0.875rem;
+  --sidebar-wordmark-size: 1rem;
 
-  /* Content canvas: broad enough for action metadata, still readable on wide windows. */
-  --canvas-measure: 78rem;
-  --canvas-pad-x: clamp(var(--space-5), 3.5vw, var(--space-10));
+  /* Let wide Mac windows carry more project context without stretching prose. */
+  --canvas-measure: 88rem;
+  --canvas-pad-x: clamp(var(--space-5), 3.2vw, var(--space-10));
 
   color-scheme: light;
 
   /* --- Surfaces ---------------------------------------------------------- */
   --surface-app: var(--paper);
-  --surface-sidebar: #efeae0;
-  --surface-raised: #fbf9f4;
+  --surface-sidebar: #EEE9DF;
+  --surface-raised: #FCFAF5;
   --surface-active: rgba(217, 108, 66, 0.1);
-  --surface-hover: rgba(36, 35, 31, 0.04);
+  --surface-hover: rgba(36, 35, 31, 0.045);
 
   /* --- Text -------------------------------------------------------------- */
   --text-primary: var(--ink);
-  --text-secondary: #6e685c;
-  --text-tertiary: #7c7568;
+  --text-secondary: #625D53;
+  --text-tertiary: #6C665B;
 
   /* --- Separators -------------------------------------------------------- */
   --separator: rgba(36, 35, 31, 0.1);
-  --separator-strong: rgba(36, 35, 31, 0.16);
+  --separator-strong: rgba(36, 35, 31, 0.17);
 
   /* --- Accent ------------------------------------------------------------ */
   --accent: var(--amber);
-  --accent-strong: #b4522c; /* readable amber for text and icons on paper */
-  --accent-text: #a34622; /* small accent text: 5.4:1 on paper */
+  --accent-strong: #A54826;
+  --accent-text: #984522;
   --accent-soft: rgba(217, 108, 66, 0.12);
 
   /* --- Interaction ------------------------------------------------------- */
-  --focus-ring: #b4522c;
+  --focus-ring: #A54826;
   --selection: rgba(217, 108, 66, 0.2);
+  --focus-width: 2px;
+  --focus-offset: 2px;
 }
 
 /* --- Dark appearance ------------------------------------------------------
@@ -116,25 +122,25 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --surface-app: #1a1917;
+    --surface-app: #1B1A18;
     --surface-sidebar: #151412;
-    --surface-raised: #211f1c;
+    --surface-raised: #24221F;
     --surface-active: rgba(232, 147, 107, 0.14);
-    --surface-hover: rgba(245, 241, 232, 0.05);
+    --surface-hover: rgba(245, 241, 232, 0.055);
 
-    --text-primary: #ece7db;
-    --text-secondary: #a49d90;
-    --text-tertiary: #8c8577;
+    --text-primary: #F0EBE1;
+    --text-secondary: #B7B0A3;
+    --text-tertiary: #A69E91;
 
     --separator: rgba(236, 231, 219, 0.1);
     --separator-strong: rgba(236, 231, 219, 0.18);
 
-    --accent: #e8936b;
-    --accent-strong: #eda179;
-    --accent-text: #eda179;
+    --accent: #E8936B;
+    --accent-strong: #F0A27C;
+    --accent-text: #F0A27C;
     --accent-soft: rgba(232, 147, 107, 0.16);
 
-    --focus-ring: #e8936b;
+    --focus-ring: #E8936B;
     --selection: rgba(232, 147, 107, 0.26);
   }
 }
@@ -142,25 +148,25 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --surface-app: #1a1917;
+  --surface-app: #1B1A18;
   --surface-sidebar: #151412;
-  --surface-raised: #211f1c;
+  --surface-raised: #24221F;
   --surface-active: rgba(232, 147, 107, 0.14);
   --surface-hover: rgba(245, 241, 232, 0.05);
 
-  --text-primary: #ece7db;
-  --text-secondary: #a49d90;
-  --text-tertiary: #8c8577;
+  --text-primary: #F0EBE1;
+  --text-secondary: #B7B0A3;
+  --text-tertiary: #A69E91;
 
   --separator: rgba(236, 231, 219, 0.1);
   --separator-strong: rgba(236, 231, 219, 0.18);
 
-  --accent: #e8936b;
-  --accent-strong: #eda179;
-  --accent-text: #eda179;
+  --accent: #E8936B;
+  --accent-strong: #F0A27C;
+  --accent-text: #F0A27C;
   --accent-soft: rgba(232, 147, 107, 0.16);
 
-  --focus-ring: #e8936b;
+  --focus-ring: #E8936B;
   --selection: rgba(232, 147, 107, 0.26);
 }
 
@@ -227,6 +233,10 @@ textarea,
 select {
   font: inherit;
   color: inherit;
+}
+
+button:disabled {
+  cursor: default;
 }
 
 svg {

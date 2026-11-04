@@ -1,24 +1,20 @@
 import type { ResolvedTheme, ThemePreference } from "../hooks/useTheme";
 import { MoonIcon, SunIcon, SystemIcon } from "./icons";
+import { AnchoredPopover } from "./Overlays";
+import { Check } from "lucide-react";
 
 interface ToolbarProps {
   dateLabel: string;
   preference: ThemePreference;
   resolved: ResolvedTheme;
-  onCyclePreference: () => void;
+  onPreferenceChange: (preference: ThemePreference) => void;
 }
 
-const THEME_LABEL: Record<ThemePreference, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-};
-
-const NEXT_THEME: Record<ThemePreference, ThemePreference> = {
-  system: "light",
-  light: "dark",
-  dark: "system",
-};
+const APPEARANCE_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 function ThemeIcon({ preference }: { preference: ThemePreference }) {
   if (preference === "light") {
@@ -38,26 +34,39 @@ export function Toolbar({
   dateLabel,
   preference,
   resolved,
-  onCyclePreference,
+  onPreferenceChange,
 }: ToolbarProps) {
-  const next = NEXT_THEME[preference];
-  const description = `Appearance: ${THEME_LABEL[preference]}. Switch to ${THEME_LABEL[next]}.`;
-
   return (
     <header className="toolbar">
       <span className="toolbar__date">{dateLabel}</span>
 
       <div className="toolbar__actions">
-        <button
-          type="button"
-          className="icon-button"
-          onClick={onCyclePreference}
-          title={description}
-          aria-label={description}
-          data-appearance={resolved}
+        <AnchoredPopover
+          label={`Appearance, currently ${preference === "system" ? `following ${resolved}` : preference}`}
+          triggerLabel="Appearance"
+          className="toolbar__appearance"
+          icon={<ThemeIcon preference={preference} />}
         >
-          <ThemeIcon preference={preference} />
-        </button>
+          {(close) => (
+            <div className="menu-list toolbar__appearance-menu">
+              {APPEARANCE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`menu-option${preference === option.value ? " menu-option--selected" : ""}`}
+                  aria-pressed={preference === option.value}
+                  onClick={() => {
+                    onPreferenceChange(option.value);
+                    close();
+                  }}
+                >
+                  <span className="menu-option__label">{option.label}</span>
+                  {preference === option.value && <Check aria-hidden="true" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </AnchoredPopover>
       </div>
     </header>
   );

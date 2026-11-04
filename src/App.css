@@ -4,7 +4,7 @@
 
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar-width) 12px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) 10px minmax(0, 1fr);
   grid-template-areas: "sidebar separator main";
   height: 100%;
   overflow: hidden;
@@ -23,7 +23,7 @@
 .sidebar-resize-handle::before {
   content: "";
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0 auto 0 4px;
   width: 1px;
   background: var(--separator);
   transition: background-color var(--duration-fast) var(--ease-out);
@@ -48,7 +48,7 @@ body.is-resizing-sidebar * {
 .app__main {
   grid-area: main;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: 3.25rem minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;

@@ -5,16 +5,17 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
+  type RefObject,
 } from "react";
-import { ArrowLeft, ArrowRight, MoreHorizontal } from "lucide-react";
-import { selectNextOpenAction, type Action, type NextActionChoice } from "../actionStore";
+import { ArrowLeft, Archive, ArchiveRestore, MoreHorizontal } from "lucide-react";
+import { selectNextOpenAction, type Action } from "../actionStore";
 import { formatProjectDate, formatRelativeProjectDate } from "../dates";
 import {
   buildProjectActivity,
   projectActivityKindLabel,
   projectActivityTargetId,
   projectLastActivityAt,
-  type ProjectActivityEntry,
 } from "../projectActivity";
 import type {
   Project,
@@ -25,7 +26,7 @@ import type {
 } from "../projectStore";
 import type { ActionsController } from "../hooks/useActions";
 import type { ProjectMutationResult, ProjectsController } from "../hooks/useProjects";
-import { ActionForm, ActionList, ActionRow, todayKey } from "./ActionViews";
+import { ActionForm, ActionList, formatDueDate, formatDueLabel, todayKey } from "./ActionViews";
 import { EditIcon, PlusIcon, TrashIcon } from "./icons";
 import { AnchoredPopover, useConfirm } from "./Overlays";
 
@@ -96,70 +97,6 @@ function focusWhenAvailable(id: string, attempts = 4) {
     return;
   }
   if (attempts > 0) window.setTimeout(() => focusWhenAvailable(id, attempts - 1), 20);
-}
-
-interface ContextLink {
-  key: string;
-  kind: string;
-  text: string;
-  meta: string;
-  targetId: string;
-  ariaLabel: string;
-}
-
-/**
- * One list shape for both "Worth remembering" and "Recent activity": a quiet
- * kind label, the item's own wording, its real timestamp, and a jump link.
- */
-function ContextLinks({
-  links,
-  onJump,
-  leadingTitle = false,
-}: {
-  links: ContextLink[];
-  onJump: (targetId: string) => void;
-  /** Overview variant: the item's own wording leads, the kind label sits under it. */
-  leadingTitle?: boolean;
-}) {
-  return (
-    <ul
-      className={
-        leadingTitle ? "context-links context-links--leading-title" : "context-links"
-      }
-    >
-      {links.map((link) => (
-        <li key={link.key} className="context-links__item">
-          <button
-            type="button"
-            className="context-links__link"
-            aria-label={link.ariaLabel}
-            onClick={() => onJump(link.targetId)}
-          >
-            <span className="context-links__kind">{link.kind}</span>
-            <span className="context-links__text">{link.text}</span>
-            <span className="context-links__meta">{link.meta}</span>
-            <ArrowRight className="context-links__arrow" aria-hidden="true" />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function activityLink(entry: ProjectActivityEntry): ContextLink {
-  const kind = projectActivityKindLabel(entry.kind);
-  const when = `${entry.label.toLowerCase()} ${formatRelativeProjectDate(entry.at)}`;
-  return {
-    key: entry.key,
-    kind,
-    text: entry.title,
-    meta: when,
-    targetId: projectActivityTargetId(entry.target),
-    ariaLabel:
-      entry.target.kind === "resume"
-        ? `Go to where I left off (${when})`
-        : `Go to ${kind.toLowerCase()}: ${entry.title} (${when})`,
-  };
 }
 
 function focusAfterContextRemoval(row: Element | null, fallback: () => void) {
@@ -296,18 +233,9 @@ function ProjectRow({
   const isArchived = project.status === "archived";
   const rowRef = useRef<HTMLLIElement>(null);
   const lastActivityAt = projectLastActivityAt(project, actions);
-  // One supporting detail per row, drawn from data the user already has:
-  // open work count while active, the archive date once archived.
   const openCount = actions.filter(
     (action) => action.projectId === project.id && action.status === "open",
   ).length;
-  const detail = isArchived
-    ? `Archived ${formatRelativeProjectDate(project.archivedAt ?? lastActivityAt)}`
-    : openCount > 0
-      ? openCount === 1
-        ? "1 open action"
-        : `${openCount} open actions`
-      : "No open actions";
 
   function toggleArchive() {
     const row = rowRef.current;
@@ -317,11 +245,10 @@ function ProjectRow({
   }
 
   function requestDelete() {
-    // Confirm the delete against this row's own menu trigger: it may remain
+    // Confirm the delete against this row's own delete control: it may remain
     // mounted (a failed write) or unmount with the row (a successful delete).
     const trigger =
-      rowRef.current?.querySelector<HTMLButtonElement>(".project-row__menu-trigger") ??
-      null;
+      rowRef.current?.querySelector<HTMLButtonElement>(".project-row__delete") ?? null;
     onDeleteProject(project, trigger, (result) => {
       // The controller's storage warning reports failures; handle focus.
       if (result.ok) focusAfterProjectRowChange(rowRef.current);
@@ -330,38 +257,78 @@ function ProjectRow({
 
   return (
     <li ref={rowRef} className={isArchived ? "project-row project-row--archived" : "project-row"}>
-      {/* The name and focus line are both visible inside the button, so the
-          accessible name includes them rather than overriding them. The menu
-          trigger is a sibling, not a child, so opening it can never activate
-          this open button. */}
+      {/* The name, description, and focus line are all visible inside the
+          button, so the accessible name includes them rather than overriding
+          them. The management controls are siblings, not children, so opening
+          one can never activate this open button. */}
       <button type="button" className="project-row__open" onClick={() => onOpen(project.id)}>
         <span className="visually-hidden">Open </span>
         <span className="project-row__name">{project.name}</span>
-        {project.currentFocus && (
-          <span className="project-row__focus">{project.currentFocus}</span>
+        {project.description && (
+          <span className="project-row__description">{project.description}</span>
         )}
-        <span className="project-row__detail">{detail}</span>
+        {project.currentFocus && (
+          <span className="project-row__focus">
+            {/* One quiet label says what the line below the name is. */}
+            <span className="project-row__focus-label">Focus</span>
+            {project.currentFocus}
+          </span>
+        )}
       </button>
+
+      {/* What the row's lines do not already say: live activity, drawn from the
+          same store values everywhere else reports it. */}
+      <div className="project-row__meta">
+        {isArchived ? (
+          <>
+            <span className="project-row__status">Archived</span>
+            <span className="project-row__activity">
+              {formatRelativeProjectDate(project.archivedAt ?? lastActivityAt)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="project-row__count">
+              {openCount === 0
+                ? "No open actions"
+                : openCount === 1
+                  ? "1 open action"
+                  : `${openCount} open actions`}
+            </span>
+            <span className="project-row__activity">
+              Updated {formatRelativeProjectDate(lastActivityAt)}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Management actions are direct, quiet controls. Destructive delete
+          still runs the shared confirmation dialog. */}
       <div className="project-row__operations">
-        {/* Project-level management stays secondary here too: the same quiet
-            overflow menu the workspace header uses, so both surfaces expose
-            exactly the same actions. */}
-        <AnchoredPopover
-          label={`Options for ${project.name}`}
-          triggerLabel=""
-          className="project-row__menu-trigger"
-          icon={<MoreHorizontal aria-hidden="true" />}
+        <button
+          type="button"
+          className="action-icon-button"
+          onClick={() => onOpen(project.id, "edit")}
+          aria-label={`Edit ${project.name}`}
         >
-          {(close) => (
-            <ProjectMenuActions
-              isArchived={isArchived}
-              close={close}
-              onEdit={() => onOpen(project.id, "edit")}
-              onToggleArchive={toggleArchive}
-              onDelete={requestDelete}
-            />
-          )}
-        </AnchoredPopover>
+          <EditIcon aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="action-icon-button"
+          onClick={toggleArchive}
+          aria-label={isArchived ? `Restore ${project.name}` : `Archive ${project.name}`}
+        >
+          {isArchived ? <ArchiveRestore aria-hidden="true" /> : <Archive aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          className="action-icon-button project-row__delete"
+          onClick={requestDelete}
+          aria-label={`Delete ${project.name}`}
+        >
+          <TrashIcon aria-hidden="true" />
+        </button>
       </div>
     </li>
   );
@@ -499,7 +466,9 @@ function ProjectsIndex({
           <h1 className="canvas__title projects-index__title" tabIndex={-1}>
             Projects
           </h1>
-          <p className="projects-index__tagline">Your work, in one place.</p>
+          <p className="projects-index__tagline">
+            Projects hold their tasks, notes, decisions, and context in one place.
+          </p>
         </div>
         {!isFirstProject && !creating && (
           <button
@@ -609,7 +578,7 @@ function ProjectActions({
         {isArchived
           ? "This project is archived. Its actions remain part of Today and Actions."
           : nextActionId
-            ? "Add work here. The next action is shown in Overview."
+            ? "Add work here. The overview keeps the most relevant open actions in view."
             : "Add work here, or assign an existing action from Today and Actions."}
       </p>
 
@@ -668,6 +637,11 @@ function ProjectActions({
   );
 }
 
+/**
+ * The project's current focus, with the user's own line about where they left
+ * off underneath it. This is the most important thing on the workspace page,
+ * so it reads as one editorial surface rather than a stack of small cards.
+ */
 function ProjectFocus({
   project,
   projects,
@@ -723,7 +697,7 @@ function ProjectFocus({
             onClick={beginEdit}
           >
             <EditIcon aria-hidden="true" />
-            <span>{project.currentFocus ? "Edit focus" : "Set focus"}</span>
+            <span>{project.currentFocus ? "Update" : "Set focus"}</span>
           </button>
         )}
       </div>
@@ -780,7 +754,135 @@ function ProjectFocus({
             : "Name the outcome you are pursuing so this project stays pointed."}
         </p>
       )}
+
+      <ProjectResumeNote project={project} projects={projects} />
     </section>
+  );
+}
+
+/**
+ * The user's own sentence about where they stopped. It is the supporting
+ * context for the focus above it: the same thread, in their words, kept in the
+ * same place so returning to the project takes one read.
+ */
+function ProjectResumeNote({
+  project,
+  projects,
+}: {
+  project: Project;
+  projects: ProjectsController;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(project.resume?.note ?? "");
+  const [error, setError] = useState<string>();
+  const inputId = useId();
+  const errorId = useId();
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const isArchived = project.status === "archived";
+
+  function beginEdit() {
+    setDraft(project.resume?.note ?? "");
+    setError(undefined);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setDraft(project.resume?.note ?? "");
+    setError(undefined);
+    setEditing(false);
+    window.setTimeout(() => editButtonRef.current?.focus(), 0);
+  }
+
+  function save() {
+    const result = projects.updateProjectResume(project.id, draft);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
+    setDraft(result.project.resume?.note ?? "");
+    setError(undefined);
+    setEditing(false);
+    window.setTimeout(() => editButtonRef.current?.focus(), 0);
+  }
+
+  return (
+    <div className="project-focus__context">
+      <div className="project-focus__context-heading">
+        <h3 className="project-focus__context-title">Where you left off</h3>
+        {!isArchived && !editing && (
+          <button
+            ref={editButtonRef}
+            type="button"
+            className="context-action"
+            onClick={beginEdit}
+          >
+            <EditIcon aria-hidden="true" />
+            <span>{project.resume ? "Edit note" : "Add note"}</span>
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <>
+          <label className="visually-hidden" htmlFor={inputId}>
+            Where I left off
+          </label>
+          <textarea
+            id={inputId}
+            className="project-detail__textarea project-focus__context-textarea"
+            value={draft}
+            autoFocus
+            placeholder="A sentence about where you stopped and what comes next."
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              if (error) setError(undefined);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelEdit();
+              } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                save();
+              }
+            }}
+          />
+          <div className="project-detail__edit-actions">
+            <button type="button" className="action-button" onClick={cancelEdit}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="action-button action-button--primary"
+              onClick={save}
+            >
+              Save note
+            </button>
+          </div>
+          {error && (
+            <p id={errorId} className="project-detail__error" role="alert">
+              {error}
+            </p>
+          )}
+        </>
+      ) : project.resume ? (
+        <>
+          <p id="project-resume-note" tabIndex={-1} className="project-focus__context-text">
+            {project.resume.note}
+          </p>
+          <p className="project-focus__context-meta">{formatResumeMeta(project.resume)}</p>
+        </>
+      ) : (
+        <p className="project-focus__context-empty">
+          {isArchived
+            ? "No note was recorded for this project."
+            : "No note yet. Write a line about where you stopped so returning takes less time."}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -790,14 +892,13 @@ function ProjectFocus({
    composes the components that already exist, so no behavior is duplicated.
    -------------------------------------------------------------------------- */
 
-type WorkspaceSectionId = "overview" | "tasks" | "notes" | "decisions" | "context";
+type WorkspaceSectionId = "overview" | "tasks" | "notes" | "decisions";
 
 const WORKSPACE_SECTIONS: { id: WorkspaceSectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "tasks", label: "Tasks" },
   { id: "notes", label: "Notes" },
   { id: "decisions", label: "Decisions" },
-  { id: "context", label: "Context" },
 ];
 
 /**
@@ -809,7 +910,8 @@ function sectionForTarget(targetId?: string): WorkspaceSectionId {
   if (targetId.startsWith("project-note-")) return "notes";
   if (targetId.startsWith("project-decision-")) return "decisions";
   if (targetId.startsWith("project-action-")) return "tasks";
-  if (targetId === "project-resume-note") return "context";
+  // The resume note now lives with the focus, on the Overview.
+  if (targetId === "project-resume-note") return "overview";
   return "overview";
 }
 
@@ -855,34 +957,184 @@ function WorkspaceNav({
   );
 }
 
-const OVERVIEW_PREVIEW_LIMIT = 3;
+const OVERVIEW_ACTIVE_LIMIT = 5;
 const OVERVIEW_CONTEXT_LIMIT = 2;
+const OVERVIEW_ACTIVITY_LIMIT = 5;
 
 /**
- * The project's current state: what it is pointed at, the next work waiting,
- * and the newest context worth rereading. Every value is drawn from records
- * the user already made; nothing is inferred or summarized.
+ * One open action, reduced to what matters while scanning the project: its
+ * completion state, its title, and when it falls due. The title opens the
+ * action in the Tasks section, where the full record lives.
+ */
+function WorkspaceActionRow({
+  action,
+  actions,
+  todayDate,
+  onOpen,
+}: {
+  action: Action;
+  actions: ActionsController;
+  todayDate: string;
+  onOpen: () => void;
+}) {
+  const dueLabel = formatDueLabel(action.dueDate, todayDate);
+  const isOverdue = action.dueDate !== undefined && action.dueDate < todayDate;
+
+  return (
+    <li className="workspace-action">
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={false}
+        className="workspace-action__check"
+        aria-label={`Complete ${action.title}`}
+        onClick={() => actions.completeAction(action.id)}
+      >
+        <span className="workspace-action__check-box" aria-hidden="true" />
+      </button>
+      <button type="button" className="workspace-action__title" onClick={onOpen}>
+        {action.title}
+      </button>
+      {dueLabel && (
+        <span
+          className={
+            isOverdue
+              ? "workspace-action__due workspace-action__due--overdue"
+              : "workspace-action__due"
+          }
+          title={action.dueDate ? `Due ${formatDueDate(action.dueDate)}` : undefined}
+        >
+          {dueLabel}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/**
+ * A single line for adding work to the project without leaving the overview.
+ * The title is all it asks for; the full record lives in the Tasks section.
+ */
+function CompactActionForm({
+  projectId,
+  actions,
+}: {
+  projectId: string;
+  actions: ActionsController;
+}) {
+  const [title, setTitle] = useState("");
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    actions.addAction({ title, projectId });
+    setTitle("");
+    inputRef.current?.focus();
+  }
+
+  return (
+    <form className="compact-action-form" onSubmit={submit} noValidate>
+      <label className="visually-hidden" htmlFor={inputId}>
+        Add a task to this project
+      </label>
+      <input
+        id={inputId}
+        ref={inputRef}
+        className="compact-action-form__input"
+        placeholder="Add a task to this project"
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+      <button
+        type="submit"
+        className="compact-action-form__submit"
+        aria-label="Add task"
+        disabled={!title.trim()}
+      >
+        <PlusIcon aria-hidden="true" />
+      </button>
+    </form>
+  );
+}
+
+/**
+ * One part of the context column: a heading, the few items worth seeing here,
+ * and the ways in to the rest of it.
+ */
+function ContextBlock({
+  title,
+  count,
+  onOpenAll,
+  onCreate,
+  children,
+}: {
+  title: string;
+  count?: number;
+  /** Opens the full section behind this block. */
+  onOpenAll?: () => void;
+  /** Creates a new item of this kind. */
+  onCreate?: { label: string; run: () => void };
+  children: ReactNode;
+}) {
+  const titleId = useId();
+  return (
+    <div className="context-block" aria-labelledby={titleId}>
+      <div className="context-block__heading">
+        <h3 id={titleId} className="context-block__title">
+          {title}
+          {count !== undefined && <span className="context-block__count">{count}</span>}
+        </h3>
+        <div className="context-block__actions">
+          {onCreate && (
+            <button type="button" className="context-action" onClick={onCreate.run}>
+              <PlusIcon aria-hidden="true" />
+              <span>{onCreate.label}</span>
+            </button>
+          )}
+          {onOpenAll && (
+            <button type="button" className="context-action" onClick={onOpenAll}>
+              View all
+            </button>
+          )}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The overview is the project's standing page: the work that is open on the
+ * left, and the context that explains it on the right. Every value comes from
+ * the records the user already wrote.
  */
 function ProjectOverview({
   project,
-  projects,
   actions,
   todayDate,
   onGoToTasks,
-  onAddTask,
-  onGoToContext,
+  onGoToNotes,
+  onGoToDecisions,
+  onCreateNote,
+  onCreateDecision,
+  onOpenAction,
   onJump,
 }: {
   project: Project;
-  projects: ProjectsController;
   actions: ActionsController;
   todayDate: string;
   onGoToTasks: () => void;
-  onAddTask: () => void;
-  onGoToContext: () => void;
+  onGoToNotes: () => void;
+  onGoToDecisions: () => void;
+  onCreateNote: () => void;
+  onCreateDecision: () => void;
+  /** Opens one action in the Tasks section, where its full record lives. */
+  onOpenAction: (actionId: string) => void;
   onJump: (targetId: string) => void;
 }) {
-  const nextTitleId = useId();
+  const workTitleId = useId();
   const contextTitleId = useId();
   const isArchived = project.status === "archived";
 
@@ -894,13 +1146,12 @@ function ProjectOverview({
     [actions.actions, project.id],
   );
 
-  // The preview is ordered the same way the project chooses one next action:
-  // selectNextOpenAction repeatedly, so the first three rows are the three the
-  // project itself would rank first.
-  const preview = useMemo(() => {
+  // The overview leads with the actions the project itself would rank first:
+  // the same order it uses to choose a single next action.
+  const activeWork = useMemo(() => {
     const picked: Action[] = [];
     let remaining = [...openActions];
-    while (picked.length < OVERVIEW_PREVIEW_LIMIT && remaining.length > 0) {
+    while (picked.length < OVERVIEW_ACTIVE_LIMIT && remaining.length > 0) {
       const choice = selectNextOpenAction(remaining, todayDate);
       if (!choice) break;
       picked.push(choice.action);
@@ -909,351 +1160,157 @@ function ProjectOverview({
     return picked;
   }, [openActions, todayDate]);
 
-  const latestDecision = useMemo(
-    () => sortContextItems(project.decisions)[0],
+  const recentNotes = useMemo(
+    () => sortContextItems(project.notes).slice(0, OVERVIEW_CONTEXT_LIMIT),
+    [project.notes],
+  );
+  const recentDecisions = useMemo(
+    () => sortContextItems(project.decisions).slice(0, OVERVIEW_CONTEXT_LIMIT),
     [project.decisions],
   );
-  const latestNote = useMemo(() => sortContextItems(project.notes)[0], [project.notes]);
-
-  const recentLinks = useMemo(() => {
-    const candidates = [
-      latestDecision
-        ? {
-            id: latestDecision.id,
-            kind: "Decision",
-            text: latestDecision.statement,
-            at: latestDecision.updatedAt,
-            targetId: `project-decision-${latestDecision.id}`,
-          }
-        : undefined,
-      latestNote
-        ? {
-            id: latestNote.id,
-            kind: "Note",
-            text: latestNote.title,
-            at: latestNote.updatedAt,
-            targetId: `project-note-${latestNote.id}`,
-          }
-        : undefined,
-    ].filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
-
-    return candidates
-      .sort((left, right) => right.at.localeCompare(left.at) || left.id.localeCompare(right.id))
-      .slice(0, OVERVIEW_CONTEXT_LIMIT)
-      .map(
-        (candidate): ContextLink => ({
-          key: `${candidate.kind.toLowerCase()}:${candidate.id}`,
-          kind: candidate.kind,
-          text: candidate.text,
-          meta: formatRelativeProjectDate(candidate.at),
-          targetId: candidate.targetId,
-          ariaLabel: `Go to ${candidate.kind.toLowerCase()}: ${candidate.text} (updated ${formatRelativeProjectDate(candidate.at)})`,
-        }),
-      );
-  }, [latestDecision, latestNote]);
+  const activity = useMemo(
+    () => buildProjectActivity(project, actions.actions, OVERVIEW_ACTIVITY_LIMIT),
+    [project, actions.actions],
+  );
 
   return (
     <div className="project-overview">
-      <ProjectFocus project={project} projects={projects} />
+      <div className="project-overview__columns">
+        <section className="project-overview__work" aria-labelledby={workTitleId}>
+          <div className="project-overview__heading">
+            <h2 id={workTitleId} className="project-overview__heading-title">
+              Active work
+            </h2>
+            <span className="project-overview__count">{openActions.length} open</span>
+            {openActions.length > 0 && (
+              <button type="button" className="context-action" onClick={onGoToTasks}>
+                View all
+              </button>
+            )}
+          </div>
 
-      <section className="project-overview__next" aria-labelledby={nextTitleId}>
-        <div className="project-overview__heading">
-          <h2 id={nextTitleId} className="project-overview__heading-title">
-            Next up
-          </h2>
-          {openActions.length > 0 && (
-            <button type="button" className="context-action" onClick={onGoToTasks}>
-              View all tasks
-            </button>
+          {activeWork.length > 0 ? (
+            <ul className="workspace-actions">
+              {activeWork.map((action) => (
+                <WorkspaceActionRow
+                  key={action.id}
+                  action={action}
+                  actions={actions}
+                  todayDate={todayDate}
+                  onOpen={() => onOpenAction(action.id)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="project-overview__empty">
+              {isArchived
+                ? "This archived project has no open actions."
+                : "No open actions yet. Add one to give this project a next step."}
+            </p>
           )}
-        </div>
-        {preview.length > 0 ? (
-          <ul className="action-list project-overview__list">
-            {preview.map((action) => (
-              <ActionRow
-                key={action.id}
-                action={action}
-                actions={actions}
-                projects={projects.projects}
-                todayDate={todayDate}
-                anchorId={`project-action-${action.id}`}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="project-overview__empty">
-            {isArchived
-              ? "This archived project has no open actions."
-              : "No open actions yet. Add one to give this project a next step."}
-          </p>
-        )}
-        {!isArchived && (
-          <button
-            type="button"
-            className="context-action project-overview__add-task"
-            onClick={onAddTask}
-          >
-            <PlusIcon aria-hidden="true" />
-            <span>Add a task</span>
-          </button>
-        )}
-      </section>
 
-      <section className="project-overview__context" aria-labelledby={contextTitleId}>
-        <div className="project-overview__heading">
+          {!isArchived && <CompactActionForm projectId={project.id} actions={actions} />}
+        </section>
+
+        <section className="project-overview__context" aria-labelledby={contextTitleId}>
           <h2 id={contextTitleId} className="project-overview__heading-title">
-            Recent context
+            Project context
           </h2>
-          <button type="button" className="context-action" onClick={onGoToContext}>
-            All context
-          </button>
-        </div>
-        {recentLinks.length > 0 ? (
-          <ContextLinks links={recentLinks} onJump={onJump} leadingTitle />
-        ) : (
-          <p className="project-overview__empty">No notes or decisions recorded yet.</p>
-        )}
-      </section>
+
+          <ContextBlock
+            title="Notes"
+            count={project.notes.length}
+            onOpenAll={project.notes.length > 0 ? onGoToNotes : undefined}
+            onCreate={{ label: "New note", run: onCreateNote }}
+          >
+            {recentNotes.length > 0 ? (
+              <ul className="context-block__list">
+                {recentNotes.map((note) => (
+                  <li key={note.id} className="context-block__item">
+                    <button
+                      type="button"
+                      className="context-block__link"
+                      onClick={() => onJump(`project-note-${note.id}`)}
+                    >
+                      <span className="context-block__text">{note.title}</span>
+                      <span className="context-block__meta">
+                        {formatRelativeProjectDate(note.updatedAt)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="project-overview__empty">
+                {isArchived ? "This project has no notes." : "No notes yet."}
+              </p>
+            )}
+          </ContextBlock>
+
+          <ContextBlock
+            title="Decisions"
+            count={project.decisions.length}
+            onOpenAll={project.decisions.length > 0 ? onGoToDecisions : undefined}
+            onCreate={{ label: "New decision", run: onCreateDecision }}
+          >
+            {recentDecisions.length > 0 ? (
+              <ul className="context-block__list">
+                {recentDecisions.map((decision) => (
+                  <li key={decision.id} className="context-block__item">
+                    <button
+                      type="button"
+                      className="context-block__link"
+                      onClick={() => onJump(`project-decision-${decision.id}`)}
+                    >
+                      <span className="context-block__text">{decision.statement}</span>
+                      <span className="context-block__meta">
+                        {formatRelativeProjectDate(decision.updatedAt)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="project-overview__empty">
+                {isArchived ? "This project has no decisions." : "No decisions yet."}
+              </p>
+            )}
+          </ContextBlock>
+
+          <ContextBlock title="Recent activity">
+            {activity.length > 0 ? (
+              <ul className="activity-list">
+                {activity.map((entry) => (
+                  <li key={entry.key} className="activity-list__item">
+                    <button
+                      type="button"
+                      className="activity-list__link"
+                      aria-label={`Go to ${projectActivityKindLabel(entry.kind).toLowerCase()}: ${entry.title} (${entry.label.toLowerCase()} ${formatRelativeProjectDate(entry.at)})`}
+                      onClick={() => onJump(projectActivityTargetId(entry.target))}
+                    >
+                      <span className="activity-list__event">{entry.label}</span>
+                      <span className="activity-list__kind">
+                        {projectActivityKindLabel(entry.kind).toLowerCase()}
+                      </span>
+                      <span className="activity-list__when">
+                        {formatRelativeProjectDate(entry.at)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="project-overview__empty">
+                Nothing has changed here yet. Added actions, notes, and decisions show up here.
+              </p>
+            )}
+          </ContextBlock>
+        </section>
+      </div>
     </div>
   );
 }
 
-
-function ProjectResume({
-  project,
-  projects,
-  actions,
-  nextChoice,
-  actionFormInputId,
-  onJump,
-}: {
-  project: Project;
-  projects: ProjectsController;
-  actions: ActionsController;
-  nextChoice?: NextActionChoice;
-  actionFormInputId: string;
-  onJump: (targetId: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(project.resume?.note ?? "");
-  const [error, setError] = useState<string>();
-  const titleId = useId();
-  const inputId = useId();
-  const errorId = useId();
-  const editButtonRef = useRef<HTMLButtonElement>(null);
-  const isArchived = project.status === "archived";
-  const todayDate = todayKey();
-  const latestDecision = useMemo(
-    () => sortContextItems(project.decisions)[0],
-    [project.decisions],
-  );
-  const latestNote = useMemo(() => sortContextItems(project.notes)[0], [project.notes]);
-
-  const rememberLinks: ContextLink[] = [];
-  if (latestDecision) {
-    rememberLinks.push({
-      key: `decision:${latestDecision.id}`,
-      kind: "Decision",
-      text: latestDecision.statement,
-      meta: formatRelativeProjectDate(latestDecision.updatedAt),
-      targetId: `project-decision-${latestDecision.id}`,
-      ariaLabel: `Go to decision: ${latestDecision.statement} (updated ${formatRelativeProjectDate(latestDecision.updatedAt)})`,
-    });
-  }
-  if (latestNote) {
-    rememberLinks.push({
-      key: `note:${latestNote.id}`,
-      kind: "Note",
-      text: latestNote.title,
-      meta: formatRelativeProjectDate(latestNote.updatedAt),
-      targetId: `project-note-${latestNote.id}`,
-      ariaLabel: `Go to note: ${latestNote.title} (updated ${formatRelativeProjectDate(latestNote.updatedAt)})`,
-    });
-  }
-
-  function beginEdit() {
-    setDraft(project.resume?.note ?? "");
-    setError(undefined);
-    setEditing(true);
-  }
-
-  function cancelEdit() {
-    setDraft(project.resume?.note ?? "");
-    setError(undefined);
-    setEditing(false);
-    window.setTimeout(() => editButtonRef.current?.focus(), 0);
-  }
-
-  function save() {
-    const result = projects.updateProjectResume(project.id, draft);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-
-    setDraft(result.project.resume?.note ?? "");
-    setError(undefined);
-    setEditing(false);
-    window.setTimeout(() => editButtonRef.current?.focus(), 0);
-  }
-
-  function focusActionForm() {
-    const input = document.getElementById(actionFormInputId);
-    if (!input) return;
-    input.scrollIntoView({ block: "center", behavior: "auto" });
-    input.focus({ preventScroll: true });
-  }
-
-  return (
-    <section className="project-resume" aria-labelledby={titleId}>
-      <h2 id={titleId} className="project-resume__title">
-        Resume
-      </h2>
-      <p className="project-resume__intro">
-        Your own note about where you stopped, paired with the next action from this
-        project’s open work.
-      </p>
-      {isArchived && (
-        <p className="project-resume__archived">
-          This project is archived. Restore it to change the resume note.
-        </p>
-      )}
-
-      <div className="project-resume__block">
-        <div className="project-resume__block-heading">
-          <h3 className="project-resume__block-title">
-            Where I left off
-            <span className="project-resume__provenance">Written by you</span>
-          </h3>
-          {!isArchived && !editing && (
-            <button
-              ref={editButtonRef}
-              type="button"
-              className="context-action"
-              onClick={beginEdit}
-            >
-              <EditIcon aria-hidden="true" />
-              <span>{project.resume ? "Edit note" : "Add note"}</span>
-            </button>
-          )}
-        </div>
-
-        {editing ? (
-          <>
-            <label className="visually-hidden" htmlFor={inputId}>
-              Where I left off
-            </label>
-            <textarea
-              id={inputId}
-              className="project-detail__textarea project-resume__textarea"
-              value={draft}
-              autoFocus
-              placeholder="A sentence about where you stopped and what comes next."
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errorId : undefined}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                if (error) setError(undefined);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  cancelEdit();
-                } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  save();
-                }
-              }}
-            />
-            <div className="project-detail__edit-actions">
-              <button type="button" className="action-button" onClick={cancelEdit}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="action-button action-button--primary"
-                onClick={save}
-              >
-                Save note
-              </button>
-            </div>
-            {error && (
-              <p id={errorId} className="project-detail__error" role="alert">
-                {error}
-              </p>
-            )}
-          </>
-        ) : project.resume ? (
-          <>
-            <p id="project-resume-note" tabIndex={-1} className="project-resume__note">
-              {project.resume.note}
-            </p>
-            <p className="project-resume__meta">{formatResumeMeta(project.resume)}</p>
-          </>
-        ) : (
-          <p className="project-resume__empty">
-            {isArchived
-              ? "No resume note was recorded for this project."
-              : "No note yet. Write a line about where you stopped so returning takes less time."}
-          </p>
-        )}
-      </div>
-
-      <div className="project-resume__block">
-        <div className="project-resume__block-heading">
-          <h3 className="project-resume__block-title">
-            Next action
-            <span className="project-resume__provenance">From open actions</span>
-          </h3>
-        </div>
-        {nextChoice ? (
-          <>
-            <p className="project-resume__reason">{nextChoice.reason}</p>
-            <ul className="action-list project-resume__action-list">
-              <ActionRow
-                key={nextChoice.action.id}
-                action={nextChoice.action}
-                actions={actions}
-                projects={projects.projects}
-                todayDate={todayDate}
-                anchorId={`project-action-${nextChoice.action.id}`}
-              />
-            </ul>
-          </>
-        ) : (
-          <>
-            <p className="project-resume__empty">
-              {isArchived
-                ? "No open actions."
-                : "No open actions yet. Add one to give this project a next step."}
-            </p>
-            {!isArchived && (
-              <button
-                type="button"
-                className="context-action project-resume__add-action"
-                onClick={focusActionForm}
-              >
-                <PlusIcon aria-hidden="true" />
-                <span>Add an action</span>
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="project-resume__block">
-        <div className="project-resume__block-heading">
-          <h3 className="project-resume__block-title">Worth remembering</h3>
-        </div>
-        {rememberLinks.length > 0 ? (
-          <ContextLinks links={rememberLinks} onJump={onJump} />
-        ) : (
-          <p className="project-resume__empty">No decisions or notes recorded yet.</p>
-        )}
-      </div>
-    </section>
-  );
-}
 
 function NoteForm({
   initialTitle = "",
@@ -1683,11 +1740,16 @@ function ProjectNotes({
   projects,
   revealId,
   onRevealHandled,
+  createRequest,
+  onCreateHandled,
 }: {
   project: Project;
   projects: ProjectsController;
   revealId?: string;
   onRevealHandled?: () => void;
+  /** Opens the note form on arrival, as asked from the overview. */
+  createRequest?: boolean;
+  onCreateHandled?: () => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -1705,6 +1767,14 @@ function ProjectNotes({
     if (!document.getElementById(revealId)) setShowAll(true);
     onRevealHandled?.();
   }, [revealId, onRevealHandled]);
+
+  useEffect(() => {
+    // The overview asks for a new note; the form lives here, so it opens on
+    // arrival. The request is cleared once it has been answered.
+    if (!createRequest) return;
+    setCreating(true);
+    onCreateHandled?.();
+  }, [createRequest, onCreateHandled]);
 
   function focusAddButton() {
     addButtonRef.current?.focus();
@@ -1791,11 +1861,16 @@ function ProjectDecisions({
   projects,
   revealId,
   onRevealHandled,
+  createRequest,
+  onCreateHandled,
 }: {
   project: Project;
   projects: ProjectsController;
   revealId?: string;
   onRevealHandled?: () => void;
+  /** Opens the decision form on arrival, as asked from the overview. */
+  createRequest?: boolean;
+  onCreateHandled?: () => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -1812,6 +1887,13 @@ function ProjectDecisions({
     if (!document.getElementById(revealId)) setShowAll(true);
     onRevealHandled?.();
   }, [revealId, onRevealHandled]);
+
+  useEffect(() => {
+    // The overview asks for a new decision; the form opens on arrival.
+    if (!createRequest) return;
+    setCreating(true);
+    onCreateHandled?.();
+  }, [createRequest, onCreateHandled]);
 
   function focusAddButton() {
     addButtonRef.current?.focus();
@@ -1893,72 +1975,6 @@ function ProjectDecisions({
   );
 }
 
-function ProjectBackground({
-  project,
-  onEdit,
-}: {
-  project: Project;
-  /** Opens the shared project edit flow; that form owns the description. */
-  onEdit: () => void;
-}) {
-  const titleId = useId();
-  return (
-    <section className="project-background" aria-labelledby={titleId}>
-      <div className="project-overview__heading">
-        <h2 id={titleId} className="project-overview__heading-title">
-          Background
-        </h2>
-        <button type="button" className="context-action" onClick={onEdit}>
-          <EditIcon aria-hidden="true" />
-          <span>{project.description ? "Edit description" : "Add description"}</span>
-        </button>
-      </div>
-      {project.description ? (
-        <p className="project-detail__description project-background__text">
-          {project.description}
-        </p>
-      ) : (
-        <p className="project-overview__empty">
-          No description yet. Add what this project is for, and why it exists.
-        </p>
-      )}
-    </section>
-  );
-}
-
-function ProjectActivity({
-  project,
-  actions,
-  onJump,
-}: {
-  project: Project;
-  actions: Action[];
-  onJump: (targetId: string) => void;
-}) {
-  const titleId = useId();
-  const entries = useMemo(() => buildProjectActivity(project, actions), [project, actions]);
-  const links = entries.map(activityLink);
-
-  return (
-    <section className="project-activity" aria-labelledby={titleId}>
-      <h2 id={titleId} className="project-activity__title">
-        Recent activity
-      </h2>
-      <p className="project-activity__intro">
-        What changed in this project and its work, newest first. Your resume note stays
-        in your own words above.
-      </p>
-      {links.length > 0 ? (
-        <ContextLinks links={links} onJump={onJump} />
-      ) : (
-        <p className="project-activity__empty">
-          No activity recorded yet. Adding an action, note, or decision will appear here.
-        </p>
-      )}
-    </section>
-  );
-}
-
 function editableProjectFields(project: Project): ProjectEditableFields {
   return {
     name: project.name,
@@ -2012,25 +2028,30 @@ function ProjectMenuActions({
   onEdit,
   onToggleArchive,
   onDelete,
+  showEdit = true,
 }: {
   isArchived: boolean;
   close: (restoreFocus?: boolean) => void;
   onEdit: () => void;
   onToggleArchive: () => void;
   onDelete: () => void;
+  /** The workspace header shows Edit as its own action, so its menu omits it. */
+  showEdit?: boolean;
 }) {
   return (
     <div className="menu-list">
-      <button
-        type="button"
-        className="menu-option"
-        onClick={() => {
-          close();
-          onEdit();
-        }}
-      >
-        <span className="menu-option__label">Edit</span>
-      </button>
+      {showEdit && (
+        <button
+          type="button"
+          className="menu-option"
+          onClick={() => {
+            close();
+            onEdit();
+          }}
+        >
+          <span className="menu-option__label">Edit</span>
+        </button>
+      )}
       <button
         type="button"
         className="menu-option"
@@ -2099,6 +2120,73 @@ function useProjectDelete(
   };
 }
 
+/**
+ * The project's identity: its name, what it is for, and whether it is still
+ * live — with the two actions that manage it on the right. It is deliberately
+ * compact: this is a working page, not a title screen.
+ */
+function ProjectHeader({
+  project,
+  titleRef,
+  isArchived,
+  onEdit,
+  onToggleArchive,
+  onDelete,
+}: {
+  project: Project;
+  titleRef: RefObject<HTMLHeadingElement | null>;
+  isArchived: boolean;
+  onEdit: () => void;
+  onToggleArchive: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <header className="project-header">
+      <div className="project-header__identity">
+        <h1 ref={titleRef} tabIndex={-1} className="project-header__title">
+          {project.name}
+        </h1>
+
+        {project.description && (
+          <p className="project-header__description">{project.description}</p>
+        )}
+
+        <p className="project-header__status">
+          <span className="project-header__status-dot" aria-hidden="true" />
+          {isArchived ? "Archived" : "Active"}
+        </p>
+      </div>
+
+      <div className="project-header__operations">
+        <button type="button" className="context-action project-header__edit" onClick={onEdit}>
+          <EditIcon aria-hidden="true" />
+          <span>Edit</span>
+        </button>
+
+        {/* Project-level management stays secondary: one quiet overflow menu
+            instead of a row of permanent buttons. */}
+        <AnchoredPopover
+          label={`Options for ${project.name}`}
+          triggerLabel=""
+          className="project-detail__menu-trigger"
+          icon={<MoreHorizontal aria-hidden="true" />}
+        >
+          {(close) => (
+            <ProjectMenuActions
+              isArchived={isArchived}
+              close={close}
+              onEdit={onEdit}
+              onToggleArchive={onToggleArchive}
+              onDelete={onDelete}
+              showEdit={false}
+            />
+          )}
+        </AnchoredPopover>
+      </div>
+    </header>
+  );
+}
+
 function ProjectDetail({
   project,
   projects,
@@ -2128,6 +2216,9 @@ function ProjectDetail({
   const [detailsError, setDetailsError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   const [revealId, setRevealId] = useState<string>();
+  // A request to start a new note or decision, made from the overview's
+  // context column and handed to the section that owns the form.
+  const [createKind, setCreateKind] = useState<"note" | "decision">();
   // The workspace destination, seeded from any deep-link target the project
   // was opened with, so a link to a note lands inside Notes, not Overview.
   const [section, setSection] = useState<WorkspaceSectionId>(() =>
@@ -2143,7 +2234,6 @@ function ProjectDetail({
   const editResumeId = useId();
   const actionFormInputId = useId();
   const todayDate = todayKey();
-  const lastActivityAt = projectLastActivityAt(project, actions.actions);
   const nextChoice = useMemo(
     () =>
       selectNextOpenAction(
@@ -2164,7 +2254,6 @@ function ProjectDetail({
     tasks: openActionCount,
     notes: project.notes.length,
     decisions: project.decisions.length,
-    context: 0,
   };
   // Project edits and action detachment write to separate stores, but they
   // report the same failure. Show one warning per distinct message.
@@ -2222,11 +2311,27 @@ function ProjectDetail({
     focusWhenAvailable(targetId);
   }
 
-  function goToTasks(formFocusId?: string) {
+  /**
+   * Opens one action in the Tasks section, where its full record lives, and
+   * puts the reader on that row.
+   */
+  function openAction(actionId: string) {
     goToSection("tasks");
-    // The task form lives in the Tasks section, so it does not exist until the
-    // switch renders; the same retry helper as deep links covers that gap.
-    if (formFocusId) focusWhenAvailable(formFocusId, 8);
+    setRevealId(`project-action-${actionId}`);
+    focusWhenAvailable(`project-action-${actionId}`, 8);
+  }
+
+  /**
+   * The overview's context column asks for a new note or decision. The form
+   * lives in the section that owns it, so the request travels with the switch.
+   */
+  function startCreating(kind: "note" | "decision") {
+    setCreateKind(kind);
+    goToSection(kind === "note" ? "notes" : "decisions");
+  }
+
+  function clearCreateKind() {
+    setCreateKind(undefined);
   }
 
   function focusMenuTrigger() {
@@ -2310,52 +2415,14 @@ function ProjectDetail({
         <span>{backLabel}</span>
       </button>
 
-      <div className="project-detail__identity">
-        <div className="project-detail__title-group">
-          <h1 ref={titleRef} tabIndex={-1} className="canvas__title project-detail__title">
-            {project.name}
-          </h1>
-
-          {project.description && (
-            <p className="project-detail__description">{project.description}</p>
-          )}
-
-          <div className="project-detail__meta">
-            <span>Created {formatProjectDate(project.createdAt)}</span>
-            <span aria-hidden="true">·</span>
-            <span>Updated {formatRelativeProjectDate(lastActivityAt)}</span>
-            {isArchived && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="project-detail__status">Archived</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {!editingDetails && (
-          <div className="project-detail__operations">
-            {/* Project-level management is secondary: one quiet overflow menu
-                instead of a row of permanent buttons. */}
-            <AnchoredPopover
-              label={`Options for ${project.name}`}
-              triggerLabel=""
-              className="project-detail__menu-trigger"
-              icon={<MoreHorizontal aria-hidden="true" />}
-            >
-              {(close) => (
-                <ProjectMenuActions
-                  isArchived={isArchived}
-                  close={close}
-                  onEdit={beginEditDetails}
-                  onToggleArchive={toggleArchive}
-                  onDelete={requestDelete}
-                />
-              )}
-            </AnchoredPopover>
-          </div>
-        )}
-      </div>
+      <ProjectHeader
+        project={project}
+        titleRef={titleRef}
+        isArchived={isArchived}
+        onEdit={beginEditDetails}
+        onToggleArchive={toggleArchive}
+        onDelete={requestDelete}
+      />
 
       {storageMessages.map((message) => (
         <p key={message} className="storage-warning" role="status">
@@ -2477,17 +2544,24 @@ function ProjectDetail({
         </form>
       ) : (
         <>
+          {/* The section strip sits with the header, so the destination is
+              always one click away. The focus follows it and stays put: it is
+              the project's direction, not part of one section. */}
           <WorkspaceNav section={section} counts={navCounts} onChange={goToSection} />
+
+          <ProjectFocus project={project} projects={projects} />
 
           {section === "overview" && (
             <ProjectOverview
               project={project}
-              projects={projects}
               actions={actions}
               todayDate={todayDate}
               onGoToTasks={() => goToSection("tasks")}
-              onAddTask={() => goToTasks(actionFormInputId)}
-              onGoToContext={() => goToSection("context")}
+              onGoToNotes={() => goToSection("notes")}
+              onGoToDecisions={() => goToSection("decisions")}
+              onCreateNote={() => startCreating("note")}
+              onCreateDecision={() => startCreating("decision")}
+              onOpenAction={openAction}
               onJump={jumpToTarget}
             />
           )}
@@ -2508,6 +2582,8 @@ function ProjectDetail({
               projects={projects}
               revealId={revealId}
               onRevealHandled={clearRevealId}
+              createRequest={createKind === "note"}
+              onCreateHandled={clearCreateKind}
             />
           )}
 
@@ -2517,24 +2593,9 @@ function ProjectDetail({
               projects={projects}
               revealId={revealId}
               onRevealHandled={clearRevealId}
+              createRequest={createKind === "decision"}
+              onCreateHandled={clearCreateKind}
             />
-          )}
-
-          {section === "context" && (
-            <>
-              <ProjectBackground project={project} onEdit={beginEditDetails} />
-
-              <ProjectResume
-                project={project}
-                projects={projects}
-                actions={actions}
-                nextChoice={nextChoice}
-                actionFormInputId={actionFormInputId}
-                onJump={jumpToTarget}
-              />
-
-              <ProjectActivity project={project} actions={actions.actions} onJump={jumpToTarget} />
-            </>
           )}
         </>
       )}

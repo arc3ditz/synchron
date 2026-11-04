@@ -17,9 +17,9 @@ import { useProjects } from "./hooks/useProjects";
 import { SECTIONS, type SectionId } from "./sections";
 import type { ProjectOpenTarget, ProjectOpenIntent } from "./components/ProjectsCanvas";
 
-const SIDEBAR_DEFAULT_WIDTH = 240;
-const SIDEBAR_MIN_WIDTH = 208;
-const SIDEBAR_MAX_WIDTH = 360;
+const SIDEBAR_DEFAULT_WIDTH = 232;
+const SIDEBAR_MIN_WIDTH = 196;
+const SIDEBAR_MAX_WIDTH = 340;
 const SIDEBAR_KEY = "synchron.sidebar-width";
 const SIDEBAR_STEP = 16;
 
@@ -54,7 +54,7 @@ function App() {
   // already on has an effect too.
   const [projectsListResetToken, setProjectsListResetToken] = useState(0);
   const dragCleanupRef = useRef<(() => void) | null>(null);
-  const { preference, resolved, cyclePreference } = useTheme();
+  const { preference, resolved, setPreference } = useTheme();
   // Projects own their timestamps, so they are created before actions and hand
   // their activity recorder to the action store.
   const projects = useProjects();
@@ -193,12 +193,15 @@ function App() {
           dateLabel={dateLabel}
           preference={preference}
           resolved={resolved}
-          onCyclePreference={cyclePreference}
+          onPreferenceChange={setPreference}
         />
         <ContentCanvas
           section={activeSection}
           actions={actions}
           projects={projects}
+          appearancePreference={preference}
+          resolvedAppearance={resolved}
+          onAppearanceChange={setPreference}
           projectTarget={projectTarget}
           projectsListResetToken={projectsListResetToken}
           onOpenProject={openProject}

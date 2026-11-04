@@ -60,6 +60,28 @@ export function formatToday(): string {
   return new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 }
 
+/** A full, absolute date, e.g. "3 Nov 2026", for titles and tooltips. */
+export function formatDueDate(value: DateValue): string {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(parseDateKey(value));
+}
+
+/**
+ * An honest relative due label: "Overdue", "Due today", "Due tomorrow", then
+ * a plain date. Nothing here guesses; it reads the stored value.
+ */
+export function formatDueLabel(value: DateValue, today = todayKey()): string {
+  if (!value) return "";
+  if (value < today) return "Overdue";
+  if (value === today) return "Due today";
+  if (value === shiftDate(today, 1)) return "Due tomorrow";
+  return `Due ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(parseDateKey(value))}`;
+}
+
 const fullDateFormat = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
 function DatePopover({ value, onSelect }: { value?: string; onSelect: (value?: string) => void }) {
@@ -334,7 +356,7 @@ export function ActionForm({
         showFocus={false}
       />
     </div>
-    <button className="action-button action-button--primary action-button--with-icon" type="submit"><PlusIcon aria-hidden="true" /><span>Add action</span></button>
+    <button className="action-button action-button--primary action-button--with-icon" type="submit" disabled={!title.trim()}><PlusIcon aria-hidden="true" /><span>Add action</span></button>
   </form>;
 }
 

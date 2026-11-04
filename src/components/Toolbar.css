@@ -7,9 +7,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  min-height: 3.25rem;
-  padding: 0 var(--space-5);
-  border-bottom: 1px solid var(--separator);
+  min-width: 0;
+  padding: 0 var(--space-6);
+  background: var(--surface-app);
 }
 
 .toolbar__date {
@@ -17,7 +17,6 @@
   overflow: hidden;
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  letter-spacing: var(--tracking-wide);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -29,27 +28,42 @@
   gap: var(--space-2);
 }
 
-/* --- Icon button ---------------------------------------------------------- */
-
-.icon-button {
+.toolbar .toolbar__appearance {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--separator);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
+  font-size: var(--text-xs);
   transition: background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
 }
 
-.icon-button:hover {
+.toolbar .toolbar__appearance:hover,
+.toolbar .toolbar__appearance[aria-expanded="true"] {
   background: var(--surface-hover);
   color: var(--text-primary);
+  border-color: var(--separator-strong);
+}
+
+.toolbar .toolbar__appearance .meta-trigger__icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.toolbar .toolbar__appearance .meta-trigger__icon svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.toolbar .toolbar__appearance-menu {
+  min-width: 10rem;
 }
 
 @media (max-width: 760px) {

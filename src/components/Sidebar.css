@@ -6,7 +6,7 @@
   grid-area: sidebar;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-8);
   min-width: 0;
   padding: var(--sidebar-pad-y) var(--sidebar-pad-x);
   background: var(--surface-sidebar);
@@ -16,10 +16,8 @@
 /* --- Brand ---------------------------------------------------------------- */
 
 .brand {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  /* Aligns the wordmark with the nav icon column. */
+  display: grid;
+  gap: 2px;
   padding: 0 var(--sidebar-brand-pad-x);
 }
 
@@ -34,10 +32,36 @@
   color: var(--accent);
 }
 
+.brand__caption {
+  color: var(--text-tertiary);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+}
+
 /* --- Navigation ----------------------------------------------------------- */
 
 .nav {
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
   min-width: 0;
+}
+
+.nav__group,
+.sidebar__settings {
+  min-width: 0;
+}
+
+.nav__heading {
+  display: block;
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--sidebar-brand-pad-x);
+  color: var(--text-tertiary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .nav__list {
@@ -53,11 +77,10 @@
   width: 100%;
   padding: var(--sidebar-item-pad-y) var(--sidebar-item-pad-x);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--sidebar-label-size);
-  letter-spacing: -0.004em;
   text-align: left;
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-out),
@@ -71,8 +94,8 @@
 
 .nav__item--active .nav__button {
   background: var(--surface-active);
-  color: var(--text-primary);
-  font-weight: 500;
+  color: var(--accent-text);
+  font-weight: 600;
 }
 
 .nav__icon {
@@ -84,7 +107,7 @@
 }
 
 .nav__item--active .nav__icon {
-  color: var(--accent-strong);
+  color: var(--accent-text);
 }
 
 .nav__label {
@@ -94,36 +117,117 @@
   white-space: nowrap;
 }
 
+.sidebar__settings {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--separator);
+}
+
 /* --- Narrow window: the rail becomes a horizontal strip -------------------- */
 
 @media (max-width: 760px) {
   .sidebar {
     flex-direction: row;
     align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border-right: 0;
     border-bottom: 1px solid var(--separator);
   }
 
   .brand {
     flex: none;
-    padding: 0;
+    padding: 0 var(--space-1);
+  }
+
+  .brand__caption,
+  .nav__heading,
+  .sidebar__settings > .nav__heading {
+    display: none;
   }
 
   .nav {
     flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 0;
     min-width: 0;
+  }
+
+  .nav__group {
+    display: flex;
+    min-width: 0;
+  }
+
+  .nav__group + .nav__group {
+    margin-left: var(--space-2);
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--separator);
   }
 
   .nav__list {
     flex-direction: row;
-    flex-wrap: wrap;
     gap: var(--space-1);
+  }
+
+  .sidebar__settings .nav__list {
+    flex-direction: row;
   }
 
   .nav__button {
     width: auto;
+    min-height: 2.25rem;
     white-space: nowrap;
+  }
+
+  .sidebar__settings {
+    flex: none;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .sidebar {
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .nav {
+    justify-content: center;
+    overflow-x: auto;
+  }
+
+  .nav__group + .nav__group {
+    margin-left: var(--space-1);
+    padding-left: var(--space-1);
+  }
+
+  .nav__button {
+    justify-content: center;
+    width: 2.25rem;
+    padding: 0;
+  }
+
+  .nav__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .sidebar__settings {
+    padding-left: var(--space-1);
+    border-left: 1px solid var(--separator);
   }
 }
